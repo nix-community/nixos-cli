@@ -2,6 +2,7 @@ package generation
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -54,12 +55,6 @@ func (e *GenerationReadError) Error() string {
 }
 
 func GenerationFromDirectory(generationDirname string, number uint64) (*Generation, error) {
-	nixosVersionManifestFile := filepath.Join(generationDirname, "nixos-version.json")
-
-	if _, err := os.Stat(generationDirname); err != nil {
-		return nil, err
-	}
-
 	info := &Generation{
 		Number:          number,
 		CreationDate:    time.Time{},
@@ -68,11 +63,19 @@ func GenerationFromDirectory(generationDirname string, number uint64) (*Generati
 		Specialisations: []string{},
 	}
 
+	nixosVersionManifestFile := filepath.Join(generationDirname, "nixos-version.json")
+
 	encounteredErrors := []error{}
 
 	manifestBytes, err := os.ReadFile(nixosVersionManifestFile)
 	if err != nil {
-		encounteredErrors = append(encounteredErrors, err)
+		// The `nixos-version.json` file does not exist in generations that
+		// are created without the corresponding NixOS module enabled or
+		// created with `nixos-rebuild`/other application tools, and should
+		// be ignored.
+		if !errors.Is(err, os.ErrNotExist) {
+			encounteredErrors = append(encounteredErrors, err)
+		}
 	} else {
 		var manifest GenerationManifest
 		err := json.Unmarshal(manifestBytes, &manifest)
@@ -88,7 +91,7 @@ func GenerationFromDirectory(generationDirname string, number uint64) (*Generati
 	}
 
 	// Fall back to reading the nixos-version file that should always
-	// exist if the version doesn't.
+	// exist if the `nixos-version.json` file doesn't exist.
 	if info.NixosVersion == "" {
 		nixosVersionFile := filepath.Join(generationDirname, "nixos-version")
 		nixosVersionContents, err := os.ReadFile(nixosVersionFile)
