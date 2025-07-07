@@ -57,7 +57,7 @@ func OptionCommand() *cobra.Command {
 	cmd.Flags().Int64VarP(&opts.MinScore, "min-score", "s", 0, "")
 	cmd.Flags().BoolVarP(&opts.DisplayValueOnly, "value-only", "v", false, "Show only the selected option's value")
 
-	if buildOpts.Flake == "true" {
+	if build.Flake() {
 		cmd.Flags().StringVarP(&opts.FlakeRef, "flake", "f", "", "Flake ref to explicitly load options from")
 	}
 

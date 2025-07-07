@@ -24,7 +24,7 @@ func InstallCommand() *cobra.Command {
 	opts := cmdOpts.InstallOpts{}
 
 	usage := "install"
-	if buildOpts.Flake == "true" {
+	if build.Flake() {
 		usage += " {FLAKE-URI}#{SYSTEM-NAME}"
 	}
 
@@ -33,7 +33,7 @@ func InstallCommand() *cobra.Command {
 		Short: "Install a NixOS system",
 		Long:  "Install a NixOS system from a given configuration.",
 		Args: func(cmd *cobra.Command, args []string) error {
-			if buildOpts.Flake == "true" {
+			if build.Flake() {
 				if err := cobra.ExactArgs(1)(cmd, args); err != nil {
 					return err
 				}
@@ -90,7 +90,7 @@ func InstallCommand() *cobra.Command {
 	nixopts.AddOptionNixOption(&cmd, &opts.NixOptions.Options)
 	nixopts.AddIncludesNixOption(&cmd, &opts.NixOptions.Includes)
 
-	if buildOpts.Flake == "true" {
+	if build.Flake() {
 		nixopts.AddRecreateLockFileNixOption(&cmd, &opts.NixOptions.RecreateLockFile)
 		nixopts.AddNoUpdateLockFileNixOption(&cmd, &opts.NixOptions.NoUpdateLockFile)
 		nixopts.AddNoWriteLockFileNixOption(&cmd, &opts.NixOptions.NoWriteLockFile)
@@ -103,7 +103,7 @@ func InstallCommand() *cobra.Command {
 	cmd.MarkFlagsMutuallyExclusive("channel", "no-channel-copy")
 
 	helpTemplate := cmd.HelpTemplate()
-	if buildOpts.Flake == "true" {
+	if build.Flake() {
 		helpTemplate += `
 Arguments:
   [FLAKE-URI]    Flake URI that contains NixOS system to build
@@ -367,7 +367,7 @@ func installMain(cmd *cobra.Command, opts *cmdOpts.InstallOpts) error {
 	}
 
 	var nixConfig configuration.Configuration
-	if buildOpts.Flake == "true" {
+	if build.Flake() {
 		nixConfig = opts.FlakeRef
 	} else {
 		var configLocation string

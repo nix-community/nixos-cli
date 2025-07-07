@@ -51,12 +51,12 @@ func featuresMain(cmd *cobra.Command, opts *cmdOpts.FeaturesOpts) {
 	log := logger.FromContext(cmd.Context())
 
 	features := features{
-		Version:     buildOpts.Version,
-		GitRevision: buildOpts.GitRevision,
+		Version:     build.Version(),
+		GitRevision: build.GitRevision(),
 		GoVersion:   runtime.Version(),
 		CompilationOptions: complilationOptions{
-			NixpkgsVersion: buildOpts.NixpkgsVersion,
-			Flake:          buildOpts.Flake == "true",
+			NixpkgsVersion: build.NixpkgsVersion(),
+			Flake:          build.Flake(),
 		},
 	}
 

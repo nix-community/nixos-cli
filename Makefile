@@ -1,12 +1,12 @@
 APP_NAME := nixos
-BUILD_VAR_PKG := github.com/nix-community/nixos-cli/internal/build
+BUILD_VAR_PKG := github.com/nix-community/nixos-cli/internal/build/vars
 
 VERSION ?= $(shell git describe --tags --always)
 COMMIT_HASH ?= $(shell git rev-parse HEAD)
 
 # Configurable parameters
 FLAKE ?= true
-NIXPKGS_REVISION ?= 24.11
+NIXPKGS_REVISION ?= 25.05
 
 LDFLAGS := -X $(BUILD_VAR_PKG).Version=$(VERSION)
 LDFLAGS += -X $(BUILD_VAR_PKG).GitRevision=$(COMMIT_HASH)

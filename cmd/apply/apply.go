@@ -27,7 +27,7 @@ func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 	opts := cmdOpts.ApplyOpts{}
 
 	usage := "apply"
-	if buildOpts.Flake == "true" {
+	if build.Flake() {
 		usage += " [FLAKE-REF]"
 	}
 
@@ -36,7 +36,7 @@ func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 		Short: "Build/activate a NixOS configuration",
 		Long:  "Build and activate a NixOS system from a given configuration.",
 		Args: func(cmd *cobra.Command, args []string) error {
-			if buildOpts.Flake == "true" {
+			if build.Flake() {
 				if err := cobra.MaximumNArgs(1)(cmd, args); err != nil {
 					return err
 				}
@@ -61,7 +61,7 @@ func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 				}
 			}
 
-			if buildOpts.Flake == "true" && opts.GenerationTag != "" && !opts.NixOptions.Impure {
+			if build.Flake() && opts.GenerationTag != "" && !opts.NixOptions.Impure {
 				if cfg.Apply.ImplyImpureWithTag {
 					if err := cmd.Flags().Set("impure", "true"); err != nil {
 						panic("failed to set --impure flag for apply command before exec with explicit generation tag")
@@ -110,7 +110,7 @@ func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 	nixopts.AddOptionNixOption(&cmd, &opts.NixOptions.Options)
 	nixopts.AddIncludesNixOption(&cmd, &opts.NixOptions.Includes)
 
-	if buildOpts.Flake == "true" {
+	if build.Flake() {
 		nixopts.AddRecreateLockFileNixOption(&cmd, &opts.NixOptions.RecreateLockFile)
 		nixopts.AddNoUpdateLockFileNixOption(&cmd, &opts.NixOptions.NoUpdateLockFile)
 		nixopts.AddNoWriteLockFileNixOption(&cmd, &opts.NixOptions.NoWriteLockFile)
@@ -120,7 +120,7 @@ func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 		nixopts.AddOverrideInputNixOption(&cmd, &opts.NixOptions.OverrideInputs)
 	}
 
-	if buildOpts.Flake == "false" {
+	if !build.Flake() {
 		cmd.Flags().BoolVar(&opts.UpgradeChannels, "upgrade", false, "Upgrade the root user`s 'nixos' channel")
 		cmd.Flags().BoolVar(&opts.UpgradeAllChannels, "upgrade-all", false, "Upgrade all the root user's channels")
 	}
@@ -133,7 +133,7 @@ func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 	cmd.MarkFlagsMutuallyExclusive("no-activate", "specialisation")
 
 	helpTemplate := cmd.HelpTemplate()
-	if buildOpts.Flake == "true" {
+	if build.Flake() {
 		helpTemplate += `
 Arguments:
   [FLAKE-REF]  Flake ref to build configuration from (default: $NIXOS_CONFIG)
@@ -226,7 +226,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 		}
 	}
 
-	if buildOpts.Flake != "true" && (opts.UpgradeChannels || opts.UpgradeAllChannels) {
+	if !build.Flake() && (opts.UpgradeChannels || opts.UpgradeAllChannels) {
 		log.Step("Upgrading channels...")
 
 		if err := upgradeChannels(s, &upgradeChannelsOptions{
