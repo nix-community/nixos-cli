@@ -98,7 +98,7 @@ func AddNoNetNixOption(cmd *cobra.Command, dest *bool) {
 }
 
 func AddIncludesNixOption(cmd *cobra.Command, dest *[]string) {
-	addNixOptionStringArray(cmd, dest, "--include", "I", "Add path to list of locations to look up <...> file names")
+	addNixOptionStringArray(cmd, dest, "include", "I", "Add path to list of locations to look up <...> file names")
 }
 
 func AddMaxJobsNixOption(cmd *cobra.Command, dest *int) {
