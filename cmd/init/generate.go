@@ -219,12 +219,12 @@ func generateConfigNix(log *logger.Logger, cfg *settings.Settings, virtType Virt
 		xserverConfig,
 		cfg.Init.DesktopConfig,
 		cfg.Init.ExtraConfig,
-		buildOpts.NixpkgsVersion,
+		build.NixpkgsVersion,
 	), nil
 }
 
 func generateFlakeNix() string {
-	nixpkgsInputLine := fmt.Sprintf(`nixpkgs.url = "github:NixOS/nixpkgs/release-%v";`, buildOpts.NixpkgsVersion)
+	nixpkgsInputLine := fmt.Sprintf(`nixpkgs.url = "github:NixOS/nixpkgs/release-%v";`, build.NixpkgsVersion())
 	return fmt.Sprintf(flakeNixTemplate, nixpkgsInputLine)
 }
 

@@ -79,7 +79,7 @@ func initMain(cmd *cobra.Command, opts *cmdOpts.InitOpts) error {
 		return err
 	}
 
-	if buildOpts.Flake == "true" {
+	if build.Flake() {
 		flakeNixText := generateFlakeNix()
 		flakeNixFilename := filepath.Join(configDir, "flake.nix")
 		log.Infof("writing %v", flakeNixFilename)

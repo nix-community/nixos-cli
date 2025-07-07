@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"github.com/fatih/color"
-	buildVars "github.com/nix-community/nixos-cli/internal/build"
+	"github.com/nix-community/nixos-cli/internal/build"
 	"github.com/nix-community/nixos-cli/internal/constants"
 	"github.com/nix-community/nixos-cli/internal/logger"
 	"github.com/nix-community/nixos-cli/internal/settings"
@@ -79,7 +79,7 @@ func mainCommand() (*cobra.Command, error) {
 		Use:                        "nixos {command} [flags]",
 		Short:                      "nixos-cli",
 		Long:                       "A tool for managing NixOS installations",
-		Version:                    buildVars.Version,
+		Version:                    build.Version(),
 		SilenceUsage:               true,
 		SuggestionsMinimumDistance: 1,
 		CompletionOptions: cobra.CompletionOptions{

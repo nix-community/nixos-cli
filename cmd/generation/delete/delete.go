@@ -249,7 +249,7 @@ func regenerateBootMenu(s system.CommandRunner, verbose bool) error {
 
 func collectGarbage(s system.CommandRunner, verbose bool) error {
 	var argv []string
-	if buildOpts.Flake == "true" {
+	if build.Flake() {
 		argv = []string{"nix", "store", "gc"}
 	} else {
 		argv = []string{"nix-collect-garbage"}

@@ -42,7 +42,7 @@ func (e *AttributeEvaluationError) Error() string {
 }
 
 func FindConfiguration(log *logger.Logger, cfg *settings.Settings, includes []string, verbose bool) (Configuration, error) {
-	if buildOpts.Flake == "true" {
+	if build.Flake() {
 		if verbose {
 			log.Info("looking for flake configuration")
 		}
@@ -87,7 +87,7 @@ const (
 func (b SystemBuildType) BuildAttr() string {
 	switch b {
 	case SystemBuildTypeSystem, SystemBuildTypeSystemActivation:
-		if buildOpts.Flake == "true" {
+		if build.Flake() {
 			return "toplevel"
 		} else {
 			return "system"
