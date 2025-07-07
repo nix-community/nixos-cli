@@ -77,6 +77,8 @@ func FindLegacyConfiguration(log *logger.Logger, includes []string, verbose bool
 		if info.IsDir() {
 			return nil, fmt.Errorf("%v is a directory, not a file", defaultNix)
 		}
+	} else {
+		configuration = filepath.Dir(configuration)
 	}
 
 	return &LegacyConfiguration{
