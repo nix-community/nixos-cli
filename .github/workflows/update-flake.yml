@@ -2,8 +2,8 @@ name: Update Flake Inputs
 on:
   workflow_dispatch:
   schedule:
-    # Every Saturday at 0:00 UTC
-    - cron: '0 0 * * 6'
+    # The 1st of every month @ 0:00 UTC
+    - cron: '0 0 1 * *'
 
 jobs:
   update-flake-inputs:
