@@ -261,10 +261,10 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 			log.Warn("configuration is not a directory")
 		} else {
 			commitMsg, err := getLatestGitCommitMessage(configDirname, cfg.Apply.IgnoreDirtyTree)
-			if err == dirtyGitTreeError {
-				log.Warnf("failed to get latest git commit message: %v", err)
-			} else if err != nil {
+			if err == errDirtyGitTree {
 				log.Warn("git tree is dirty")
+			} else if err != nil {
+				log.Warnf("failed to get latest git commit message: %v", err)
 			} else {
 				generationTag = commitMsg
 			}
@@ -477,7 +477,7 @@ func upgradeChannels(s system.CommandRunner, opts *upgradeChannelsOptions) error
 	return err
 }
 
-var dirtyGitTreeError = fmt.Errorf("git tree is dirty")
+var errDirtyGitTree = fmt.Errorf("git tree is dirty")
 
 func getLatestGitCommitMessage(pathToRepo string, ignoreDirty bool) (string, error) {
 	repo, err := git.PlainOpen(pathToRepo)
@@ -496,7 +496,7 @@ func getLatestGitCommitMessage(pathToRepo string, ignoreDirty bool) (string, err
 	}
 
 	if !status.IsClean() && !ignoreDirty {
-		return "", dirtyGitTreeError
+		return "", errDirtyGitTree
 	}
 
 	head, err := repo.Head()
