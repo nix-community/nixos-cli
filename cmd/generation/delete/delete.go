@@ -114,12 +114,6 @@ func generationDeleteMain(cmd *cobra.Command, genOpts *cmdOpts.GenerationOpts, o
 	cfg := settings.FromContext(cmd.Context())
 	s := system.NewLocalSystem(log)
 
-	if !s.IsNixOS() {
-		msg := "this command can only be run on NixOS systems"
-		log.Error(msg)
-		return fmt.Errorf("%v", msg)
-	}
-
 	if os.Geteuid() != 0 {
 		err := utils.ExecAsRoot(cfg.RootCommand)
 		if err != nil {
