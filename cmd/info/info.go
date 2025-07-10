@@ -12,6 +12,7 @@ import (
 	"github.com/nix-community/nixos-cli/internal/constants"
 	"github.com/nix-community/nixos-cli/internal/generation"
 	"github.com/nix-community/nixos-cli/internal/logger"
+	"github.com/nix-community/nixos-cli/internal/system"
 	"github.com/spf13/cobra"
 )
 
@@ -44,6 +45,13 @@ const (
 
 func infoMain(cmd *cobra.Command, opts *cmdOpts.InfoOpts) error {
 	log := logger.FromContext(cmd.Context())
+	s := system.NewLocalSystem(log)
+
+	if !s.IsNixOS() {
+		msg := "the info command is only supported on NixOS systems"
+		log.Errorf(msg)
+		return fmt.Errorf("%v", msg)
+	}
 
 	// Only support the `system` profile for now.
 	currentGenNumber, err := activation.GetCurrentGenerationNumber("system")
