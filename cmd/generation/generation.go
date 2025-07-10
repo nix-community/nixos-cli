@@ -1,11 +1,15 @@
 package generation
 
 import (
+	"fmt"
+
 	"github.com/spf13/cobra"
 
-	"github.com/nix-community/nixos-cli/internal/cmd/opts"
-	"github.com/nix-community/nixos-cli/internal/cmd/utils"
+	cmdOpts "github.com/nix-community/nixos-cli/internal/cmd/opts"
+	cmdUtils "github.com/nix-community/nixos-cli/internal/cmd/utils"
 	"github.com/nix-community/nixos-cli/internal/generation"
+	"github.com/nix-community/nixos-cli/internal/logger"
+	"github.com/nix-community/nixos-cli/internal/system"
 
 	genDeleteCmd "github.com/nix-community/nixos-cli/cmd/generation/delete"
 	genDiffCmd "github.com/nix-community/nixos-cli/cmd/generation/diff"
@@ -21,6 +25,16 @@ func GenerationCommand() *cobra.Command {
 		Use:   "generation {command}",
 		Short: "Manage NixOS generations",
 		Long:  "Manage NixOS generations on this machine.",
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			log := logger.FromContext(cmd.Context())
+			s := system.NewLocalSystem(log)
+
+			if !s.IsNixOS() {
+				return fmt.Errorf("generation commands can only be run on NixOS systems")
+			}
+
+			return nil
+		},
 	}
 
 	cmd.PersistentFlags().StringVarP(&opts.ProfileName, "profile", "p", "system", "System profile to use")
