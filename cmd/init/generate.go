@@ -221,7 +221,7 @@ func generateConfigNix(log *logger.Logger, cfg *settings.Settings, virtType Virt
 		xserverConfig,
 		cfg.Init.DesktopConfig,
 		cfg.Init.ExtraConfig,
-		build.NixpkgsVersion,
+		build.NixpkgsVersion(),
 	), nil
 }
 
