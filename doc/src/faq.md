@@ -31,7 +31,7 @@ same, but the options are different, and I'm lazy. So no.
 Yes! However, this has been moved to a separate tool called
 [`optnix`](https://github.com/water-sucks/optnix).
 
-`nixos option -i` actually uses `optnix` as a library within its code, so it is
+`nixos option` actually uses `optnix` as a library within its code, so it is
 exactly the same UX.
 
 ## More questions?

@@ -2,15 +2,18 @@ NIXOS-CLI-OPTION-TUI(1)
 
 # NAME
 
-nixos option -i - query available NixOS options interactively
+nixos option (interactive) - query available NixOS options interactively
 
 # SYNOPSIS
 
-*nixos option -i* [QUERY]
+*nixos option* [QUERY]
 
 # DESCRIPTION
 
-*nixos option -i* is an interactive TUI search for NixOS commands.
+*nixos option*, by default, spawns interactive TUI search mode for NixOS
+options, unless *-n* is specified.
+
+Refer to *nixos-cli-option(1)* for non-interactive mode usage.
 
 # WINDOW LAYOUT
 
