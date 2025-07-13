@@ -26,21 +26,33 @@ func OptionCommand() *cobra.Command {
 	opts := cmdOpts.OptionOpts{}
 
 	cmd := cobra.Command{
-		Use:   "option [flags] [NAME]",
+		Use:   "option [flags] [OPTION-NAME]",
 		Short: "Query NixOS options and their details",
 		Long:  "Query available NixOS module options for this system.",
 		Args: func(cmd *cobra.Command, args []string) error {
-			argsFunc := cobra.ExactArgs(1)
-			if opts.Interactive {
-				argsFunc = cobra.MaximumNArgs(1)
-			}
-
-			if err := argsFunc(cmd, args); err != nil {
+			if err := cobra.MaximumNArgs(1)(cmd, args); err != nil {
 				return err
 			}
 
 			if len(args) > 0 {
 				opts.OptionInput = args[0]
+			}
+
+			// Imply `--non-interactive` for scripting output if not specified
+			if opts.DisplayJson || opts.DisplayValueOnly {
+				if cmd.Flags().Changed("non-interactive") && !opts.NonInteractive {
+					return fmt.Errorf("--non-interactive is required when using output format flags")
+				}
+
+				opts.NonInteractive = true
+			}
+
+			if opts.DisplayJson && opts.DisplayValueOnly {
+				return fmt.Errorf("--json and --value-only flags conflict")
+			}
+
+			if opts.NonInteractive && len(args) < 1 {
+				return fmt.Errorf("argument [OPTION-NAME] is required for non-interactive mode")
 			}
 
 			return nil
@@ -52,18 +64,16 @@ func OptionCommand() *cobra.Command {
 	}
 
 	cmd.Flags().BoolVarP(&opts.DisplayJson, "json", "j", false, "Output information in JSON format")
-	cmd.Flags().BoolVarP(&opts.Interactive, "interactive", "i", false, "Show interactive search TUI for options")
-	cmd.Flags().BoolVarP(&opts.NoUseCache, "no-cache", "n", false, "Do not attempt to use prebuilt option cache")
-	cmd.Flags().Int64VarP(&opts.MinScore, "min-score", "s", 0, "")
+	cmd.Flags().BoolVarP(&opts.NonInteractive, "non-interactive", "n", false, "Do not show search TUI for options")
+	cmd.Flags().BoolVar(&opts.NoUseCache, "no-cache", false, "Do not attempt to use prebuilt option cache")
+	cmd.Flags().Int64VarP(&opts.MinScore, "min-score", "s", 0, "Minimum `score` threshold for matching queries")
 	cmd.Flags().BoolVarP(&opts.DisplayValueOnly, "value-only", "v", false, "Show only the selected option's value")
 
 	if build.Flake() {
-		cmd.Flags().StringVarP(&opts.FlakeRef, "flake", "f", "", "Flake ref to explicitly load options from")
+		cmd.Flags().StringVarP(&opts.FlakeRef, "flake", "f", "", "Flake `ref` to explicitly load options from")
 	}
 
 	nixopts.AddIncludesNixOption(&cmd, &opts.NixPathIncludes)
-
-	cmd.MarkFlagsMutuallyExclusive("json", "interactive", "value-only")
 
 	cmdUtils.SetHelpFlagText(&cmd)
 	cmd.SetHelpTemplate(cmd.HelpTemplate() + `
@@ -161,7 +171,7 @@ func optionMain(cmd *cobra.Command, opts *cmdOpts.OptionOpts) error {
 		return realValue, err
 	}
 
-	if opts.Interactive {
+	if !opts.NonInteractive {
 		spinner.Stop()
 		return optionTUI.OptionTUI(optionTUI.OptionTUIArgs{
 			Options:      options,

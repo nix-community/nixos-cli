@@ -173,7 +173,7 @@ type InstallOpts struct {
 }
 
 type OptionOpts struct {
-	Interactive      bool
+	NonInteractive   bool
 	NixPathIncludes  []string
 	DisplayJson      bool
 	NoUseCache       bool
