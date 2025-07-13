@@ -14,32 +14,34 @@ Display documentation and values for available NixOS configuration options.
 This command can be used to inspect how modules influence the system and what
 values are currently set for individual options.
 
-The command will enter an interactive search mode if *--interactive* is passed.
-Otherwise, it expects a specific option name to display details for.
+By default, *nixos option* will enter an interactive TUI with a search bar.
+Non-interactive mode can be specified explicitly using *--non-interactive*/*-n*
+or by using the alternative display options *--json* or *--value-only*. When in
+non-interactive mode, a specific option name to display details for is required.
+
+See *nixos-cli-option-ui(1)* for information on how the option TUI works.
 
 If the option is found in non-interactive mode, then its details are displayed.
 Otherwise, similar options are searched for, and printed if they roughly
 match the search query.
 
-A TUI is available for interactive search.
-
 # EXAMPLES
+
+Find an option using the UI (starting with an initial search):
+
+	*nixos option "search.for.option.with.this.name"*
 
 Find an option and display its details, non-interactively:
 
-	*nixos option \_module.args*
+	*nixos option -n \_module.args*
 
 Find an option and obtain the type using structured JSON output and _jq_:
 
 	*nixos option \_module.args -j | jq .type*
 
-Find an option using the UI (starting with an initial search):
-
-	*nixos option -i "search.for.option.with.this.name"*
-
 Find an option in a different flake ref (assume a flake-enabled CLI):
 
-	*nixos option -f "github:MattRStoffel/mixed#nixos-machine" "option.name"*
+	*nixos option -n -f "github:MattRStoffel/mixed#nixos-machine" "option.name"*
 
 # OPTIONS
 
@@ -60,11 +62,6 @@ Find an option in a different flake ref (assume a flake-enabled CLI):
 
 	Default: *$NIXOS_CONFIG*
 
-*-i*, *--interactive*
-	Start an interactive TUI for exploring options with a search bar.
-
-	See *nixos-cli-option-ui(1)* for information on how the option TUI works.
-
 *-j*, *--json*
 	Output option data as a JSON object.
 
@@ -78,12 +75,16 @@ Find an option in a different flake ref (assume a flake-enabled CLI):
 
 	Default: *1*
 
-*-n*, *--no-cache*
+*--no-cache*
 	Disable usage of the prebuilt options cache.
 
 	Disabling the cache means that the index will need to be built, which takes
 	time due to Nix evaluation being slow. Use only when the normal option cache
 	is not working.
+
+*-n*, *--non-interactive*
+	Do not start the interactive search environment. This option is implied
+	when *--json* or *--value-only* modes are in use.
 
 *-v*, *--value-only*
 	Print only the current value of the selected option.

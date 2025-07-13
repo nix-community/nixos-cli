@@ -121,10 +121,10 @@ documentation exposed can _still_ have documentation through the option UI!
 
 Cool, right?
 
-Run `nixos option -i` for the interactive search TUI.
+By default, `nixos option` uses this TUI.
 
-Also, `nixos option` will just print options and their evaluated values, without
-dropping into a TUI.
+To use normal, non-interactive output for a specific option, add the `-n`
+switch.
 
 However, there is one caveat: generating the option index is an intensive
 operation; this can be precomputed on every configuration change using the
@@ -139,10 +139,10 @@ The following environment variables influence `nixos-cli` behavior:
   `/etc/nixos-cli/config.toml`)
 - `NIXOS_CONFIG` :: where the configuration to work with is stored
 
-    This can vary depending on if the CLI is flake-enabled. If the CLI is
-    flake-enabled, then `$NIXOS_CONFIG` _must_ point to a valid flake ref.
-    Otherwise, it can point to a local Nix configuration file (i.e.
-    `configuration.nix`) or directory containing a `default.nix`.
+  This can vary depending on if the CLI is flake-enabled. If the CLI is
+  flake-enabled, then `$NIXOS_CONFIG` _must_ point to a valid flake ref.
+  Otherwise, it can point to a local Nix configuration file (i.e.
+  `configuration.nix`) or directory containing a `default.nix`.
 
 ## Aliases
 
