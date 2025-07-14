@@ -3,6 +3,7 @@
   buildGoModule,
   nix-gitignore,
   installShellFiles,
+  buildPackages,
   stdenv,
   scdoc,
   revision ? "unknown",
@@ -17,13 +18,17 @@ buildGoModule (finalAttrs: {
 
   nativeBuildInputs = [installShellFiles scdoc];
 
-  env = {
-    CGO_ENABLED = 0;
-    COMMIT_HASH = revision;
-    FLAKE = lib.boolToString flake;
-    VERSION = finalAttrs.version;
-    NIXPKGS_REVISION = lib.trivial.release;
-  };
+  env =
+    {
+      CGO_ENABLED = 0;
+      COMMIT_HASH = revision;
+      FLAKE = lib.boolToString flake;
+      VERSION = finalAttrs.version;
+      NIXPKGS_REVISION = lib.trivial.release;
+    }
+    // (lib.optionalAttrs stdenv.isLinux {
+      SYSTEMD_DBUS_INTERFACE_DIR = "${buildPackages.systemd}/share/dbus-1/interfaces";
+    });
 
   buildPhase = ''
     runHook preBuild
