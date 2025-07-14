@@ -31,6 +31,12 @@ buildGoModule (finalAttrs: {
 
   buildPhase = ''
     runHook preBuild
+
+    # Force-regenerate the dbus bindings. They can be different depending
+    # on the version of `nixpkgs`, and builds must fail if the interface
+    # does not match anymore.
+    make gen-dbus-bindings
+
     make all gen-manpages
     runHook postBuild
   '';
