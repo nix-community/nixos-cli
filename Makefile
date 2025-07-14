@@ -23,6 +23,15 @@ build:
 	@echo "building $(APP_NAME)..."
 	CGO_ENABLED=$(CGO_ENABLED) go build -o ./$(APP_NAME) -ldflags="$(LDFLAGS)" .
 
+.PHONY: gen-dbus-bindings
+gen-dbus-bindings:
+ifeq ($(SYSTEMD_DBUS_INTERFACE_DIR),)
+	@echo "skipping go generate: SYSTEMD_DBUS_INTERFACE_DIR not set"
+else
+	@echo "running go generate..."
+	go generate ./...
+endif
+
 .PHONY: clean
 clean:
 	@echo "cleaning up..."
