@@ -29,7 +29,7 @@ ifeq ($(SYSTEMD_DBUS_INTERFACE_DIR),)
 	@echo "skipping go generate: SYSTEMD_DBUS_INTERFACE_DIR not set"
 else
 	@echo "running go generate..."
-	go generate ./...
+	go generate github.com/nix-community/nixos-cli/internal/dbus
 endif
 
 .PHONY: clean
