@@ -75,6 +75,11 @@ Among other things.
 	Show log messages for when developing TUIs. Only useful for during
 	development.
 
+*NIXOS_CLI_SUPPRESS_NO_SETTINGS_WARNING*
+	Suppress the settings warning. Useful for non-NixOS systems where there is
+	no settings file configured by default and the warnings get noisy/clutter
+	logs.
+
 # SEE ALSO
 
 *nixos-cli-config(5)*
