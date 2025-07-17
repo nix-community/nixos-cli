@@ -63,8 +63,11 @@ func mainCommand() (*cobra.Command, error) {
 
 	cfg, err := settings.ParseSettings(configLocation)
 	if err != nil {
-		log.Error(err)
-		log.Warn("proceeding with defaults only, you have been warned")
+		if os.Getenv("NIXOS_CLI_SUPPRESS_NO_SETTINGS_WARNING") == "" {
+			log.Error(err)
+			log.Warn("proceeding with defaults only, you have been warned")
+		}
+
 		cfg = settings.NewSettings()
 	}
 
