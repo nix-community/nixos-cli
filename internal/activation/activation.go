@@ -131,7 +131,8 @@ func GetCurrentGenerationNumber(profile string) (uint64, error) {
 type SwitchToConfigurationAction int
 
 const (
-	SwitchToConfigurationActionSwitch = iota
+	SwitchToConfigurationActionUnknown = iota
+	SwitchToConfigurationActionSwitch
 	SwitchToConfigurationActionBoot
 	SwitchToConfigurationActionTest
 	SwitchToConfigurationActionDryActivate
