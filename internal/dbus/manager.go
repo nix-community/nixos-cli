@@ -31,6 +31,9 @@ var ErrUnknownSignal = errors.New("unknown signal")
 func LookupSignal(signal *dbus.Signal) (Signal, error) {
 	switch signal.Name {
 	case InterfaceOrgFreedesktopDBusProperties + "." + "PropertiesChanged":
+		if len(signal.Body) < 3 {
+			return nil, fmt.Errorf("signal has %v args rather than the expected 3", len(signal.Body))
+		}
 		v0, ok := signal.Body[0].(string)
 		if !ok {
 			return nil, fmt.Errorf("prop .InterfaceName is %T, not string", signal.Body[0])
@@ -53,6 +56,9 @@ func LookupSignal(signal *dbus.Signal) (Signal, error) {
 			},
 		}, nil
 	case InterfaceOrgFreedesktopSystemd1Manager + "." + "UnitNew":
+		if len(signal.Body) < 2 {
+			return nil, fmt.Errorf("signal has %v args rather than the expected 2", len(signal.Body))
+		}
 		v0, ok := signal.Body[0].(string)
 		if !ok {
 			return nil, fmt.Errorf("prop .Id is %T, not string", signal.Body[0])
@@ -70,6 +76,9 @@ func LookupSignal(signal *dbus.Signal) (Signal, error) {
 			},
 		}, nil
 	case InterfaceOrgFreedesktopSystemd1Manager + "." + "UnitRemoved":
+		if len(signal.Body) < 2 {
+			return nil, fmt.Errorf("signal has %v args rather than the expected 2", len(signal.Body))
+		}
 		v0, ok := signal.Body[0].(string)
 		if !ok {
 			return nil, fmt.Errorf("prop .Id is %T, not string", signal.Body[0])
@@ -87,6 +96,9 @@ func LookupSignal(signal *dbus.Signal) (Signal, error) {
 			},
 		}, nil
 	case InterfaceOrgFreedesktopSystemd1Manager + "." + "JobNew":
+		if len(signal.Body) < 3 {
+			return nil, fmt.Errorf("signal has %v args rather than the expected 3", len(signal.Body))
+		}
 		v0, ok := signal.Body[0].(uint32)
 		if !ok {
 			return nil, fmt.Errorf("prop .Id is %T, not uint32", signal.Body[0])
@@ -109,6 +121,9 @@ func LookupSignal(signal *dbus.Signal) (Signal, error) {
 			},
 		}, nil
 	case InterfaceOrgFreedesktopSystemd1Manager + "." + "JobRemoved":
+		if len(signal.Body) < 4 {
+			return nil, fmt.Errorf("signal has %v args rather than the expected 4", len(signal.Body))
+		}
 		v0, ok := signal.Body[0].(uint32)
 		if !ok {
 			return nil, fmt.Errorf("prop .Id is %T, not uint32", signal.Body[0])
@@ -136,6 +151,9 @@ func LookupSignal(signal *dbus.Signal) (Signal, error) {
 			},
 		}, nil
 	case InterfaceOrgFreedesktopSystemd1Manager + "." + "StartupFinished":
+		if len(signal.Body) < 6 {
+			return nil, fmt.Errorf("signal has %v args rather than the expected 6", len(signal.Body))
+		}
 		v0, ok := signal.Body[0].(uint64)
 		if !ok {
 			return nil, fmt.Errorf("prop .Firmware is %T, not uint64", signal.Body[0])
@@ -173,12 +191,18 @@ func LookupSignal(signal *dbus.Signal) (Signal, error) {
 			},
 		}, nil
 	case InterfaceOrgFreedesktopSystemd1Manager + "." + "UnitFilesChanged":
+		if len(signal.Body) < 0 {
+			return nil, fmt.Errorf("signal has %v args rather than the expected 0", len(signal.Body))
+		}
 		return &OrgFreedesktopSystemd1ManagerUnitFilesChangedSignal{
 			sender: signal.Sender,
 			Path:   signal.Path,
 			Body:   &OrgFreedesktopSystemd1ManagerUnitFilesChangedSignalBody{},
 		}, nil
 	case InterfaceOrgFreedesktopSystemd1Manager + "." + "Reloading":
+		if len(signal.Body) < 1 {
+			return nil, fmt.Errorf("signal has %v args rather than the expected 1", len(signal.Body))
+		}
 		v0, ok := signal.Body[0].(bool)
 		if !ok {
 			return nil, fmt.Errorf("prop .Active is %T, not bool", signal.Body[0])
@@ -191,6 +215,9 @@ func LookupSignal(signal *dbus.Signal) (Signal, error) {
 			},
 		}, nil
 	case InterfaceOrgFreedesktopLogin1Manager + "." + "SecureAttentionKey":
+		if len(signal.Body) < 2 {
+			return nil, fmt.Errorf("signal has %v args rather than the expected 2", len(signal.Body))
+		}
 		v0, ok := signal.Body[0].(string)
 		if !ok {
 			return nil, fmt.Errorf("prop .SeatId is %T, not string", signal.Body[0])
@@ -208,6 +235,9 @@ func LookupSignal(signal *dbus.Signal) (Signal, error) {
 			},
 		}, nil
 	case InterfaceOrgFreedesktopLogin1Manager + "." + "SessionNew":
+		if len(signal.Body) < 2 {
+			return nil, fmt.Errorf("signal has %v args rather than the expected 2", len(signal.Body))
+		}
 		v0, ok := signal.Body[0].(string)
 		if !ok {
 			return nil, fmt.Errorf("prop .SessionId is %T, not string", signal.Body[0])
@@ -225,6 +255,9 @@ func LookupSignal(signal *dbus.Signal) (Signal, error) {
 			},
 		}, nil
 	case InterfaceOrgFreedesktopLogin1Manager + "." + "SessionRemoved":
+		if len(signal.Body) < 2 {
+			return nil, fmt.Errorf("signal has %v args rather than the expected 2", len(signal.Body))
+		}
 		v0, ok := signal.Body[0].(string)
 		if !ok {
 			return nil, fmt.Errorf("prop .SessionId is %T, not string", signal.Body[0])
@@ -242,6 +275,9 @@ func LookupSignal(signal *dbus.Signal) (Signal, error) {
 			},
 		}, nil
 	case InterfaceOrgFreedesktopLogin1Manager + "." + "UserNew":
+		if len(signal.Body) < 2 {
+			return nil, fmt.Errorf("signal has %v args rather than the expected 2", len(signal.Body))
+		}
 		v0, ok := signal.Body[0].(uint32)
 		if !ok {
 			return nil, fmt.Errorf("prop .Uid is %T, not uint32", signal.Body[0])
@@ -259,6 +295,9 @@ func LookupSignal(signal *dbus.Signal) (Signal, error) {
 			},
 		}, nil
 	case InterfaceOrgFreedesktopLogin1Manager + "." + "UserRemoved":
+		if len(signal.Body) < 2 {
+			return nil, fmt.Errorf("signal has %v args rather than the expected 2", len(signal.Body))
+		}
 		v0, ok := signal.Body[0].(uint32)
 		if !ok {
 			return nil, fmt.Errorf("prop .Uid is %T, not uint32", signal.Body[0])
@@ -276,6 +315,9 @@ func LookupSignal(signal *dbus.Signal) (Signal, error) {
 			},
 		}, nil
 	case InterfaceOrgFreedesktopLogin1Manager + "." + "SeatNew":
+		if len(signal.Body) < 2 {
+			return nil, fmt.Errorf("signal has %v args rather than the expected 2", len(signal.Body))
+		}
 		v0, ok := signal.Body[0].(string)
 		if !ok {
 			return nil, fmt.Errorf("prop .SeatId is %T, not string", signal.Body[0])
@@ -293,6 +335,9 @@ func LookupSignal(signal *dbus.Signal) (Signal, error) {
 			},
 		}, nil
 	case InterfaceOrgFreedesktopLogin1Manager + "." + "SeatRemoved":
+		if len(signal.Body) < 2 {
+			return nil, fmt.Errorf("signal has %v args rather than the expected 2", len(signal.Body))
+		}
 		v0, ok := signal.Body[0].(string)
 		if !ok {
 			return nil, fmt.Errorf("prop .SeatId is %T, not string", signal.Body[0])
@@ -310,6 +355,9 @@ func LookupSignal(signal *dbus.Signal) (Signal, error) {
 			},
 		}, nil
 	case InterfaceOrgFreedesktopLogin1Manager + "." + "PrepareForShutdown":
+		if len(signal.Body) < 1 {
+			return nil, fmt.Errorf("signal has %v args rather than the expected 1", len(signal.Body))
+		}
 		v0, ok := signal.Body[0].(bool)
 		if !ok {
 			return nil, fmt.Errorf("prop .Start is %T, not bool", signal.Body[0])
@@ -322,6 +370,9 @@ func LookupSignal(signal *dbus.Signal) (Signal, error) {
 			},
 		}, nil
 	case InterfaceOrgFreedesktopLogin1Manager + "." + "PrepareForShutdownWithMetadata":
+		if len(signal.Body) < 2 {
+			return nil, fmt.Errorf("signal has %v args rather than the expected 2", len(signal.Body))
+		}
 		v0, ok := signal.Body[0].(bool)
 		if !ok {
 			return nil, fmt.Errorf("prop .Start is %T, not bool", signal.Body[0])
@@ -339,6 +390,9 @@ func LookupSignal(signal *dbus.Signal) (Signal, error) {
 			},
 		}, nil
 	case InterfaceOrgFreedesktopLogin1Manager + "." + "PrepareForSleep":
+		if len(signal.Body) < 1 {
+			return nil, fmt.Errorf("signal has %v args rather than the expected 1", len(signal.Body))
+		}
 		v0, ok := signal.Body[0].(bool)
 		if !ok {
 			return nil, fmt.Errorf("prop .Start is %T, not bool", signal.Body[0])
@@ -631,7 +685,7 @@ type OrgFreedesktopSystemd1Managerer interface {
 	// ReloadOrTryRestartUnit is org.freedesktop.systemd1.Manager.ReloadOrTryRestartUnit method.
 	ReloadOrTryRestartUnit(name string, mode string) (job dbus.ObjectPath, err *dbus.Error)
 	// EnqueueUnitJob is org.freedesktop.systemd1.Manager.EnqueueUnitJob method.
-	EnqueueUnitJob(name string, jobType string, jobMode string) (jobId uint32, jobPath dbus.ObjectPath, unitId string, unitPath dbus.ObjectPath, jobType string, affectedJobs []struct {
+	EnqueueUnitJob(name string, jobType string, jobMode string) (jobId uint32, jobPath dbus.ObjectPath, unitId string, unitPath dbus.ObjectPath, jobTypeOut string, affectedJobs []struct {
 		V0 uint32
 		V1 dbus.ObjectPath
 		V2 string
@@ -1131,7 +1185,7 @@ func (*UnimplementedOrgFreedesktopSystemd1Manager) ReloadOrTryRestartUnit(name s
 	return
 }
 
-func (*UnimplementedOrgFreedesktopSystemd1Manager) EnqueueUnitJob(name string, jobType string, jobMode string) (jobId uint32, jobPath dbus.ObjectPath, unitId string, unitPath dbus.ObjectPath, jobType string, affectedJobs []struct {
+func (*UnimplementedOrgFreedesktopSystemd1Manager) EnqueueUnitJob(name string, jobType string, jobMode string) (jobId uint32, jobPath dbus.ObjectPath, unitId string, unitPath dbus.ObjectPath, jobTypeOut string, affectedJobs []struct {
 	V0 uint32
 	V1 dbus.ObjectPath
 	V2 string
@@ -1769,14 +1823,14 @@ func (o *OrgFreedesktopSystemd1Manager) ReloadOrTryRestartUnit(ctx context.Conte
 }
 
 // EnqueueUnitJob calls org.freedesktop.systemd1.Manager.EnqueueUnitJob method.
-func (o *OrgFreedesktopSystemd1Manager) EnqueueUnitJob(ctx context.Context, name string, jobType string, jobMode string) (jobId uint32, jobPath dbus.ObjectPath, unitId string, unitPath dbus.ObjectPath, jobType string, affectedJobs []struct {
+func (o *OrgFreedesktopSystemd1Manager) EnqueueUnitJob(ctx context.Context, name string, jobType string, jobMode string) (jobId uint32, jobPath dbus.ObjectPath, unitId string, unitPath dbus.ObjectPath, jobTypeOut string, affectedJobs []struct {
 	V0 uint32
 	V1 dbus.ObjectPath
 	V2 string
 	V3 dbus.ObjectPath
 	V4 string
 }, err error) {
-	err = o.object.CallWithContext(ctx, InterfaceOrgFreedesktopSystemd1Manager+".EnqueueUnitJob", 0, name, jobType, jobMode).Store(&jobId, &jobPath, &unitId, &unitPath, &jobType, &affectedJobs)
+	err = o.object.CallWithContext(ctx, InterfaceOrgFreedesktopSystemd1Manager+".EnqueueUnitJob", 0, name, jobType, jobMode).Store(&jobId, &jobPath, &unitId, &unitPath, &jobTypeOut, &affectedJobs)
 	return
 }
 
@@ -4073,12 +4127,12 @@ type OrgFreedesktopLogin1Managerer interface {
 	CreateSession(uid uint32, pid uint32, service string, inType string, class string, desktop string, seatId string, vtnr uint32, tty string, display string, remote bool, remoteUser string, remoteHost string, properties []struct {
 		V0 string
 		V1 dbus.Variant
-	}) (sessionId string, objectPath dbus.ObjectPath, runtimePath string, fifoFd dbus.UnixFD, uid uint32, seatId string, vtnr uint32, existing bool, err *dbus.Error)
+	}) (sessionId string, objectPath dbus.ObjectPath, runtimePath string, fifoFd dbus.UnixFD, uidOut uint32, seatIdOut string, vtnrOut uint32, existing bool, err *dbus.Error)
 	// CreateSessionWithPIDFD is org.freedesktop.login1.Manager.CreateSessionWithPIDFD method.
 	CreateSessionWithPIDFD(uid uint32, pidfd dbus.UnixFD, service string, inType string, class string, desktop string, seatId string, vtnr uint32, tty string, display string, remote bool, remoteUser string, remoteHost string, flags uint64, properties []struct {
 		V0 string
 		V1 dbus.Variant
-	}) (sessionId string, objectPath dbus.ObjectPath, runtimePath string, fifoFd dbus.UnixFD, uid uint32, seatId string, vtnr uint32, existing bool, err *dbus.Error)
+	}) (sessionId string, objectPath dbus.ObjectPath, runtimePath string, fifoFd dbus.UnixFD, uidOut uint32, seatIdOut string, vtnrOut uint32, existing bool, err *dbus.Error)
 	// ReleaseSession is org.freedesktop.login1.Manager.ReleaseSession method.
 	ReleaseSession(sessionId string) (err *dbus.Error)
 	// ActivateSession is org.freedesktop.login1.Manager.ActivateSession method.
@@ -4345,7 +4399,7 @@ func (*UnimplementedOrgFreedesktopLogin1Manager) ListInhibitors() (inhibitors []
 func (*UnimplementedOrgFreedesktopLogin1Manager) CreateSession(uid uint32, pid uint32, service string, inType string, class string, desktop string, seatId string, vtnr uint32, tty string, display string, remote bool, remoteUser string, remoteHost string, properties []struct {
 	V0 string
 	V1 dbus.Variant
-}) (sessionId string, objectPath dbus.ObjectPath, runtimePath string, fifoFd dbus.UnixFD, uid uint32, seatId string, vtnr uint32, existing bool, err *dbus.Error) {
+}) (sessionId string, objectPath dbus.ObjectPath, runtimePath string, fifoFd dbus.UnixFD, uidOut uint32, seatIdOut string, vtnrOut uint32, existing bool, err *dbus.Error) {
 	err = &dbus.ErrMsgUnknownMethod
 	return
 }
@@ -4353,7 +4407,7 @@ func (*UnimplementedOrgFreedesktopLogin1Manager) CreateSession(uid uint32, pid u
 func (*UnimplementedOrgFreedesktopLogin1Manager) CreateSessionWithPIDFD(uid uint32, pidfd dbus.UnixFD, service string, inType string, class string, desktop string, seatId string, vtnr uint32, tty string, display string, remote bool, remoteUser string, remoteHost string, flags uint64, properties []struct {
 	V0 string
 	V1 dbus.Variant
-}) (sessionId string, objectPath dbus.ObjectPath, runtimePath string, fifoFd dbus.UnixFD, uid uint32, seatId string, vtnr uint32, existing bool, err *dbus.Error) {
+}) (sessionId string, objectPath dbus.ObjectPath, runtimePath string, fifoFd dbus.UnixFD, uidOut uint32, seatIdOut string, vtnrOut uint32, existing bool, err *dbus.Error) {
 	err = &dbus.ErrMsgUnknownMethod
 	return
 }
@@ -4717,8 +4771,8 @@ func (o *OrgFreedesktopLogin1Manager) ListInhibitors(ctx context.Context) (inhib
 func (o *OrgFreedesktopLogin1Manager) CreateSession(ctx context.Context, uid uint32, pid uint32, service string, inType string, class string, desktop string, seatId string, vtnr uint32, tty string, display string, remote bool, remoteUser string, remoteHost string, properties []struct {
 	V0 string
 	V1 dbus.Variant
-}) (sessionId string, objectPath dbus.ObjectPath, runtimePath string, fifoFd dbus.UnixFD, uid uint32, seatId string, vtnr uint32, existing bool, err error) {
-	err = o.object.CallWithContext(ctx, InterfaceOrgFreedesktopLogin1Manager+".CreateSession", 0, uid, pid, service, inType, class, desktop, seatId, vtnr, tty, display, remote, remoteUser, remoteHost, properties).Store(&sessionId, &objectPath, &runtimePath, &fifoFd, &uid, &seatId, &vtnr, &existing)
+}) (sessionId string, objectPath dbus.ObjectPath, runtimePath string, fifoFd dbus.UnixFD, uidOut uint32, seatIdOut string, vtnrOut uint32, existing bool, err error) {
+	err = o.object.CallWithContext(ctx, InterfaceOrgFreedesktopLogin1Manager+".CreateSession", 0, uid, pid, service, inType, class, desktop, seatId, vtnr, tty, display, remote, remoteUser, remoteHost, properties).Store(&sessionId, &objectPath, &runtimePath, &fifoFd, &uidOut, &seatIdOut, &vtnrOut, &existing)
 	return
 }
 
@@ -4730,8 +4784,8 @@ func (o *OrgFreedesktopLogin1Manager) CreateSession(ctx context.Context, uid uin
 func (o *OrgFreedesktopLogin1Manager) CreateSessionWithPIDFD(ctx context.Context, uid uint32, pidfd dbus.UnixFD, service string, inType string, class string, desktop string, seatId string, vtnr uint32, tty string, display string, remote bool, remoteUser string, remoteHost string, flags uint64, properties []struct {
 	V0 string
 	V1 dbus.Variant
-}) (sessionId string, objectPath dbus.ObjectPath, runtimePath string, fifoFd dbus.UnixFD, uid uint32, seatId string, vtnr uint32, existing bool, err error) {
-	err = o.object.CallWithContext(ctx, InterfaceOrgFreedesktopLogin1Manager+".CreateSessionWithPIDFD", 0, uid, pidfd, service, inType, class, desktop, seatId, vtnr, tty, display, remote, remoteUser, remoteHost, flags, properties).Store(&sessionId, &objectPath, &runtimePath, &fifoFd, &uid, &seatId, &vtnr, &existing)
+}) (sessionId string, objectPath dbus.ObjectPath, runtimePath string, fifoFd dbus.UnixFD, uidOut uint32, seatIdOut string, vtnrOut uint32, existing bool, err error) {
+	err = o.object.CallWithContext(ctx, InterfaceOrgFreedesktopLogin1Manager+".CreateSessionWithPIDFD", 0, uid, pidfd, service, inType, class, desktop, seatId, vtnr, tty, display, remote, remoteUser, remoteHost, flags, properties).Store(&sessionId, &objectPath, &runtimePath, &fifoFd, &uidOut, &seatIdOut, &vtnrOut, &existing)
 	return
 }
 
