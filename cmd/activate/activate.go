@@ -3,33 +3,49 @@ package activate
 import (
 	"fmt"
 
-	cmdOpts "github.com/nix-community/nixos-cli/internal/cmd/opts"
+	"github.com/nix-community/nixos-cli/internal/activation"
 	cmdUtils "github.com/nix-community/nixos-cli/internal/cmd/utils"
 	"github.com/spf13/cobra"
 )
 
 func ActivateCommand() *cobra.Command {
-	opts := cmdOpts.ActivateOpts{}
+	var action activation.SwitchToConfigurationAction
+
+	commands := map[string]string{
+		"boot":         "Make this configuration the boot default",
+		"check":        "Run pre-activation checks and exit",
+		"dry-activate": "Show what would be activated but do not perform it",
+		"switch":       "Activate this configuration and make it the boot default",
+		"test":         "Activate this configuration, but don't make it the boot default",
+	}
 
 	cmd := cobra.Command{
-		Use:   "activate [flags] [OPTION-NAME]",
+		Use:   "activate [ACTION] [flags]",
 		Short: "Run activation scripts for a NixOS system",
 		Long:  "Run boot and activation scripts for NixOS generations.",
-		PreRunE: func(cmd *cobra.Command, args []string) error {
-			if !opts.Activate && !opts.CreateBootEntries && !opts.RunChecksOnly {
-				return fmt.Errorf("at least one action must be specified")
+		Args:  cobra.ExactArgs(1),
+		ValidArgsFunction: func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+			results := make([]string, 0, len(commands))
+			for command, desc := range commands {
+				results = append(results, fmt.Sprintf("%v\t%v", command, desc))
 			}
+			return results, cobra.ShellCompDirectiveNoFileComp
+		},
+		PreRunE: func(cmd *cobra.Command, args []string) error {
+			a, err := activation.ParseSwitchToConfigurationAction(args[0])
+			if err != nil {
+				return err
+			}
+			action = a
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return cmdUtils.CommandErrorHandler(activateMain(cmd, &opts))
+			return cmdUtils.CommandErrorHandler(activateMain(cmd, action))
 		},
 	}
 
-	cmd.Flags().BoolVarP(&opts.Activate, "activate", "a", false, "Activate the configuration now")
-	cmd.Flags().BoolVarP(&opts.CreateBootEntries, "boot", "b", false, "Regenerate boot entries and set as default")
-	cmd.Flags().BoolVarP(&opts.RunChecksOnly, "checks-only", "c", false, "Run pre-switch checks and exit")
-	cmd.Flags().BoolVarP(&opts.Dry, "dry", "d", false, "Show what would be done but do not perform it")
+	cmdUtils.SetHelpFlagText(&cmd)
+	cmd.SetHelpTemplate(cmd.HelpTemplate() + "\nActions:\n" + cmdUtils.AlignedOptions(commands))
 
 	return &cmd
 }
