@@ -132,14 +132,34 @@ type SwitchToConfigurationAction int
 
 const (
 	SwitchToConfigurationActionUnknown = iota
+	SwitchToConfigurationActionChecksOnly
 	SwitchToConfigurationActionSwitch
 	SwitchToConfigurationActionBoot
 	SwitchToConfigurationActionTest
 	SwitchToConfigurationActionDryActivate
 )
 
+func ParseSwitchToConfigurationAction(arg string) (SwitchToConfigurationAction, error) {
+	switch arg {
+	case "check":
+		return SwitchToConfigurationActionChecksOnly, nil
+	case "switch":
+		return SwitchToConfigurationActionSwitch, nil
+	case "boot":
+		return SwitchToConfigurationActionBoot, nil
+	case "test":
+		return SwitchToConfigurationActionTest, nil
+	case "dry-activate":
+		return SwitchToConfigurationActionDryActivate, nil
+	default:
+		return SwitchToConfigurationActionUnknown, fmt.Errorf("invalid switch action: %q", arg)
+	}
+}
+
 func (c SwitchToConfigurationAction) String() string {
 	switch c {
+	case SwitchToConfigurationActionChecksOnly:
+		return "check"
 	case SwitchToConfigurationActionSwitch:
 		return "switch"
 	case SwitchToConfigurationActionBoot:
