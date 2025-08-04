@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/nix-community/nixos-cli/internal/build"
 	"github.com/nix-community/nixos-cli/internal/cmd/opts"
@@ -215,20 +216,40 @@ func generateConfigNix(log *logger.Logger, cfg *settings.Settings, virtType Virt
 `
 	}
 
+	stateVersion, _ := getNixpkgsVersion()
+
 	return fmt.Sprintf(
 		configurationNixTemplate,
 		bootloaderConfig,
 		xserverConfig,
 		cfg.Init.DesktopConfig,
 		cfg.Init.ExtraConfig,
-		build.NixpkgsVersion(),
+		stateVersion,
 	), nil
+}
+
+// A heuristic for determining if the version actually exists, or
+// if a future `nixpkgs` version like nixos-unstable is being used.
+// If this is the case, bail.
+func getNixpkgsVersion() (string, error) {
+	version := build.NixpkgsVersion()
+
+	timeOfRelease, err := time.Parse("06.01", version)
+	if err != nil {
+		return "", err
+	}
+
+	if timeOfRelease.After(time.Now()) {
+		return "", fmt.Errorf("release %v does not exist yet", version)
+	}
+
+	return version, nil
 }
 
 func generateFlakeNix() string {
 	var branchName string
 
-	if version := build.NixpkgsVersion(); version != "" {
+	if version, err := getNixpkgsVersion(); err == nil {
 		branchName = fmt.Sprintf("release-%v", version)
 	} else {
 		branchName = "nixos-unstable"
