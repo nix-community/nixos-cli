@@ -226,7 +226,15 @@ func generateConfigNix(log *logger.Logger, cfg *settings.Settings, virtType Virt
 }
 
 func generateFlakeNix() string {
-	nixpkgsInputLine := fmt.Sprintf(`nixpkgs.url = "github:NixOS/nixpkgs/release-%v";`, build.NixpkgsVersion())
+	var branchName string
+
+	if version := build.NixpkgsVersion(); version != "" {
+		branchName = fmt.Sprintf("release-%v", version)
+	} else {
+		branchName = "nixos-unstable"
+	}
+
+	nixpkgsInputLine := fmt.Sprintf(`nixpkgs.url = "github:NixOS/nixpkgs/%s";`, branchName)
 	return fmt.Sprintf(flakeNixTemplate, nixpkgsInputLine)
 }
 
