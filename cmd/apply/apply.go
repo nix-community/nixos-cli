@@ -256,6 +256,15 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 	}
 
 	generationTag := opts.GenerationTag
+	if generationTag == "" {
+		if tagVar := os.Getenv("NIXOS_GENERATION_TAG"); tagVar != "" {
+			if opts.Verbose {
+				log.Info("using explicitly set NIXOS_GENERATION_TAG variable for generation tag")
+			}
+			generationTag = tagVar
+		}
+	}
+
 	if generationTag == "" && cfg.Apply.UseGitCommitMsg {
 		if !configIsDirectory {
 			log.Warn("configuration is not a directory")
@@ -269,17 +278,15 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 				generationTag = commitMsg
 			}
 		}
+	}
 
-		generationTag = strings.TrimSpace(generationTag)
+	generationTag = strings.TrimSpace(generationTag)
 
-		if generationTag == "" {
-			log.Warn("ignoring apply.use_git_commit_msg setting")
-		} else {
-			// Make sure --impure is added to the Nix options if
-			// an implicit commit message is used.
-			if err := cmd.Flags().Set("impure", "true"); err != nil {
-				panic("failed to set --impure flag for apply command before exec with implicit generation tag with git message")
-			}
+	if generationTag == "" {
+		// Make sure --impure is added to the Nix options if
+		// an implicit commit message is used.
+		if err := cmd.Flags().Set("impure", "true"); err != nil {
+			panic("failed to set --impure flag for apply command before exec with implicit generation tag with git message")
 		}
 	}
 
