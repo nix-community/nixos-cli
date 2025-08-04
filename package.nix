@@ -22,6 +22,7 @@ buildGoModule (finalAttrs: {
     COMMIT_HASH = revision;
     FLAKE = lib.boolToString flake;
     VERSION = finalAttrs.version;
+    NIXPKGS_REVISION = lib.trivial.release;
   };
 
   buildPhase = ''
