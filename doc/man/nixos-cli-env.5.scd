@@ -65,6 +65,10 @@ Among other things.
 		environment variable, if the _nixos-config=<PATH>_ attribute is
 		specified there.
 
+*NIXOS_GENERATION_TAG*
+	A description for the generation. Usually set by default through the *-t*
+	flag in *nixos apply* for child commands.
+
 *NIXOS_CLI_DISABLE_STEPS*
 	Disable showing visual steps with the logger. These "steps" get converted to
 	information logs internally if this is set.
