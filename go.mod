@@ -7,10 +7,10 @@ toolchain go1.24.3
 require (
 	github.com/charmbracelet/bubbles v0.21.0
 	github.com/charmbracelet/bubbletea v1.3.6
-	github.com/charmbracelet/glamour v0.10.0
 	github.com/djherbis/times v1.6.0
 	github.com/fatih/color v1.18.0
 	github.com/go-git/go-git/v5 v5.13.1
+	github.com/godbus/dbus/v5 v5.1.0
 	github.com/knadh/koanf/parsers/toml/v2 v2.2.0
 	github.com/knadh/koanf/providers/file v1.2.0
 	github.com/knadh/koanf/v2 v2.2.2
@@ -18,6 +18,7 @@ require (
 	github.com/sahilm/fuzzy v0.1.1
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/pflag v1.0.6
+	github.com/water-sucks/optnix v0.2.0
 	github.com/yarlson/pin v0.9.1
 	golang.org/x/term v0.33.0
 )
@@ -43,9 +44,11 @@ require (
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/ProtonMail/go-crypto v1.1.5 // indirect
 	github.com/alecthomas/chroma/v2 v2.19.0 // indirect
+	github.com/amenzhinsky/dbus-codegen-go v0.2.0 // indirect
 	github.com/atotto/clipboard v0.1.4 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/charmbracelet/colorprofile v0.3.1 // indirect
+	github.com/charmbracelet/glamour v0.10.0 // indirect
 	github.com/charmbracelet/x/cellbuf v0.0.13 // indirect
 	github.com/charmbracelet/x/exp/slice v0.0.0-20250711012602-b1f986320f7e // indirect
 	github.com/cloudflare/circl v1.5.0 // indirect
@@ -74,7 +77,6 @@ require (
 	github.com/pjbgf/sha1cd v0.3.1 // indirect
 	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3 // indirect
 	github.com/skeema/knownhosts v1.3.0 // indirect
-	github.com/water-sucks/optnix v0.2.0 // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	github.com/yuin/goldmark v1.7.12 // indirect
@@ -87,3 +89,7 @@ require (
 	golang.org/x/tools v0.34.0 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 )
+
+tool github.com/amenzhinsky/dbus-codegen-go
+
+replace github.com/amenzhinsky/dbus-codegen-go => github.com/water-sucks/dbus-codegen-go v0.0.0-20250728070445-02468ab735a8

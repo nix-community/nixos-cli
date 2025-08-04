@@ -14,6 +14,7 @@ import (
 
 	"github.com/nix-community/nixos-cli/internal/cmd/opts"
 
+	activateCmd "github.com/nix-community/nixos-cli/cmd/activate"
 	applyCmd "github.com/nix-community/nixos-cli/cmd/apply"
 	completionCmd "github.com/nix-community/nixos-cli/cmd/completion"
 	enterCmd "github.com/nix-community/nixos-cli/cmd/enter"
@@ -136,6 +137,7 @@ func mainCommand() (*cobra.Command, error) {
 
 	_ = cmd.RegisterFlagCompletionFunc("config", settings.CompleteConfigFlag)
 
+	cmd.AddCommand(activateCmd.ActivateCommand())
 	cmd.AddCommand(applyCmd.ApplyCommand(cfg))
 	cmd.AddCommand(completionCmd.CompletionCommand())
 	cmd.AddCommand(enterCmd.EnterCommand())
