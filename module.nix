@@ -100,6 +100,9 @@ in {
       Defaults env_keep += "NIXOS_CONFIG"
       Defaults env_keep += "NIXOS_GENERATION_TAG"
       Defaults env_keep += "NIXOS_CLI_CONFIG"
+      Defaults env_keep += "NIXOS_CLI_DISABLE_STEPS"
+      Defaults env_keep += "NIXOS_CLI_DEBUG_MODE"
+      Defaults env_keep += "NIXOS_CLI_SUPPRESS_NO_SETTINGS_WARNING"
     '';
   };
 }
