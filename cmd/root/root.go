@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/carapace-sh/carapace"
 	"github.com/fatih/color"
 	"github.com/nix-community/nixos-cli/internal/build"
 	"github.com/nix-community/nixos-cli/internal/constants"
@@ -86,7 +87,7 @@ func mainCommand() (*cobra.Command, error) {
 		SilenceUsage:               true,
 		SuggestionsMinimumDistance: 1,
 		CompletionOptions: cobra.CompletionOptions{
-			HiddenDefaultCmd: true,
+			DisableDefaultCmd: true,
 		},
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			for key, value := range opts.ConfigValues {
@@ -154,6 +155,8 @@ func mainCommand() (*cobra.Command, error) {
 			log.Warnf("failed to add alias '%v': %v", alias, err.Error())
 		}
 	}
+
+	carapace.Gen(&cmd)
 
 	return &cmd, nil
 }
