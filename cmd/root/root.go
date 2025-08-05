@@ -156,7 +156,7 @@ func mainCommand() (*cobra.Command, error) {
 		}
 	}
 
-	carapace.Gen(&cmd)
+	carapace.Gen(cmd.Root())
 
 	return &cmd, nil
 }
