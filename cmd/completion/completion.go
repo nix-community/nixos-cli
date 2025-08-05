@@ -1,8 +1,9 @@
 package completion
 
 import (
-	"os"
+	"fmt"
 
+	"github.com/carapace-sh/carapace"
 	"github.com/spf13/cobra"
 )
 
@@ -13,17 +14,15 @@ func CompletionCommand() *cobra.Command {
 		Long:                  "Generate completion scripts for use in shells.",
 		Hidden:                true,
 		DisableFlagsInUseLine: true,
-		ValidArgs:             []string{"bash", "zsh", "fish"},
+		ValidArgs:             []string{},
 		Args:                  cobra.MatchAll(cobra.ExactArgs(1), cobra.OnlyValidArgs),
 		Run: func(cmd *cobra.Command, args []string) {
-			switch args[0] {
-			case "bash":
-				_ = cmd.Root().GenBashCompletionV2(os.Stdout, true)
-			case "zsh":
-				_ = cmd.Root().GenZshCompletion(os.Stdout)
-			case "fish":
-				_ = cmd.Root().GenFishCompletion(os.Stdout, true)
+			completion_script, err := carapace.Gen(cmd.Root()).Snippet(args[0])
+			if err != nil {
+				fmt.Println("", err)
+				return
 			}
+			fmt.Println(completion_script)
 		},
 	}
 
