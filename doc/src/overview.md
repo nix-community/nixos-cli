@@ -173,7 +173,10 @@ Supported shells:
 - `bash`
 - `zsh`
 - `fish`
+- `nushell`
+- `elvish`
+- `xonsh`
 
 If you want support for another shell, file an issue. However, this support is
-provided by [Cobra](https://github.com/spf13/cobra), and as such, support will
-probably need to be implemented upstream before this is possible.
+provided by [Carapace](https://github.com/carapace-sh/carapace), and as such,
+support will probably need to be implemented upstream before this is possible.
