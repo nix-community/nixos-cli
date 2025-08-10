@@ -116,7 +116,7 @@ func (d generationItemDelegate) Render(w io.Writer, m list.Model, index int, lis
 		}
 	}
 
-	fmt.Fprint(w, fn(str))
+	_, _ = fmt.Fprint(w, fn(str))
 }
 
 type endAction interface {

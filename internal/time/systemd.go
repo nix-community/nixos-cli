@@ -14,7 +14,7 @@ func DurationFromTimeSpan(span string) (time.Duration, error) {
 	}
 
 	for _, c := range span {
-		if !(unicode.IsDigit(c) || unicode.IsLetter(c) || c == ' ') {
+		if !unicode.IsDigit(c) && !unicode.IsLetter(c) && c != ' ' {
 			return 0, fmt.Errorf("invalid character %v", c)
 		}
 	}

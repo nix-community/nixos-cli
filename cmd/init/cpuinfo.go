@@ -48,7 +48,7 @@ func getCPUInfo(log *logger.Logger) *CPUInfo {
 		return result
 	}
 
-	defer cpuinfoFile.Close()
+	defer func() { _ = cpuinfoFile.Close() }()
 
 	s := bufio.NewScanner(cpuinfoFile)
 	s.Split(bufio.ScanLines)
