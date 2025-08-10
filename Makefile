@@ -29,6 +29,10 @@ clean:
 	go clean
 	rm -rf site/ man/
 
+.PHONY: check
+check:
+	golangci-lint run
+
 .PHONY: test
 test:
 	@echo "running tests..."

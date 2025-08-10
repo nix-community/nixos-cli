@@ -31,6 +31,9 @@ jobs:
           nix develop .# -c make
           nix develop .# -c make FLAKE=false
 
+      - name: Run checks
+        run: nix develop .# -c make check
+
       - name: Run tests
         run: nix develop .# -c make test
 
