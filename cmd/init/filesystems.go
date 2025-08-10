@@ -42,7 +42,7 @@ func findSwapDevices(log *logger.Logger) []string {
 		log.Warnf("failed to open swap device list %v: %v", swapDeviceListFilename, err)
 		return swapDevices
 	}
-	defer swapDeviceList.Close()
+	defer func() { _ = swapDeviceList.Close() }()
 
 	s := bufio.NewScanner(swapDeviceList)
 	s.Split(bufio.ScanLines)
@@ -54,11 +54,12 @@ func findSwapDevices(log *logger.Logger) []string {
 		swapFilename := fields[0]
 		swapType := fields[1]
 
-		if swapType == "partition" {
+		switch swapType {
+		case "partition":
 			swapDevices = append(swapDevices, findStableDevPath(swapFilename))
-		} else if swapType == "file" {
+		case "file":
 			log.Infof("skipping swap file %v, specify in configuration manually if needed", swapFilename)
-		} else {
+		default:
 			log.Warnf("unsupported swap type %v for %v; do not specify in configuration", swapType, swapFilename)
 		}
 	}
@@ -77,7 +78,7 @@ func findFilesystems(log *logger.Logger, rootDir string) []Filesystem {
 		log.Warnf("failed to open swap device list %v: %v", mountedFilesystemListFilename, err)
 		return filesystems
 	}
-	defer mountList.Close()
+	defer func() { _ = mountList.Close() }()
 
 	s := bufio.NewScanner(mountList)
 	s.Split(bufio.ScanLines)

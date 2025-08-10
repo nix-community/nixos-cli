@@ -92,8 +92,8 @@ func prettyPrintGenInfo(g *generation.Generation) {
 		version = "NixOS (unknown version)"
 	}
 
-	titleColor.Printf("%v\n", version)
-	titleColor.Println(strings.Repeat("-", len(version)))
+	_, _ = titleColor.Printf("%v\n", version)
+	_, _ = titleColor.Println(strings.Repeat("-", len(version)))
 
 	printKey("Generation")
 	fmt.Println(g.Number)
