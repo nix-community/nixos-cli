@@ -4,16 +4,18 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"slices"
 	"strconv"
 	"time"
 
 	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
 
-	"github.com/nix-community/nixos-cli/cmd/generation/shared"
+	genUtils "github.com/nix-community/nixos-cli/cmd/generation/shared"
 	"github.com/nix-community/nixos-cli/internal/build"
-	"github.com/nix-community/nixos-cli/internal/cmd/opts"
-	"github.com/nix-community/nixos-cli/internal/cmd/utils"
+	cmdOpts "github.com/nix-community/nixos-cli/internal/cmd/opts"
+	cmdUtils "github.com/nix-community/nixos-cli/internal/cmd/utils"
 	"github.com/nix-community/nixos-cli/internal/constants"
 	"github.com/nix-community/nixos-cli/internal/generation"
 	"github.com/nix-community/nixos-cli/internal/logger"
@@ -45,11 +47,13 @@ func GenerationDeleteCommand(genOpts *cmdOpts.GenerationOpts) *cobra.Command {
 				}
 			}
 
+			if _, err := regexp.Compile(opts.Pattern); err != nil {
+				return fmt.Errorf("invalid pattern: %v", err)
+			}
+
 			for _, remove := range opts.Remove {
-				for _, keep := range opts.Keep {
-					if remove == keep {
-						return fmt.Errorf("cannot remove and keep the same generation %v", remove)
-					}
+				if slices.Contains(opts.Keep, remove) {
+					return fmt.Errorf("cannot remove and keep the same generation %v", remove)
 				}
 			}
 
@@ -70,7 +74,7 @@ func GenerationDeleteCommand(genOpts *cmdOpts.GenerationOpts) *cobra.Command {
 				}
 			}
 
-			if !opts.All && opts.LowerBound == 0 && opts.UpperBound == 0 && len(opts.Remove) == 0 && opts.OlderThan == "" && len(opts.Keep) == 0 && opts.MinimumToKeep == 0 {
+			if !opts.All && opts.LowerBound == 0 && opts.UpperBound == 0 && len(opts.Remove) == 0 && opts.OlderThan == "" && len(opts.Keep) == 0 && opts.MinimumToKeep == 0 && opts.Pattern == "" {
 				return fmt.Errorf("no generations or deletion parameters were given")
 			}
 
@@ -87,6 +91,8 @@ func GenerationDeleteCommand(genOpts *cmdOpts.GenerationOpts) *cobra.Command {
 	cmd.Flags().Uint64VarP(&opts.UpperBound, "to", "t", 0, "Delete all generations until `gen`, inclusive")
 	cmd.Flags().Uint64VarP(&opts.MinimumToKeep, "min", "m", 0, "Keep a minimum of `num` generations")
 	cmd.Flags().StringVarP(&opts.OlderThan, "older-than", "o", "", "Delete all generations older than `period`")
+	// TODO: add -p shorthand if possible
+	cmd.Flags().StringVar(&opts.Pattern, "pattern", "", "Delete all generations matching `regex`")
 	cmd.Flags().UintSliceVarP(&opts.Keep, "keep", "k", nil, "Always keep this `gen`, can be specified many times")
 	cmd.Flags().BoolVarP(&opts.Verbose, "verbose", "v", false, "Show verbose logging")
 	cmd.Flags().BoolVarP(&opts.AlwaysConfirm, "yes", "y", false, "Automatically confirm generation deletion")

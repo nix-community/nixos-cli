@@ -59,6 +59,14 @@ delete 22 explicitly at the same time:
 
 	For more information, see the *systemd.time(7)* man page.
 
+*-p*, *--pattern* <REGEX>
+	Delete all generations that have a tag/description match *REGEX*.
+
+	The *REGEX* value is a Go-formatted regular expression using RE2
+	syntax, which is roughly a subset of PCRE regular expression syntax.
+
+	For more information, see https://github.com/google/re2/wiki/Syntax.
+
 *-t*, *--to* <GEN>
 	Delete all generations until generation number *GEN*, inclusive.
 
@@ -90,6 +98,7 @@ from most prioritized to least prioritized:
 	- *--keep*
 	- *[GEN...]* positional args
 	- *--all*
+	- *--pattern*
 	- *--from* + *--to*
 	- *--older-than*
 

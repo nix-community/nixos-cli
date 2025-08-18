@@ -2,6 +2,7 @@ package delete
 
 import (
 	"fmt"
+	"regexp"
 	"slices"
 	"sort"
 	"time"
@@ -54,6 +55,15 @@ func resolveGenerationsToDelete(generations []generation.Generation, opts *cmdOp
 			gensToRemove[v.Number] = present{}
 		}
 	} else {
+		if opts.Pattern != "" {
+			pattern := regexp.MustCompile(opts.Pattern)
+			for _, g := range generations {
+				if pattern.MatchString(g.Description) {
+					gensToRemove[g.Number] = present{}
+				}
+			}
+		}
+
 		if opts.LowerBound != 0 || opts.UpperBound != 0 {
 			upperBound := opts.UpperBound
 			if upperBound == 0 {

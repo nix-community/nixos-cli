@@ -94,6 +94,7 @@ type GenerationDeleteOpts struct {
 	OlderThan     string
 	UpperBound    uint64
 	AlwaysConfirm bool
+	Pattern       string
 	// This ideally should be a uint64 to match types,
 	// but Cobra's pflags does not support this type yet.
 	Remove  []uint
