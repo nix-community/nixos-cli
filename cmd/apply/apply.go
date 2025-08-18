@@ -282,7 +282,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 
 	generationTag = strings.TrimSpace(generationTag)
 
-	if generationTag == "" {
+	if generationTag != "" {
 		// Make sure --impure is added to the Nix options if
 		// an implicit commit message is used.
 		if err := cmd.Flags().Set("impure", "true"); err != nil {
