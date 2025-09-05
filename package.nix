@@ -3,6 +3,7 @@
   buildGoModule,
   nix-gitignore,
   installShellFiles,
+  buildPackages,
   stdenv,
   scdoc,
   revision ? "unknown",
@@ -13,20 +14,30 @@ buildGoModule (finalAttrs: {
   version = "0.13.0-dev";
   src = nix-gitignore.gitignoreSource [] ./.;
 
-  vendorHash = "sha256-di/aLNAC08ciCi/9VWt3gHh9P0mDHTOBt1mt5yMoLx0=";
+  vendorHash = "sha256-U7HYyi59Z5sgnU/4+MYkuvTRLAXXulq4AVS/XuddmOc=";
 
   nativeBuildInputs = [installShellFiles scdoc];
 
-  env = {
-    CGO_ENABLED = 0;
-    COMMIT_HASH = revision;
-    FLAKE = lib.boolToString flake;
-    VERSION = finalAttrs.version;
-    NIXPKGS_REVISION = lib.trivial.release;
-  };
+  env =
+    {
+      CGO_ENABLED = 0;
+      COMMIT_HASH = revision;
+      FLAKE = lib.boolToString flake;
+      VERSION = finalAttrs.version;
+      NIXPKGS_REVISION = lib.trivial.release;
+    }
+    // (lib.optionalAttrs stdenv.isLinux {
+      SYSTEMD_DBUS_INTERFACE_DIR = "${buildPackages.systemd}/share/dbus-1/interfaces";
+    });
 
   buildPhase = ''
     runHook preBuild
+
+    # Force-regenerate the dbus bindings. They can be different depending
+    # on the version of `nixpkgs`, and builds must fail if the interface
+    # does not match anymore.
+    make gen-dbus-bindings
+
     make all gen-manpages
     runHook postBuild
   '';

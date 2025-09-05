@@ -51,6 +51,10 @@
           scdoc
           nix-options-doc
         ];
+
+        env = lib.optionalAttrs pkgs.stdenv.isLinux {
+          SYSTEMD_DBUS_INTERFACE_DIR = "${pkgs.buildPackages.systemd}/share/dbus-1/interfaces";
+        };
       };
     });
 
