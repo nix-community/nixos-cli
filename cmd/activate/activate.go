@@ -29,6 +29,7 @@ func ActivateCommand() *cobra.Command {
 			for command, desc := range commands {
 				results = append(results, fmt.Sprintf("%v\t%v", command, desc))
 			}
+
 			return results, cobra.ShellCompDirectiveNoFileComp
 		},
 		PreRunE: func(cmd *cobra.Command, args []string) error {
@@ -37,6 +38,7 @@ func ActivateCommand() *cobra.Command {
 				return err
 			}
 			action = a
+
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
