@@ -7,6 +7,13 @@ type MainOpts struct {
 	ConfigValues map[string]string
 }
 
+type ActivateOpts struct {
+	RunChecksOnly     bool
+	Activate          bool
+	CreateBootEntries bool
+	Dry               bool
+}
+
 type AliasesOpts struct {
 	DisplayJson bool
 }
