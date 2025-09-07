@@ -45,6 +45,7 @@ func (l *LocalSystem) Run(cmd *Command) (int, error) {
 }
 
 func (l *LocalSystem) IsNixOS() bool {
+	// TODO: use os-release if this file does not exist
 	_, err := os.Stat("/etc/NIXOS")
 	return err == nil
 }
