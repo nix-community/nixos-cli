@@ -3,12 +3,12 @@
 package activate
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"slices"
 
 	"github.com/nix-community/nixos-cli/internal/activation"
+	cmdOpts "github.com/nix-community/nixos-cli/internal/cmd/opts"
 	"github.com/nix-community/nixos-cli/internal/constants"
 	"github.com/nix-community/nixos-cli/internal/generation"
 	"github.com/nix-community/nixos-cli/internal/logger"
@@ -74,10 +74,12 @@ func getRequiredVars() (*RequiredVars, error) {
 	}, nil
 }
 
-func execInSwitchContext(s system.CommandRunner, log *logger.Logger, action activation.SwitchToConfigurationAction) error {
-	// TODO: document behavior and what is required for this to be set properly.
-	specialisation := os.Getenv("NIXOS_SPECIALISATION")
-
+func execInSwitchContext(
+	s system.CommandRunner,
+	log *logger.Logger,
+	action activation.SwitchToConfigurationAction,
+	specialisation string,
+) error {
 	if specialisation != "" {
 		specialisations, err := generation.CollectSpecialisations(constants.CurrentSystem)
 		if err != nil {
@@ -85,7 +87,8 @@ func execInSwitchContext(s system.CommandRunner, log *logger.Logger, action acti
 		}
 
 		if !slices.Contains(specialisations, specialisation) {
-			log.Errorf("specialisation defined in $NIXOS_SPECIALISATION is %v does not exist")
+			err = fmt.Errorf("specialisation '%v' does not exist", specialisations)
+			log.Error(err)
 			return err
 		}
 	}
@@ -97,13 +100,16 @@ func execInSwitchContext(s system.CommandRunner, log *logger.Logger, action acti
 	return err
 }
 
-func activateMain(cmd *cobra.Command, action activation.SwitchToConfigurationAction) error {
+func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 	log := logger.FromContext(cmd.Context())
 	s := system.NewLocalSystem(log)
 
 	if attemptingActivation := os.Getenv("NIXOS_CLI_ATTEMPTING_ACTIVATION"); attemptingActivation == "" {
-		err := execInSwitchContext(s, log, action)
-		log.Errorf("failed to re-execute switch-to-configuration script: %v", err)
+		err := execInSwitchContext(s, log, opts.Action, opts.Specialisation)
+		if err != nil {
+			log.Errorf("failed to re-execute switch-to-configuration script: %v", err)
+		}
+
 		return err
 	}
 
@@ -118,10 +124,13 @@ func activateMain(cmd *cobra.Command, action activation.SwitchToConfigurationAct
 		return err
 	}
 
-	bytes, _ := json.MarshalIndent(vars, "", "  ")
-	fmt.Printf("%s\n", string(bytes))
+	env := os.Environ()
+	env = append(env, "NIXOS_ACTION="+opts.Action.String())
 
-	// TODO: run pre-switch checks
+	if vars.LocaleArchive != "" {
+		env = append(env, "LOCALE_ARCHIVE="+vars.LocaleArchive)
+	}
+	_ = env
 
 	return nil
 }

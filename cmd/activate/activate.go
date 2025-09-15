@@ -2,14 +2,16 @@ package activate
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/nix-community/nixos-cli/internal/activation"
+	cmdOpts "github.com/nix-community/nixos-cli/internal/cmd/opts"
 	cmdUtils "github.com/nix-community/nixos-cli/internal/cmd/utils"
 	"github.com/spf13/cobra"
 )
 
 func ActivateCommand() *cobra.Command {
-	var action activation.SwitchToConfigurationAction
+	var opts cmdOpts.ActivateOpts
 
 	commands := map[string]string{
 		"boot":         "Make this configuration the boot default",
@@ -37,13 +39,17 @@ func ActivateCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			action = a
+			opts.Action = a
 
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return cmdUtils.CommandErrorHandler(activateMain(cmd, action))
+			return cmdUtils.CommandErrorHandler(activateMain(cmd, &opts))
 		},
+	}
+
+	if os.Getenv("NIXOS_CLI_ATTEMPTING_ACTIVATION") == "" {
+		cmd.Flags().StringVarP(&opts.Specialisation, "specialisation", "s", "", "Activate specialisation `name`")
 	}
 
 	cmdUtils.SetHelpFlagText(&cmd)
