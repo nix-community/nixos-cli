@@ -380,7 +380,11 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 		return err
 	}
 
-	if !opts.Dry {
+	// Do not create a generation for dry runs or for
+	// testing generations using the --no-boot option.
+	createGeneration := !opts.Dry && !opts.NoBoot
+
+	if createGeneration {
 		if opts.Verbose {
 			log.Step("Setting system profile...")
 		}
@@ -397,7 +401,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 	// fails, since the active profile will not be rolled back
 	// automatically.
 	rollbackProfile := false
-	if !opts.Dry {
+	if createGeneration {
 		defer func(rollback *bool) {
 			if !*rollback {
 				return
