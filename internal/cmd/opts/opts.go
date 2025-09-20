@@ -1,10 +1,18 @@
 package cmdOpts
 
-import "github.com/nix-community/nixos-cli/internal/configuration"
+import (
+	"github.com/nix-community/nixos-cli/internal/configuration"
+	"github.com/nix-community/nixos-cli/internal/activation"
+)
 
 type MainOpts struct {
 	ColorAlways  bool
 	ConfigValues map[string]string
+}
+
+type ActivateOpts struct {
+	Action         activation.SwitchToConfigurationAction
+	Specialisation string
 }
 
 type AliasesOpts struct {

@@ -2,7 +2,11 @@ package cmdUtils
 
 import (
 	"errors"
+	"fmt"
+	"maps"
 	"os"
+	"slices"
+	"sort"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
@@ -39,4 +43,26 @@ func ConfigureBubbleTeaLogger(prefix string) (func(), error) {
 		}
 		_ = file.Close()
 	}, err
+}
+
+func AlignedOptions(options map[string]string) string {
+	maxLen := 0
+	for cmd := range options {
+		if len(cmd) > maxLen {
+			maxLen = len(cmd)
+		}
+	}
+
+	result := ""
+	format := fmt.Sprintf("  %%-%ds  %%s\n", maxLen)
+
+	keys := slices.Collect(maps.Keys(options))
+	sort.Strings(keys)
+
+	for _, cmd := range keys {
+		desc := options[cmd]
+		result += fmt.Sprintf(format, cmd, desc)
+	}
+
+	return result
 }
