@@ -14,6 +14,7 @@ import (
 	"github.com/nix-community/nixos-cli/internal/logger"
 	"github.com/nix-community/nixos-cli/internal/system"
 	"github.com/spf13/cobra"
+	"golang.org/x/sys/unix"
 )
 
 type RequiredVars struct {
@@ -100,6 +101,11 @@ func execInSwitchContext(
 	return err
 }
 
+const (
+	// TODO: this can maybe change in the future?
+	ACTIVATION_LOCKFILE = "/run/nixos/switch-to-configuration.lock"
+)
+
 func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 	log := logger.FromContext(cmd.Context())
 	s := system.NewLocalSystem(log)
@@ -121,6 +127,7 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 
 	vars, err := getRequiredVars()
 	if err != nil {
+		log.Errorf("%s", err)
 		return err
 	}
 
@@ -131,6 +138,28 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 		env = append(env, "LOCALE_ARCHIVE="+vars.LocaleArchive)
 	}
 	_ = env
+
+	err = os.MkdirAll("/run/nixos", 0o755)
+	if err != nil {
+		log.Errorf("failed to create /run/nixos: %s", err)
+		return err
+	}
+
+	lockfile, err := os.OpenFile(ACTIVATION_LOCKFILE, os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		log.Errorf("failed to create activation lockfile %s: %s", ACTIVATION_LOCKFILE, err)
+		return err
+	}
+	defer func() { _ = lockfile.Close() }()
+
+	if err := unix.Flock(int(lockfile.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
+		log.Errorf("failed to lock %s", ACTIVATION_LOCKFILE)
+		log.Info("is another activation process running?")
+		return err
+	}
+	defer unix.Flock(int(lockfile.Fd()), unix.LOCK_UN)
+
+	// TODO: syslog init?
 
 	return nil
 }
