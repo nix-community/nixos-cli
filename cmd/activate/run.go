@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"slices"
+	"strings"
 
 	"github.com/nix-community/nixos-cli/internal/activation"
 	cmdOpts "github.com/nix-community/nixos-cli/internal/cmd/opts"
@@ -101,6 +102,22 @@ func execInSwitchContext(
 	return err
 }
 
+func runPreSwitchCheck(
+	s system.CommandRunner,
+	cmdStr string,
+	toplevel string,
+	action activation.SwitchToConfigurationAction,
+) error {
+	// TODO: would it be more appropriate to use shlex.Split() here?
+	args := strings.Split(cmdStr, " ")
+	args = append(args, toplevel)
+	args = append(args, action.String())
+
+	cmd := system.NewCommand(args[0], args[1:]...)
+	_, err := s.Run(cmd)
+	return err
+}
+
 const (
 	// TODO: this can maybe change in the future?
 	ACTIVATION_LOCKFILE = "/run/nixos/switch-to-configuration.lock"
@@ -131,13 +148,17 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 		return err
 	}
 
-	env := os.Environ()
-	env = append(env, "NIXOS_ACTION="+opts.Action.String())
-
-	if vars.LocaleArchive != "" {
-		env = append(env, "LOCALE_ARCHIVE="+vars.LocaleArchive)
+	err = os.Setenv("NIXOS_ACTION", opts.Action.String())
+	if err != nil {
+		log.Errorf("failed to set NIXOS_ACTION variable: %s", err)
+		return err
 	}
-	_ = env
+
+	err = os.Setenv("LOCALE_ARCHIVE", vars.LocaleArchive)
+	if err != nil {
+		log.Errorf("failed to set LOCALE_ARCHIVE variable: %s", err)
+		return err
+	}
 
 	err = os.MkdirAll("/run/nixos", 0o755)
 	if err != nil {
@@ -160,6 +181,20 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 	defer unix.Flock(int(lockfile.Fd()), unix.LOCK_UN)
 
 	// TODO: syslog init?
+
+	if skipCheck := os.Getenv("NIXOS_NO_CHECK"); skipCheck == "" {
+		log.Info("running pre-switch checks")
+
+		err = runPreSwitchCheck(s, vars.PreSwitchCheckCmd, vars.Toplevel, opts.Action)
+		if err != nil {
+			log.Errorf("failed to run pre-switch check commands: %s", err)
+			return err
+		}
+	}
+
+	if opts.Action == activation.SwitchToConfigurationActionChecksOnly {
+		return nil
+	}
 
 	return nil
 }
