@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/nix-community/nixos-cli/internal/cmd/nixopts"
@@ -22,15 +23,28 @@ type FlakeRef struct {
 func FlakeRefFromString(s string) *FlakeRef {
 	split := strings.Index(s, "#")
 
+	var uri string
+	if split > -1 {
+		uri = s[:split]
+	} else {
+		uri = s
+	}
+
+	if _, err := os.Stat(uri); err == nil {
+		if resolved, err := filepath.EvalSymlinks(uri); err == nil {
+			uri = resolved
+		}
+    }
+
 	if split > -1 {
 		return &FlakeRef{
-			URI:    s[:split],
+			URI:    uri,
 			System: s[split+1:],
 		}
 	}
 
 	return &FlakeRef{
-		URI:    s,
+		URI:    uri,
 		System: "",
 	}
 }
