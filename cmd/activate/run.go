@@ -51,9 +51,9 @@ func getRequiredVars() (*RequiredVars, error) {
 		return nil, ErrorRequiredVarMissing{VarName: "PRE_SWITCH_CHECK"}
 	}
 
-	installBootloaderCmd := os.Getenv("INSTALL_BOOTLOADER_CMD")
+	installBootloaderCmd := os.Getenv("INSTALL_BOOTLOADER")
 	if installBootloaderCmd == "" {
-		return nil, ErrorRequiredVarMissing{VarName: "INSTALL_BOOTLOADER_CMD"}
+		return nil, ErrorRequiredVarMissing{VarName: "INSTALL_BOOTLOADER"}
 	}
 
 	localeArchive := os.Getenv("LOCALE_ARCHIVE")
@@ -111,6 +111,20 @@ func runPreSwitchCheck(
 	args := strings.Split(cmdStr, " ")
 	args = append(args, toplevel)
 	args = append(args, action.String())
+
+	cmd := system.NewCommand(args[0], args[1:]...)
+	_, err := s.Run(cmd)
+	return err
+}
+
+func installBootloader(
+	s system.CommandRunner,
+	cmdStr string,
+	toplevel string,
+) error {
+	// TODO: would it be more appropriate to use shlex.Split() here?
+	args := strings.Split(cmdStr, " ")
+	args = append(args, toplevel)
 
 	cmd := system.NewCommand(args[0], args[1:]...)
 	_, err := s.Run(cmd)
@@ -192,6 +206,19 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 	}
 
 	if opts.Action == activation.SwitchToConfigurationActionChecksOnly {
+		return nil
+	}
+
+	if opts.Action == activation.SwitchToConfigurationActionBoot || opts.Action == activation.SwitchToConfigurationActionSwitch {
+		log.Info("installing bootloader")
+
+		if err := installBootloader(s, vars.InstallBootloaderCmd, vars.Toplevel); err != nil {
+			log.Errorf("failed to install bootloader: %s", err)
+			return err
+		}
+	}
+
+	if opts.Action == activation.SwitchToConfigurationActionBoot {
 		return nil
 	}
 
