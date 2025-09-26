@@ -219,6 +219,24 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 		}
 	}
 
+	if skipSync := os.Getenv("NIXOS_NO_SYNC"); skipSync == "" {
+		log.Info("syncing /nix/store to disk")
+
+		dir, err := os.Open("/nix/store")
+		if err != nil {
+			log.Errorf("failed to sync /nix/store: %v", err)
+			log.Info("will not proceed with activation")
+			return err
+		}
+		defer func() { _ = dir.Close() }()
+
+		if err := unix.Syncfs(int(dir.Fd())); err != nil {
+			log.Errorf("failed to sync /nix/store: %v", err)
+			log.Info("will not proceed with activation")
+			return err
+		}
+	}
+
 	if opts.Action == activation.SwitchToConfigurationActionBoot {
 		return nil
 	}
