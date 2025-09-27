@@ -3,8 +3,10 @@
 package activate
 
 import (
+	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -131,6 +133,32 @@ func installBootloader(
 	return err
 }
 
+type ErrInterfaceVersion struct {
+}
+
+var ErrMismatchedInterfaceVersion = errors.New("this NixOS configuration has an init that is incompatible with the current configuration")
+
+func validateInterfaceVersion(toplevel string) error {
+	currentInitInterfaceVersionFile := filepath.Join(constants.CurrentSystem, "init-interface-version")
+	newInitInterfaceVersionFile := filepath.Join(toplevel, "init-interface-version")
+
+	currentInitInterfaceVersion, err := os.ReadFile(currentInitInterfaceVersionFile)
+	if err != nil {
+		return fmt.Errorf("failed to read %s: %v", currentInitInterfaceVersionFile, err)
+	}
+
+	newInitInterfaceVersion, err := os.ReadFile(newInitInterfaceVersionFile)
+	if err != nil {
+		return fmt.Errorf("failed to read %s: %v", newInitInterfaceVersionFile, err)
+	}
+
+	if string(currentInitInterfaceVersion) != string(newInitInterfaceVersion) {
+		return ErrMismatchedInterfaceVersion
+	}
+
+	return nil
+}
+
 const (
 	// TODO: this can maybe change in the future?
 	ACTIVATION_LOCKFILE = "/run/nixos/switch-to-configuration.lock"
@@ -191,7 +219,7 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 		log.Info("is another activation process running?")
 		return err
 	}
-	defer unix.Flock(int(lockfile.Fd()), unix.LOCK_UN)
+	defer func() { _ = unix.Flock(int(lockfile.Fd()), unix.LOCK_UN) }()
 
 	// TODO: syslog init?
 
@@ -238,6 +266,14 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 
 	if opts.Action == activation.SwitchToConfigurationActionBoot {
 		return nil
+	}
+
+	if err = validateInterfaceVersion(vars.Toplevel); err != nil {
+		log.Errorf("%v", err)
+		if errors.Is(err, ErrMismatchedInterfaceVersion) {
+			log.Info("the new configuration won't take effect until you reboot the system")
+		}
+		return err
 	}
 
 	return nil
