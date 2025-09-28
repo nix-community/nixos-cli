@@ -6,9 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"slices"
 	"strings"
+	"syscall"
 
 	"github.com/nix-community/nixos-cli/internal/activation"
 	cmdOpts "github.com/nix-community/nixos-cli/internal/cmd/opts"
@@ -225,6 +227,8 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 	}
 	defer func() { _ = unix.Flock(int(lockfile.Fd()), unix.LOCK_UN) }()
 
+	// TODO: apply dry activation semantics?
+
 	// TODO: syslog init?
 
 	if skipCheck := os.Getenv("NIXOS_NO_CHECK"); skipCheck == "" {
@@ -279,6 +283,10 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 		}
 		return err
 	}
+
+	// Prevent this process from getting killed if running
+	// in a TTY and tty* systemd unit(s) are restarted.
+	signal.Ignore(syscall.SIGHUP)
 
 	return nil
 }
