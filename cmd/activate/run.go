@@ -166,6 +166,12 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 	log := logger.FromContext(cmd.Context())
 	s := system.NewLocalSystem(log)
 
+	if os.Geteuid() != 0 {
+		err := fmt.Errorf("this command must be ran as root")
+		log.Errorf("%s", err)
+		return err
+	}
+
 	if attemptingActivation := os.Getenv("NIXOS_CLI_ATTEMPTING_ACTIVATION"); attemptingActivation == "" {
 		err := execInSwitchContext(s, log, opts.Action, opts.Specialisation)
 		if err != nil {
