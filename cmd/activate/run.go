@@ -3,6 +3,7 @@
 package activate
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -11,6 +12,8 @@ import (
 	"slices"
 	"strings"
 	"syscall"
+
+	systemdDbus "github.com/coreos/go-systemd/v22/dbus"
 
 	"github.com/nix-community/nixos-cli/internal/activation"
 	cmdOpts "github.com/nix-community/nixos-cli/internal/cmd/opts"
@@ -168,6 +171,10 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 	log := logger.FromContext(cmd.Context())
 	s := system.NewLocalSystem(log)
 
+	if opts.Action == activation.SwitchToConfigurationActionDryActivate {
+		recordUnits = false
+	}
+
 	if os.Geteuid() != 0 {
 		err := fmt.Errorf("this command must be ran as root")
 		log.Errorf("%s", err)
@@ -227,8 +234,6 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 	}
 	defer func() { _ = unix.Flock(int(lockfile.Fd()), unix.LOCK_UN) }()
 
-	// TODO: apply dry activation semantics?
-
 	// TODO: syslog init?
 
 	if skipCheck := os.Getenv("NIXOS_NO_CHECK"); skipCheck == "" {
@@ -287,6 +292,28 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 	// Prevent this process from getting killed if running
 	// in a TTY and tty* systemd unit(s) are restarted.
 	signal.Ignore(syscall.SIGHUP)
+
+	ctx := context.Background()
+
+	systemd, err := systemdDbus.NewWithContext(ctx)
+	if err != nil {
+		log.Errorf("failed to initialize systemd dbus connection: %v", err)
+		return err
+	}
+	defer systemd.Close()
+
+	unitLists := makeUnitLists(vars.Toplevel)
+
+	currentActiveUnits, err := getActiveUnits(ctx, systemd)
+	if err != nil {
+		return fmt.Errorf("failed to get active units: %s", err)
+	}
+
+	err = unitLists.ClassifyActiveUnits(ctx, currentActiveUnits)
+	if err != nil {
+		log.Errorf("%v", err)
+		return err
+	}
 
 	return nil
 }
