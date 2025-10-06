@@ -1,4 +1,4 @@
-package time
+package systemdUtils
 
 import (
 	"fmt"

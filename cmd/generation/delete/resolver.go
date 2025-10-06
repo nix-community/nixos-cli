@@ -9,7 +9,7 @@ import (
 
 	"github.com/nix-community/nixos-cli/internal/cmd/opts"
 	"github.com/nix-community/nixos-cli/internal/generation"
-	timeUtils "github.com/nix-community/nixos-cli/internal/time"
+	"github.com/nix-community/nixos-cli/internal/systemd"
 )
 
 type generationSet map[uint64]present
@@ -93,7 +93,7 @@ func resolveGenerationsToDelete(generations []generation.Generation, opts *cmdOp
 
 		if opts.OlderThan != "" {
 			// This is validated during argument parsing, so no need to check for errors.
-			olderThanTimeSpan, _ := timeUtils.DurationFromTimeSpan(opts.OlderThan)
+			olderThanTimeSpan, _ := systemdUtils.DurationFromTimeSpan(opts.OlderThan)
 			upperDateBound := time.Now().Add(-olderThanTimeSpan)
 
 			for _, v := range generations {
