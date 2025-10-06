@@ -21,7 +21,7 @@ import (
 	"github.com/nix-community/nixos-cli/internal/logger"
 	"github.com/nix-community/nixos-cli/internal/settings"
 	"github.com/nix-community/nixos-cli/internal/system"
-	timeUtils "github.com/nix-community/nixos-cli/internal/time"
+	"github.com/nix-community/nixos-cli/internal/systemd"
 	"github.com/nix-community/nixos-cli/internal/utils"
 )
 
@@ -42,7 +42,7 @@ func GenerationDeleteCommand(genOpts *cmdOpts.GenerationOpts) *cobra.Command {
 			}
 			if cmd.Flags().Changed("older-than") {
 				// Make sure older-than is a valid systemd.time(7) string
-				if _, err := timeUtils.DurationFromTimeSpan(opts.OlderThan); err != nil {
+				if _, err := systemdUtils.DurationFromTimeSpan(opts.OlderThan); err != nil {
 					return fmt.Errorf("invalid value for --older-than: %v", err.Error())
 				}
 			}
