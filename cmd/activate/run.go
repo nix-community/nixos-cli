@@ -315,5 +315,31 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 		return err
 	}
 
+	currentFilesystems, currentSwapDevices, _ := parseFstab("/etc/fstab")
+	newFilesystems, newSwapDevices, _ := parseFstab(filepath.Join(vars.Toplevel, "/etc/fstab"))
+
+	unitLists.ClassifyFilesystemUnits(currentFilesystems, newFilesystems)
+
+	for device := range currentSwapDevices {
+		if _, ok := newSwapDevices[device]; !ok {
+			// The swap entry has disappeared, so turn it off.
+			//
+			// Can't use "systemctl stop" here, since systemd has lots
+			// of alias units that prevent a stop from actually calling
+			// "swapoff", so we instead invoke the syscall ourselves.
+			if opts.Action == activation.SwitchToConfigurationActionDryActivate {
+				log.Infof("would stop swap device %s", device)
+			} else {
+				log.Infof("stopping swap device %s", device)
+				err := swapoff(device)
+				if err != nil {
+					log.Warnf("failed to stop swapping to device %s, continuing activation anyway", device)
+				}
+			}
+		}
+
+		// FIXME: update swap options (i.e. its priority).
+	}
+
 	return nil
 }

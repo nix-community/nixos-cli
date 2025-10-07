@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	systemdDbus "github.com/coreos/go-systemd/v22/dbus"
+	systemdUnit "github.com/coreos/go-systemd/v22/unit"
 	systemdUtils "github.com/nix-community/nixos-cli/internal/systemd"
 )
 
@@ -351,6 +352,52 @@ func (l *UnitLists) ClassifyModifiedUnit(
 	}
 
 	return nil
+}
+
+// Given a map of currently mounted filesystems and the new map
+// of filesystems to handle, classify whether or not their units
+// should be restarted, reloaded, or stopped (aka unmounted).
+func (l UnitLists) ClassifyFilesystemUnits(
+	currentFilesystems map[string]Filesystem,
+	newFilesystems map[string]Filesystem,
+) {
+	for mountpoint, currentFS := range currentFilesystems {
+		unit := fmt.Sprintf("%s.mount", systemdUnit.UnitNamePathEscape(mountpoint))
+
+		newFS, stillExists := newFilesystems[mountpoint]
+		if !stillExists {
+			// Unmount filesystem units that have disappeared from the
+			// new system.
+			l.Stop.Add(unit)
+			continue
+		}
+
+		if currentFS.Type != newFS.Type || currentFS.Device != newFS.Device {
+			// "/" and "/nix" mountpoints should never be restarted,
+			// or these could cause a system crash.
+			//
+			// Only reload these special mountpoints if their
+			// mount options have changed.
+			if mountpoint == "/" || mountpoint == "/nix" {
+				if currentFS.Options != newFS.Options {
+					l.Reload.Add(unit)
+					recordUnit(RELOAD_LIST_FILE, unit)
+				} else {
+					l.Skip.Add(unit)
+				}
+			} else {
+				// Device and type changes require unmounting the existing
+				// filesystem, which can only be achieved with a unit restart.
+				l.Restart.Add(unit)
+				recordUnit(RESTART_LIST_FILE, unit)
+			}
+		} else if currentFS.Options != newFS.Options {
+			// Any units reloaded here will respect the soft "remount"
+			// option, so there's no need to handle this specially.
+			l.Reload.Add(unit)
+			recordUnit(RELOAD_LIST_FILE, unit)
+		}
+	}
 }
 
 // Ask the currently running systemd instance via dbus which units are active.
