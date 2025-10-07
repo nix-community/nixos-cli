@@ -341,5 +341,30 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 		// FIXME: update swap options (i.e. its priority).
 	}
 
+	currentPID1Path, err := filepath.EvalSymlinks("/proc/1/exe")
+	if err != nil {
+		currentPID1Path = "/unknown"
+	}
+
+	newPID1Path, err := filepath.EvalSymlinks(filepath.Join(vars.NewSystemd, "lib/systemd/systemd"))
+	if err != nil {
+		err := fmt.Errorf("systemd binary in this system does not exist, cannot continue")
+		log.Errorf("%s", err)
+		return err
+	}
+
+	currentSystemdSystemConfig, err := filepath.EvalSymlinks("/etc/systemd/system.conf")
+	if err != nil {
+		currentSystemdSystemConfig = "/unknown"
+	}
+
+	newSystemdSystemConfig, err := filepath.EvalSymlinks(filepath.Join(vars.Toplevel, "etc/systemd/system.conf"))
+	if err != nil {
+		newSystemdSystemConfig = "/unknown"
+	}
+
+	restartSystemd := currentPID1Path != newPID1Path || currentSystemdSystemConfig != newSystemdSystemConfig
+	log.Infof("would restart systemd: %v", restartSystemd)
+
 	return nil
 }
