@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"slices"
@@ -23,6 +24,14 @@ import (
 	"github.com/nix-community/nixos-cli/internal/system"
 	"github.com/spf13/cobra"
 	"golang.org/x/sys/unix"
+)
+
+const (
+	ACTIVATION_LOCKFILE = "/run/nixos/switch-to-configuration.lock"
+
+	RELOAD_BY_ACTIVATION_LIST_FILE      = "/run/nixos/activation-reload-list"
+	DRY_RESTART_BY_ACTIVATION_LIST_FILE = "/run/nixos/dry-activation-restart-list"
+	DRY_RELOAD_BY_ACTIVATION_LIST_FILE  = "/run/nixos/dry-activation-reload-list"
 )
 
 type RequiredVars struct {
@@ -162,10 +171,20 @@ func validateInterfaceVersion(toplevel string) error {
 	return nil
 }
 
-const (
-	// TODO: this can maybe change in the future?
-	ACTIVATION_LOCKFILE = "/run/nixos/switch-to-configuration.lock"
-)
+func runActivateScript(toplevel string, dry bool) error {
+	var script string
+	if dry {
+		script = filepath.Join(toplevel, "dry-activate")
+	} else {
+		script = filepath.Join(toplevel, "activate")
+	}
+
+	cmd := exec.Command(script)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	return cmd.Run()
+}
 
 func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 	log := logger.FromContext(cmd.Context())
@@ -364,7 +383,89 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 	}
 
 	restartSystemd := currentPID1Path != newPID1Path || currentSystemdSystemConfig != newSystemdSystemConfig
-	log.Infof("would restart systemd: %v", restartSystemd)
+
+	unitsToStop := unitLists.Stop.Filter(unitLists.Filter)
+
+	if opts.Action == activation.SwitchToConfigurationActionDryActivate {
+		if len(unitsToStop) > 0 {
+			log.Infof("would stop the following units: %s", strings.Join(unitsToStop.Sorted(), ", "))
+		}
+
+		if len(unitLists.Skip) > 0 {
+			log.Infof("would NOT stop the following changed units: %s", strings.Join(unitLists.Skip.Sorted(), ", "))
+		}
+
+		log.Info("would run activate script...")
+
+		// If the dry activate script fails, don't stop printing output
+		// and just ignore the errors.
+		err = runActivateScript(vars.Toplevel, true)
+		if err != nil {
+			log.Warnf("running activation script failed: %s", err)
+			log.Info("this will be a fatal error during a real activation")
+		}
+
+		dryRestartUnits := readUnitsListFile(DRY_RESTART_BY_ACTIVATION_LIST_FILE)
+		for unit := range dryRestartUnits {
+			resolvedUnit := resolveUnit(unit, vars.Toplevel)
+
+			if _, ok := currentActiveUnits[unit]; !ok {
+				unitLists.Start.Add(unit)
+				continue
+			}
+
+			err = unitLists.ClassifyModifiedUnit(
+				unit,
+				resolvedUnit.BaseName,
+				resolvedUnit.NewUnitFile,
+				resolvedUnit.NewBaseFile,
+				nil,
+				currentActiveUnits,
+			)
+			if err != nil {
+				log.Errorf("failed to classify unit %s: %s", unit, err)
+				return err
+			}
+		}
+
+		err := os.Remove(DRY_RESTART_BY_ACTIVATION_LIST_FILE)
+		if err != nil && !os.IsNotExist(err) {
+			log.Warnf("failed to remove %s, please remove manually to prevent problems with future activations", DRY_RESTART_BY_ACTIVATION_LIST_FILE)
+		}
+
+		dryReloadUnits := readUnitsListFile(DRY_RELOAD_BY_ACTIVATION_LIST_FILE)
+		for unit := range dryReloadUnits {
+			if _, ok := currentActiveUnits[unit]; !ok {
+				if !unitLists.Restart.Has(unit) && !unitLists.Stop.Has(unit) {
+					unitLists.Reload.Add(unit)
+				}
+			}
+		}
+
+		err = os.Remove(DRY_RELOAD_BY_ACTIVATION_LIST_FILE)
+		if err != nil && !os.IsNotExist(err) {
+			log.Errorf("failed to remove %s, please remove manually to prevent problems with future activations", DRY_RELOAD_BY_ACTIVATION_LIST_FILE)
+		}
+
+		if restartSystemd {
+			log.Info("would restart systemd")
+		}
+
+		if len(unitLists.Reload) > 0 {
+			log.Infof("would reload the following units: %s", strings.Join(unitLists.Reload.Sorted(), ", "))
+		}
+
+		if len(unitLists.Restart) > 0 {
+			log.Infof("would restart the following units: %s", strings.Join(unitLists.Restart.Sorted(), ", "))
+		}
+
+		unitsToStart := unitLists.Start.Filter(unitLists.Filter)
+		if len(unitsToStart) > 0 {
+			log.Infof("would start the following units: %s", strings.Join(unitsToStart.Sorted(), ", "))
+		}
+
+		return nil
+	}
 
 	return nil
 }

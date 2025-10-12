@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 
 	systemdDbus "github.com/coreos/go-systemd/v22/dbus"
@@ -174,6 +175,28 @@ func (l *UnitLists) ClassifyActiveUnits(ctx context.Context, units map[string]Un
 	}
 
 	return nil
+}
+
+func (l UnitList) Filter(unitsToFilter UnitList) UnitList {
+	newList := make(UnitList)
+
+	for unit := range l {
+		if !unitsToFilter.Has(unit) {
+			newList.Add(unit)
+		}
+	}
+
+	return newList
+}
+
+func (l UnitList) Sorted() []string {
+	keys := make([]string, 0, len(l))
+	for unit := range l {
+		keys = append(keys, strings.ToLower(unit))
+	}
+
+	sort.Strings(keys)
+	return keys
 }
 
 func (l *UnitLists) ClassifyModifiedUnit(
