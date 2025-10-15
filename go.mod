@@ -92,3 +92,5 @@ require (
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+replace github.com/coreos/go-systemd/v22 v22.6.0 => github.com/water-sucks/go-systemd/v22 v22.0.0-20251014195852-fe9dbfc225a6
