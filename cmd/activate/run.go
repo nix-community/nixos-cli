@@ -6,12 +6,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"syscall"
 
 	systemdDbus "github.com/coreos/go-systemd/v22/dbus"
@@ -29,9 +31,10 @@ import (
 const (
 	ACTIVATION_LOCKFILE = "/run/nixos/switch-to-configuration.lock"
 
-	RELOAD_BY_ACTIVATION_LIST_FILE      = "/run/nixos/activation-reload-list"
 	DRY_RESTART_BY_ACTIVATION_LIST_FILE = "/run/nixos/dry-activation-restart-list"
 	DRY_RELOAD_BY_ACTIVATION_LIST_FILE  = "/run/nixos/dry-activation-reload-list"
+	RELOAD_BY_ACTIVATION_LIST_FILE      = "/run/nixos/activation-reload-list"
+	RESTART_BY_ACTIVATION_LIST_FILE     = "/run/nixos/activation-restart-list"
 )
 
 type RequiredVars struct {
@@ -171,6 +174,8 @@ func validateInterfaceVersion(toplevel string) error {
 	return nil
 }
 
+var errActivateScriptNotExist = errors.New("activate script does not exist")
+
 func runActivateScript(toplevel string, dry bool) error {
 	var script string
 	if dry {
@@ -179,11 +184,96 @@ func runActivateScript(toplevel string, dry bool) error {
 		script = filepath.Join(toplevel, "activate")
 	}
 
+	if _, err := os.Stat(script); errors.Is(err, os.ErrNotExist) {
+		return errActivateScriptNotExist
+	}
+
 	cmd := exec.Command(script)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
 	return cmd.Run()
+}
+
+type unitAction string
+
+const (
+	actionStart   unitAction = "start"
+	actionStop    unitAction = "stop"
+	actionRestart unitAction = "restart"
+	actionReload  unitAction = "reload"
+)
+
+// Run a specified action on a unit list, of either
+// "start", "stop", "restart", or "reload".
+//
+// Returns a map of systemd job statuses for each unit
+// name, with the following possible values:
+//
+// - "done" - success
+// - "canceled" - context canceled before execution finished
+// - "timeout" - job timeout reached
+// - "failed" - job failed
+// - "dependency" - a dependency failed, so this job was removed
+// - "skipped" - action did not apply for unit, so nothing done
+//
+// along with a list of errors encountered
+func runUnitAction(
+	ctx context.Context,
+	systemd *systemdDbus.Conn,
+	units UnitList,
+	action unitAction,
+) (map[string]string, []error) {
+	// Instead of using an errgroup, collect all errors
+	// that result from this operation using an error channel..
+	//
+	// Errors will be displayed by invoking the systemctl binary
+	// later, after all unit actions are finished.
+	var wg sync.WaitGroup
+	errCh := make(chan error, len(units))
+
+	var mu sync.Mutex
+	statuses := make(map[string]string, len(units))
+
+	for unit := range units {
+		wg.Go(func() {
+			unit := unit
+			ch := make(chan string, 1)
+
+			var err error
+			switch action {
+			case actionReload:
+				_, err = systemd.ReloadUnitContext(ctx, unit, "replace", ch)
+			case actionRestart:
+				_, err = systemd.RestartUnitContext(ctx, unit, "replace", ch)
+			case actionStart:
+				_, err = systemd.StartUnitContext(ctx, unit, "replace", ch)
+			case actionStop:
+				_, err = systemd.StopUnitContext(ctx, unit, "replace", ch)
+			}
+
+			if err != nil {
+				errCh <- fmt.Errorf("failed to %v %s: %w", action, unit, err)
+			}
+
+			result := <-ch
+
+			mu.Lock()
+			statuses[unit] = result
+		})
+	}
+
+	wg.Wait()
+	close(errCh)
+
+	errs := make([]error, 0, len(units))
+	for err := range errCh {
+		if err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	return statuses, errs
 }
 
 func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
@@ -384,9 +474,8 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 
 	restartSystemd := currentPID1Path != newPID1Path || currentSystemdSystemConfig != newSystemdSystemConfig
 
-	unitsToStop := unitLists.Stop.Filter(unitLists.Filter)
-
 	if opts.Action == activation.SwitchToConfigurationActionDryActivate {
+		unitsToStop := unitLists.Stop.Filter(unitLists.Filter)
 		if len(unitsToStop) > 0 {
 			log.Infof("would stop the following units: %s", strings.Join(unitsToStop.Sorted(), ", "))
 		}
@@ -400,9 +489,8 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 		// If the dry activate script fails, don't stop printing output
 		// and just ignore the errors.
 		err = runActivateScript(vars.Toplevel, true)
-		if err != nil {
+		if err != nil && !errors.Is(err, errActivateScriptNotExist) {
 			log.Warnf("running activation script failed: %s", err)
-			log.Info("this will be a fatal error during a real activation")
 		}
 
 		dryRestartUnits := readUnitsListFile(DRY_RESTART_BY_ACTIVATION_LIST_FILE)
@@ -428,8 +516,8 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 			}
 		}
 
-		err := os.Remove(DRY_RESTART_BY_ACTIVATION_LIST_FILE)
-		if err != nil && !os.IsNotExist(err) {
+		err := os.RemoveAll(DRY_RESTART_BY_ACTIVATION_LIST_FILE)
+		if err != nil {
 			log.Warnf("failed to remove %s, please remove manually to prevent problems with future activations", DRY_RESTART_BY_ACTIVATION_LIST_FILE)
 		}
 
@@ -442,9 +530,9 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 			}
 		}
 
-		err = os.Remove(DRY_RELOAD_BY_ACTIVATION_LIST_FILE)
-		if err != nil && !os.IsNotExist(err) {
-			log.Errorf("failed to remove %s, please remove manually to prevent problems with future activations", DRY_RELOAD_BY_ACTIVATION_LIST_FILE)
+		err = os.RemoveAll(DRY_RELOAD_BY_ACTIVATION_LIST_FILE)
+		if err != nil {
+			log.Warnf("failed to remove %s, please remove manually to prevent problems with future activations", DRY_RELOAD_BY_ACTIVATION_LIST_FILE)
 		}
 
 		if restartSystemd {
@@ -465,6 +553,94 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 		}
 
 		return nil
+	}
+
+	log.Info("switching to system configuration")
+
+	serviceStatuses := make(map[string]string)
+
+	if len(unitLists.Stop) > 0 {
+		filteredUnits := unitLists.Stop.Filter(unitLists.Filter)
+		if len(filteredUnits) > 0 {
+			log.Infof("stopping the following units: %s", strings.Join(filteredUnits.Sorted(), ", "))
+		}
+
+		statuses, _ := runUnitAction(ctx, systemd, unitLists.Stop, actionStop)
+		maps.Copy(serviceStatuses, statuses)
+	}
+
+	if len(unitLists.Skip) > 0 {
+		log.Infof("NOT restarting the following changed units: %s", strings.Join(unitLists.Skip.Sorted(), ", "))
+	}
+
+	exitCode := 0
+
+	log.Info("running activation script")
+	err = runActivateScript(vars.Toplevel, false)
+	if err != nil && !errors.Is(err, errActivateScriptNotExist) {
+		log.Errorf("failed to run activate script: %v", err)
+		exitCode = 2
+	}
+
+	activateRestartUnits := readUnitsListFile(RESTART_BY_ACTIVATION_LIST_FILE)
+	for unit := range activateRestartUnits {
+		resolvedUnit := resolveUnit(unit, vars.Toplevel)
+
+		if _, ok := currentActiveUnits[unit]; !ok {
+			unitLists.Start.Add(unit)
+			continue
+		}
+
+		err = unitLists.ClassifyModifiedUnit(
+			unit,
+			resolvedUnit.BaseName,
+			resolvedUnit.NewUnitFile,
+			resolvedUnit.NewBaseFile,
+			nil,
+			currentActiveUnits,
+		)
+		if err != nil {
+			log.Errorf("failed to classify unit %s: %s", unit, err)
+			return err
+		}
+	}
+
+	err = os.RemoveAll(RESTART_BY_ACTIVATION_LIST_FILE)
+	if err != nil {
+		log.Warnf("failed to remove %s, please remove manually to prevent problems with future activations", DRY_RELOAD_BY_ACTIVATION_LIST_FILE)
+	}
+
+	activateReloadUnits := readUnitsListFile(RELOAD_BY_ACTIVATION_LIST_FILE)
+	for unit := range activateReloadUnits {
+		if _, ok := currentActiveUnits[unit]; !ok {
+			if !unitLists.Restart.Has(unit) && !unitLists.Stop.Has(unit) {
+				unitLists.Reload.Add(unit)
+			}
+		}
+	}
+
+	err = os.RemoveAll(RELOAD_BY_ACTIVATION_LIST_FILE)
+	if err != nil {
+		log.Warnf("failed to remove %s, please remove manually to prevent problems with future activations", RELOAD_BY_ACTIVATION_LIST_FILE)
+	}
+
+	// Restart systemd if necessary. Note that this is done using the
+	// current version of systemd, just in case the new one has trouble
+	// communicating with the running pid 1.
+	//
+	// Basically the equivalent of `systemd daemon-reexec`.
+	if restartSystemd {
+		// A reply will not be received, so ignore errors.
+		_ = systemd.ReexecuteContext(ctx)
+	}
+
+	// Forget about previously failed services and reload the
+	// available systemd units; basically `systemctl daemon-reload`.
+	_ = systemd.ReloadContext(ctx)
+
+	// TODO: figure out way to exit gracefully with correct error code
+	if exitCode != 0 {
+		os.Exit(exitCode)
 	}
 
 	return nil
