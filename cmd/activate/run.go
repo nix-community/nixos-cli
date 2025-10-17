@@ -744,6 +744,24 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 		_ = os.RemoveAll(RELOAD_LIST_FILE)
 	}
 
+	// Restart changed services (aka those that have to be restarted,
+	// rather than stopped and started).
+	if len(unitLists.Restart) > 0 {
+		filteredUnits := unitLists.Restart.Filter(unitLists.Filter)
+		if len(filteredUnits) > 0 {
+			log.Infof("restarting the following units: %s", strings.Join(filteredUnits.Sorted(), ", "))
+		}
+
+		statuses, errs := runUnitAction(ctx, systemd, unitLists.Restart, actionRestart)
+		for _, err := range errs {
+			log.Warn(err)
+			exitCode = 4
+		}
+		maps.Copy(serviceStatuses, statuses)
+
+		_ = os.RemoveAll(RESTART_LIST_FILE)
+	}
+
 	// TODO: figure out way to exit gracefully with correct error code
 	if exitCode != 0 {
 		os.Exit(exitCode)
