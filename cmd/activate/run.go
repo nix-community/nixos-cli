@@ -753,6 +753,38 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 	}
 	_ = os.RemoveAll(RESTART_LIST_FILE)
 
+	// Start all active targets, as well as changed units we stopped above.
+	//
+	// The latter is necessary because some may not be dependencies of the
+	// targets (i.e. they were manually started).
+	//
+	// FIXME: detect units that are symlinks to other units. We shouldn't
+	// start both at the same time because we'll get a "Failed to add path
+	// to set" error from systemd.
+	if len(unitLists.Start) > 0 {
+		filteredUnits := unitLists.Start.Filter(unitLists.Filter)
+		if len(filteredUnits) > 0 {
+			log.Infof("starting the following units: %s", strings.Join(filteredUnits.Sorted(), ", "))
+		}
+
+		statuses := runUnitAction(ctx, systemd, unitLists.Start, actionStart)
+		unitStatuses = append(unitStatuses, statuses...)
+	}
+	_ = os.RemoveAll(START_LIST_FILE)
+
+	for _, s := range unitStatuses {
+		switch s.Result {
+		case "timeout", "failed", "dependency":
+			log.Warnf("failed to %s %s", s.Action, s.Unit)
+			exitCode = 4
+		}
+
+		if s.Err != nil {
+			log.Warnf("service error for %s: %v", s.Unit, s.Err)
+			exitCode = 4
+		}
+	}
+
 	// TODO: figure out way to exit gracefully with correct error code
 	if exitCode != 0 {
 		os.Exit(exitCode)
