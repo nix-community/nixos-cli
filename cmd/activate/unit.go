@@ -447,6 +447,17 @@ func getActiveUnits(ctx context.Context, systemd *systemdDbus.Conn) (map[string]
 	return unitMap, nil
 }
 
+func unitIsActive(ctx context.Context, systemd *systemdDbus.Conn, unit string) (bool, error) {
+	prop, err := systemd.GetUnitPropertyContext(ctx, unit, "ActiveState")
+	if err != nil {
+		return false, err
+	}
+
+	state := prop.Value.Value().(string)
+
+	return state == "active" || state == "activating", nil
+}
+
 type ResolvedUnit struct {
 	// Original unit string (foo@bar.service)
 	Unit string

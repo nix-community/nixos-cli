@@ -25,6 +25,7 @@ import (
 	"github.com/nix-community/nixos-cli/internal/generation"
 	"github.com/nix-community/nixos-cli/internal/logger"
 	"github.com/nix-community/nixos-cli/internal/system"
+	systemdUtils "github.com/nix-community/nixos-cli/internal/systemd"
 	"github.com/spf13/cobra"
 	"golang.org/x/sys/unix"
 )
@@ -534,10 +535,7 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 			}
 		}
 
-		err := os.RemoveAll(DRY_RESTART_BY_ACTIVATION_LIST_FILE)
-		if err != nil {
-			log.Warnf("failed to remove %s, please remove manually to prevent problems with future activations", DRY_RESTART_BY_ACTIVATION_LIST_FILE)
-		}
+		_ = os.RemoveAll(DRY_RESTART_BY_ACTIVATION_LIST_FILE)
 
 		dryReloadUnits := readUnitsListFile(DRY_RELOAD_BY_ACTIVATION_LIST_FILE)
 		for unit := range dryReloadUnits {
@@ -548,10 +546,7 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 			}
 		}
 
-		err = os.RemoveAll(DRY_RELOAD_BY_ACTIVATION_LIST_FILE)
-		if err != nil {
-			log.Warnf("failed to remove %s, please remove manually to prevent problems with future activations", DRY_RELOAD_BY_ACTIVATION_LIST_FILE)
-		}
+		_ = os.RemoveAll(DRY_RELOAD_BY_ACTIVATION_LIST_FILE)
 
 		if restartSystemd {
 			log.Info("would restart systemd")
@@ -623,10 +618,7 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 		}
 	}
 
-	err = os.RemoveAll(RESTART_BY_ACTIVATION_LIST_FILE)
-	if err != nil {
-		log.Warnf("failed to remove %s, please remove manually to prevent problems with future activations", DRY_RELOAD_BY_ACTIVATION_LIST_FILE)
-	}
+	_ = os.RemoveAll(RESTART_BY_ACTIVATION_LIST_FILE)
 
 	activateReloadUnits := readUnitsListFile(RELOAD_BY_ACTIVATION_LIST_FILE)
 	for unit := range activateReloadUnits {
@@ -637,10 +629,7 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 		}
 	}
 
-	err = os.RemoveAll(RELOAD_BY_ACTIVATION_LIST_FILE)
-	if err != nil {
-		log.Warnf("failed to remove %s, please remove manually to prevent problems with future activations", RELOAD_BY_ACTIVATION_LIST_FILE)
-	}
+	_ = os.RemoveAll(RELOAD_BY_ACTIVATION_LIST_FILE)
 
 	// Restart systemd if necessary. Note that this is done using the
 	// current version of systemd, just in case the new one has trouble
@@ -700,6 +689,60 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 		exitCode = 4
 	}
 	serviceStatuses[SYSINIT_REACTIVATION_TARGET] = <-sysinitReactivationStatus
+
+	// Before reloading we need to ensure that the units are still active.
+	//
+	// They may have been deactivated because one of their requirements got
+	// stopped. If they are inactive but should have been reloaded, the user
+	// probably expects them to be started.
+	if len(unitLists.Reload) > 0 {
+		for unit := range unitLists.Reload {
+			active, err := unitIsActive(ctx, systemd, unit)
+			if err != nil {
+				log.Errorf("failed to get state of unit %s: %v", unit, err)
+				continue
+			}
+
+			if active {
+				continue
+			}
+
+			unitPath := filepath.Join(vars.Toplevel, "etc/systemd/system", unit)
+			unitInfo, err := systemdUtils.ParseUnit(unitPath, unitPath)
+			if err != nil {
+				log.Errorf("failed to parse unit file %s: %s", unitPath, err)
+				continue
+			}
+
+			if !unitInfo.GetBoolean("Unit", "RefuseManualStart", false) &&
+				!unitInfo.GetBoolean("Unit", "X-OnlyManualStart", false) {
+				unitLists.Start.Add(unit)
+				recordUnit(START_LIST_FILE, unit)
+			}
+
+			// Don't reload the unit, reloading would fail in this case.
+			unitLists.Reload.Remove(unit)
+			unrecordUnit(RELOAD_LIST_FILE, unit)
+		}
+	}
+
+	// Reload units that need it.
+	// This includes remounting changed mount units.
+	if len(unitLists.Reload) > 0 {
+		filteredUnits := unitLists.Reload.Filter(unitLists.Filter)
+		if len(filteredUnits) > 0 {
+			log.Infof("reloading the following units: %s", strings.Join(filteredUnits.Sorted(), ", "))
+		}
+
+		statuses, errs := runUnitAction(ctx, systemd, unitLists.Reload, actionReload)
+		for _, err := range errs {
+			log.Warn(err)
+			exitCode = 4
+		}
+		maps.Copy(serviceStatuses, statuses)
+
+		_ = os.RemoveAll(RELOAD_LIST_FILE)
+	}
 
 	// TODO: figure out way to exit gracefully with correct error code
 	if exitCode != 0 {
