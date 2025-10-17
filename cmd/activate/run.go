@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"maps"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -210,6 +209,13 @@ const (
 	actionReload  unitAction = "reload"
 )
 
+type unitActionResult struct {
+	Action unitAction
+	Unit   string
+	Result string
+	Err    error
+}
+
 // Run a specified action on a unit list, of either
 // "start", "stop", "restart", or "reload".
 //
@@ -229,17 +235,10 @@ func runUnitAction(
 	systemd *systemdDbus.Conn,
 	units UnitList,
 	action unitAction,
-) (map[string]string, []error) {
-	// Instead of using an errgroup, collect all errors
-	// that result from this operation using an error channel..
-	//
-	// Errors will be displayed by invoking the systemctl binary
-	// later, after all unit actions are finished.
+) []unitActionResult {
 	var wg sync.WaitGroup
-	errCh := make(chan error, len(units))
 
-	var mu sync.Mutex
-	statuses := make(map[string]string, len(units))
+	results := make(chan unitActionResult, len(units))
 
 	for unit := range units {
 		wg.Go(func() {
@@ -258,31 +257,28 @@ func runUnitAction(
 				_, err = systemd.StopUnitContext(ctx, unit, "replace", ch)
 			}
 
-			if err != nil {
-				errCh <- fmt.Errorf("failed to %v %s: %w", action, unit, err)
-			}
-
 			select {
 			case result := <-ch:
-				mu.Lock()
-				statuses[unit] = result
-				mu.Unlock()
+				results <- unitActionResult{
+					Action: action,
+					Unit:   unit,
+					Result: result,
+					Err:    err,
+				}
 			case <-ctx.Done():
 			}
 		})
 	}
 
 	wg.Wait()
-	close(errCh)
+	close(results)
 
-	errs := make([]error, 0, len(units))
-	for err := range errCh {
-		if err != nil {
-			errs = append(errs, err)
-		}
+	collected := make([]unitActionResult, 0, len(units))
+	for result := range results {
+		collected = append(collected, result)
 	}
 
-	return statuses, errs
+	return collected
 }
 
 func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
@@ -570,7 +566,7 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 
 	log.Info("switching to system configuration")
 
-	serviceStatuses := make(map[string]string)
+	unitStatuses := make([]unitActionResult, 0)
 
 	if len(unitLists.Stop) > 0 {
 		filteredUnits := unitLists.Stop.Filter(unitLists.Filter)
@@ -578,8 +574,8 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 			log.Infof("stopping the following units: %s", strings.Join(filteredUnits.Sorted(), ", "))
 		}
 
-		statuses, _ := runUnitAction(ctx, systemd, unitLists.Stop, actionStop)
-		maps.Copy(serviceStatuses, statuses)
+		statuses := runUnitAction(ctx, systemd, unitLists.Stop, actionStop)
+		unitStatuses = append(unitStatuses, statuses...)
 	}
 
 	if len(unitLists.Skip) > 0 {
@@ -688,7 +684,12 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 		log.Errorf("failed to restart %s: %s", SYSINIT_REACTIVATION_TARGET, err)
 		exitCode = 4
 	}
-	serviceStatuses[SYSINIT_REACTIVATION_TARGET] = <-sysinitReactivationStatus
+	unitStatuses = append(unitStatuses, unitActionResult{
+		Action: actionRestart,
+		Unit:   SYSINIT_REACTIVATION_TARGET,
+		Result: <-sysinitReactivationStatus,
+		Err:    err,
+	})
 
 	// Before reloading we need to ensure that the units are still active.
 	//
@@ -734,15 +735,10 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 			log.Infof("reloading the following units: %s", strings.Join(filteredUnits.Sorted(), ", "))
 		}
 
-		statuses, errs := runUnitAction(ctx, systemd, unitLists.Reload, actionReload)
-		for _, err := range errs {
-			log.Warn(err)
-			exitCode = 4
-		}
-		maps.Copy(serviceStatuses, statuses)
-
-		_ = os.RemoveAll(RELOAD_LIST_FILE)
+		statuses := runUnitAction(ctx, systemd, unitLists.Reload, actionReload)
+		unitStatuses = append(unitStatuses, statuses...)
 	}
+	_ = os.RemoveAll(RELOAD_LIST_FILE)
 
 	// Restart changed services (aka those that have to be restarted,
 	// rather than stopped and started).
@@ -752,15 +748,10 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 			log.Infof("restarting the following units: %s", strings.Join(filteredUnits.Sorted(), ", "))
 		}
 
-		statuses, errs := runUnitAction(ctx, systemd, unitLists.Restart, actionRestart)
-		for _, err := range errs {
-			log.Warn(err)
-			exitCode = 4
-		}
-		maps.Copy(serviceStatuses, statuses)
-
-		_ = os.RemoveAll(RESTART_LIST_FILE)
+		statuses := runUnitAction(ctx, systemd, unitLists.Restart, actionRestart)
+		unitStatuses = append(unitStatuses, statuses...)
 	}
+	_ = os.RemoveAll(RESTART_LIST_FILE)
 
 	// TODO: figure out way to exit gracefully with correct error code
 	if exitCode != 0 {
