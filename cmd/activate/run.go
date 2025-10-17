@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	systemdDbus "github.com/coreos/go-systemd/v22/dbus"
 	"github.com/coreos/go-systemd/v22/login1"
@@ -279,6 +280,29 @@ func runUnitAction(
 	}
 
 	return collected
+}
+
+func waitForSystemdToSettle(systemd *systemdDbus.Conn, idleTimeout time.Duration, maxTimeout time.Duration) {
+	changes, _ := systemd.SubscribeUnits(idleTimeout)
+
+	idleTimer := time.NewTimer(idleTimeout)
+	overallTimer := time.NewTimer(maxTimeout)
+
+	for {
+		select {
+		case <-changes:
+			if !idleTimer.Stop() {
+				<-idleTimer.C
+			}
+			idleTimer.Reset(idleTimeout)
+
+		case <-idleTimer.C:
+			return
+
+		case <-overallTimer.C:
+			return
+		}
+	}
 }
 
 func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
@@ -784,6 +808,9 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 			exitCode = 4
 		}
 	}
+
+	log.Info("waiting for systemd events to settle")
+	waitForSystemdToSettle(systemd, 250*time.Millisecond, 90*time.Second)
 
 	// TODO: figure out way to exit gracefully with correct error code
 	if exitCode != 0 {
