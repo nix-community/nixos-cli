@@ -38,6 +38,8 @@ const (
 	RESTART_BY_ACTIVATION_LIST_FILE     = "/run/nixos/activation-restart-list"
 
 	NIXOS_STC_PARENT_EXE = "__NIXOS_SWITCH_TO_CONFIGURATION_PARENT_EXE"
+
+	SYSINIT_REACTIVATION_TARGET = "sysinit-reactivation.target"
 )
 
 type RequiredVars struct {
@@ -679,6 +681,25 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 			return err
 		}
 	}
+
+	// Restart sysinit-reactivation.target. This target only exists to
+	// restart services ordered before sysinit.target. We cannot use
+	// X-StopOnReconfiguration to restart sysinit.target because then
+	// ALL services of the system would be restarted since all normal
+	// services have a default dependency on sysinit.target.
+	//
+	// sysinit-reactivation.target ensures that services ordered BEFORE
+	// sysinit.target get re-started in the correct order. Ordering between
+	// these services is respected.
+	log.Infof("restarting %s", SYSINIT_REACTIVATION_TARGET)
+
+	sysinitReactivationStatus := make(chan string, 1)
+	_, err = systemd.RestartUnitContext(ctx, SYSINIT_REACTIVATION_TARGET, "replace", sysinitReactivationStatus)
+	if err != nil {
+		log.Errorf("failed to restart %s: %s", SYSINIT_REACTIVATION_TARGET, err)
+		exitCode = 4
+	}
+	serviceStatuses[SYSINIT_REACTIVATION_TARGET] = <-sysinitReactivationStatus
 
 	// TODO: figure out way to exit gracefully with correct error code
 	if exitCode != 0 {
