@@ -22,10 +22,27 @@ func ActivateCommand() *cobra.Command {
 	}
 
 	cmd := cobra.Command{
-		Use:   "activate [ACTION] [flags]",
+		Use:   "activate <ACTION> [flags]",
 		Short: "Run activation scripts for a NixOS system",
 		Long:  "Run boot and activation scripts for NixOS generations.",
-		Args:  cobra.ExactArgs(1),
+		Args: func(cmd *cobra.Command, args []string) error {
+			if os.Getenv(NIXOS_STC_PARENT_EXE) != "" {
+				return nil
+			}
+
+			if len(args) == 0 {
+				return fmt.Errorf("missing required argument <ACTION>")
+			}
+
+			a, err := activation.ParseSwitchToConfigurationAction(args[0])
+			if err != nil {
+				return err
+			}
+
+			opts.Action = a
+
+			return nil
+		},
 		ValidArgsFunction: func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
 			results := make([]string, 0, len(commands))
 			for command, desc := range commands {
@@ -33,15 +50,6 @@ func ActivateCommand() *cobra.Command {
 			}
 
 			return results, cobra.ShellCompDirectiveNoFileComp
-		},
-		PreRunE: func(cmd *cobra.Command, args []string) error {
-			a, err := activation.ParseSwitchToConfigurationAction(args[0])
-			if err != nil {
-				return err
-			}
-			opts.Action = a
-
-			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return cmdUtils.CommandErrorHandler(activateMain(cmd, &opts))
