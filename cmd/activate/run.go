@@ -17,6 +17,7 @@ import (
 	"syscall"
 
 	systemdDbus "github.com/coreos/go-systemd/v22/dbus"
+	"github.com/coreos/go-systemd/v22/login1"
 
 	"github.com/nix-community/nixos-cli/internal/activation"
 	cmdOpts "github.com/nix-community/nixos-cli/internal/cmd/opts"
@@ -35,6 +36,8 @@ const (
 	DRY_RELOAD_BY_ACTIVATION_LIST_FILE  = "/run/nixos/dry-activation-reload-list"
 	RELOAD_BY_ACTIVATION_LIST_FILE      = "/run/nixos/activation-reload-list"
 	RESTART_BY_ACTIVATION_LIST_FILE     = "/run/nixos/activation-restart-list"
+
+	NIXOS_STC_PARENT_EXE = "__NIXOS_SWITCH_TO_CONFIGURATION_PARENT_EXE"
 )
 
 type RequiredVars struct {
@@ -256,10 +259,13 @@ func runUnitAction(
 				errCh <- fmt.Errorf("failed to %v %s: %w", action, unit, err)
 			}
 
-			result := <-ch
-
-			mu.Lock()
-			statuses[unit] = result
+			select {
+			case result := <-ch:
+				mu.Lock()
+				statuses[unit] = result
+				mu.Unlock()
+			case <-ctx.Done():
+			}
 		})
 	}
 
@@ -282,6 +288,10 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 
 	if opts.Action == activation.SwitchToConfigurationActionDryActivate {
 		recordUnits = false
+	}
+
+	if parentExe := os.Getenv(NIXOS_STC_PARENT_EXE); parentExe != "" {
+		return userSwitch(log, parentExe)
 	}
 
 	if os.Geteuid() != 0 {
@@ -410,6 +420,12 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 		return err
 	}
 	defer systemd.Close()
+
+	logind, err := login1.New()
+	if err != nil {
+		log.Errorf("failed to initialize logind system dbus connection: %v", err)
+	}
+	defer logind.Close()
 
 	unitLists := makeUnitLists(vars.Toplevel)
 
@@ -637,6 +653,32 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 	// Forget about previously failed services and reload the
 	// available systemd units; basically `systemctl daemon-reload`.
 	_ = systemd.ReloadContext(ctx)
+
+	users, err := logind.ListUsersContext(ctx)
+	if err != nil {
+		log.Errorf("failed to list users using logind: %s", err)
+		return err
+	}
+	for _, user := range users {
+		userProps, _ := logind.GetUserPropertiesContext(ctx, user.Path)
+
+		var gid uint32
+		err := userProps["GID"].Store(&gid)
+		if err != nil {
+			log.Warnf("failed to get GID for user %s, skipping", user.Name)
+			continue
+		}
+
+		runtimePath := userProps["RuntimePath"].String()
+
+		log.Infof("reloading units for user %s...", user.Name)
+
+		err = execUserSwitchProcess(user.UID, gid, runtimePath)
+		if err != nil {
+			log.Errorf("failed to run user switch for user %s: %v", user.Name, err)
+			return err
+		}
+	}
 
 	// TODO: figure out way to exit gracefully with correct error code
 	if exitCode != 0 {
