@@ -454,7 +454,8 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 
 	currentActiveUnits, err := getActiveUnits(ctx, systemd)
 	if err != nil {
-		return fmt.Errorf("failed to get active units: %s", err)
+		log.Errorf("failed to get active units: %s", err)
+		return err
 	}
 
 	err = unitLists.ClassifyActiveUnits(ctx, currentActiveUnits)
@@ -812,9 +813,75 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 	log.Info("waiting for systemd events to settle")
 	waitForSystemdToSettle(systemd, 250*time.Millisecond, 90*time.Second)
 
+	newActiveUnits, err := getActiveUnits(ctx, systemd)
+	if err != nil {
+		log.Errorf("failed to get new active units: %s", err)
+		return err
+	}
+
+	failedUnits := make(UnitList)
+	newUnits := make(UnitList)
+
+	for unit, state := range newActiveUnits {
+		if state.State == "failed" {
+			failedUnits.Add(unit)
+			continue
+		}
+
+		if state.SubState == "auto-restart" && strings.HasSuffix(unit, ".service") {
+			prop, err := systemd.GetUnitTypePropertyContext(ctx, unit, "Service", "ExecMainStatus")
+			if err != nil {
+				log.Errorf("failed to get ExecMainStatus property for %s: %v", unit, err)
+				continue
+			}
+
+			var execMainStatus int32
+			err = prop.Value.Store(&execMainStatus)
+			if err != nil {
+				log.Errorf("failed to convert ExecMainStatus prop value to int32: %v", err)
+			}
+
+			if execMainStatus != 0 {
+				failedUnits.Add(unit)
+				continue
+			}
+		}
+
+		if state.State != "failed" && strings.HasSuffix(unit, ".scope") {
+			if _, exists := currentActiveUnits[unit]; !exists {
+				newUnits.Add(unit)
+			}
+		}
+	}
+
+	if len(newUnits) > 0 {
+		log.Infof("the following new units were started: %s", strings.Join(newUnits.Sorted(), ", "))
+	}
+
+	if len(failedUnits) > 0 {
+		units := failedUnits.Sorted()
+		log.Warnf("the following units failed: %s", strings.Join(units, ", "))
+
+		systemctl := filepath.Join(vars.NewSystemd, "bin/systemctl")
+
+		argv := []string{systemctl, "status", "--no-pager", "--full"}
+		argv = append(argv, units...)
+
+		cmd := exec.Command(argv[0], argv[1:]...)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+
+		_ = cmd.Run()
+
+		exitCode = 4
+	}
+
 	// TODO: figure out way to exit gracefully with correct error code
 	if exitCode != 0 {
+		log.Errorf("switching to system configuration failed (status %d)", exitCode)
 		os.Exit(exitCode)
+	} else {
+		log.Info("finished switching to system configuration")
 	}
 
 	return nil
