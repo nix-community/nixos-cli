@@ -434,7 +434,7 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 		if errors.Is(err, ErrMismatchedInterfaceVersion) {
 			log.Info("the new configuration won't take effect until you reboot the system")
 		}
-		return err
+		os.Exit(100)
 	}
 
 	// Prevent this process from getting killed if running
@@ -882,7 +882,6 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 		exitCode = 4
 	}
 
-	// TODO: figure out way to exit gracefully with correct error code
 	if exitCode != 0 {
 		log.Errorf("switching to system configuration failed (status %d)", exitCode)
 		os.Exit(exitCode)
