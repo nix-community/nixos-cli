@@ -115,8 +115,8 @@ This command also forwards Nix options passed here to all relevant Nix invocatio
 Check the Nix manual page for more details on what options are available.
 `
 
-	cmdUtils.SetHelpFlagText(&cmd)
 	cmd.SetHelpTemplate(helpTemplate)
+	cmdUtils.SetHelpFlagText(&cmd)
 
 	return &cmd
 }
@@ -406,8 +406,14 @@ func installMain(cmd *cobra.Command, opts *cmdOpts.InstallOpts) error {
 	}
 
 	if c, ok := nixConfig.(*configuration.LegacyConfiguration); ok {
-		opts.NixOptions.Includes = append(opts.NixOptions.Includes, fmt.Sprintf("nixos-config=%s", c.ConfigDirname))
+		// This value gets appended to the list of includes,
+		// and does not replace existing values already provided
+		// for -I on the command line.
+		if err := cmd.Flags().Set("include", fmt.Sprintf("nixos-config=%s", c.ConfigDirname)); err != nil {
+			panic("failed to set --include flag for nixos install command for legacy systems")
+		}
 	}
+
 	systemBuildOptions := configuration.SystemBuildOptions{
 		Verbose:   opts.Verbose,
 		CmdFlags:  cmd.Flags(),
