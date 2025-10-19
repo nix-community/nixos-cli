@@ -315,6 +315,12 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 	log := logger.FromContext(cmd.Context())
 	s := system.NewLocalSystem(log)
 
+	if !s.IsNixOS() {
+		err := fmt.Errorf("the activate command is unsupported on non-NixOS systems")
+		log.Error(err)
+		return err
+	}
+
 	if opts.Action == activation.SwitchToConfigurationActionDryActivate {
 		recordUnits = false
 	}
@@ -335,12 +341,6 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 			log.Errorf("failed to re-execute switch-to-configuration script: %v", err)
 		}
 
-		return err
-	}
-
-	if !s.IsNixOS() {
-		err := fmt.Errorf("the activate command is unsupported on non-NixOS systems")
-		log.Error(err)
 		return err
 	}
 
