@@ -56,5 +56,6 @@ buildGoModule (finalAttrs: {
     description = "A unified NixOS tooling replacement for nixos-* utilities";
     license = licenses.gpl3Only;
     maintainers = with maintainers; [water-sucks];
+    mainProgram = "nixos";
   };
 })
