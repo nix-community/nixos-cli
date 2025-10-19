@@ -45,6 +45,25 @@ in {
         prev;
     };
 
+    useActivationInterface = lib.mkOption {
+      type = types.bool;
+      default = false;
+      example = true;
+      description = ''
+        Use the `nixos activate` interface to switch configurations, instead of the
+        `switch-to-configuration-ng` program that is currently used in `nixpkgs`.
+
+        The behavior is mostly the same, but changes can be made that may potentially
+        break behavior from the original on a per-case basis.
+
+        If this is disabled, users will still be able to use `nixos activate` on their
+        own, but it will serve solely as a shim to run the switch script on a switchable.
+        system.
+
+        This activation interface is experimental and subject to change.
+      '';
+    };
+
     generationTag = lib.mkOption {
       type = types.nullOr types.str;
       default = lib.maybeEnv "NIXOS_GENERATION_TAG" null;
@@ -59,50 +78,81 @@ in {
     };
   };
 
-  config = lib.mkIf cfg.enable {
-    environment.systemPackages = [cfg.package];
+  config = lib.mkIf cfg.enable (lib.mkMerge [
+    {
+      environment.systemPackages = [cfg.package];
 
-    # While there is already an `options.json` that exists in the
-    # `config.system.build.manual.optionsJSON` attribute, this is
-    # not as full-featured, because it does not contain NixOS options
-    # that are not available in base `nixpkgs`. This does increase
-    # eval time, but that's a fine tradeoff in this case since it
-    # is able to be disabled.
-    environment.etc."nixos-cli/options-cache.json" = lib.mkIf cfg.prebuildOptionCache {
-      text = let
-        optionList' = lib.optionAttrSetToDocList options;
-        optionList = builtins.filter (v: v.visible && !v.internal) optionList';
-      in
-        builtins.toJSON optionList;
-    };
+      environment.etc."nixos-cli/config.toml".source =
+        tomlFormat.generate "nixos-cli-config.toml" cfg.config;
 
-    environment.etc."nixos-cli/config.toml".source =
-      tomlFormat.generate "nixos-cli-config.toml" cfg.config;
+      # Hijack system builder commands to insert a `nixos-version.json` file at the root.
+      system.systemBuilderCommands = let
+        nixos-version-json = builtins.toJSON {
+          nixosVersion = "${nixosCfg.distroName} ${nixosCfg.release} (${nixosCfg.codeName})";
+          nixpkgsRevision = nixosCfg.revision;
+          configurationRevision = "${builtins.toString config.system.configurationRevision}";
+          description = cfg.generationTag;
+        };
+      in ''
+        cat > "$out/nixos-version.json" << EOF
+        ${nixos-version-json}
+        EOF
+      '';
 
-    # Hijack system builder commands to insert a `nixos-version.json` file at the root.
-    system.systemBuilderCommands = let
-      nixos-version-json = builtins.toJSON {
-        nixosVersion = "${nixosCfg.distroName} ${nixosCfg.release} (${nixosCfg.codeName})";
-        nixpkgsRevision = nixosCfg.revision;
-        configurationRevision = "${builtins.toString config.system.configurationRevision}";
-        description = cfg.generationTag;
+      security.sudo.extraConfig = ''
+        # Preserve NIXOS_CONFIG and NIXOS_CLI_CONFIG in sudo invocations of
+        # `nixos apply`. This is required in order to keep ownership across
+        # automatic re-exec as root.
+        Defaults env_keep += "NIXOS_CONFIG"
+        Defaults env_keep += "NIXOS_GENERATION_TAG"
+        Defaults env_keep += "NIXOS_CLI_CONFIG"
+        Defaults env_keep += "NIXOS_CLI_DISABLE_STEPS"
+        Defaults env_keep += "NIXOS_CLI_DEBUG_MODE"
+        Defaults env_keep += "NIXOS_CLI_SUPPRESS_NO_SETTINGS_WARNING"
+      '';
+    }
+    (lib.mkIf cfg.prebuildOptionCache {
+      # While there is already an `options.json` that exists in the
+      # `config.system.build.manual.optionsJSON` attribute, this is
+      # not as full-featured, because it does not contain NixOS options
+      # that are not available in base `nixpkgs`. This does increase
+      # eval time, but that's a fine tradeoff in this case since it
+      # is able to be disabled.
+      environment.etc."nixos-cli/options-cache.json" = {
+        text = let
+          optionList' = lib.optionAttrSetToDocList options;
+          optionList = builtins.filter (v: v.visible && !v.internal) optionList';
+        in
+          builtins.toJSON optionList;
       };
-    in ''
-      cat > "$out/nixos-version.json" << EOF
-      ${nixos-version-json}
-      EOF
-    '';
+    })
+    (lib.mkIf cfg.useActivationInterface {
+      # This looks confusing, but this only stops the switch-to-configuration-ng
+      # program from being used. The system will still be switchable.
+      system.switch.enable = lib.mkForce false;
 
-    security.sudo.extraConfig = ''
-      # Preserve NIXOS_CONFIG and NIXOS_CLI_CONFIG in sudo invocations of
-      # `nixos apply`. This is required in order to keep ownership across
-      # automatic re-exec as root.
-      Defaults env_keep += "NIXOS_CONFIG"
-      Defaults env_keep += "NIXOS_GENERATION_TAG"
-      Defaults env_keep += "NIXOS_CLI_CONFIG"
-      Defaults env_keep += "NIXOS_CLI_DISABLE_STEPS"
-      Defaults env_keep += "NIXOS_CLI_DEBUG_MODE"
-      Defaults env_keep += "NIXOS_CLI_SUPPRESS_NO_SETTINGS_WARNING"
-    '';
-  };
+      # Use a subshell so we can source makeWrapper's setup hook without
+      # affecting the rest of activatableSystemBuilderCommands.
+      system.activatableSystemBuilderCommands = ''
+        (
+          source ${pkgs.buildPackages.makeWrapper}/nix-support/setup-hook
+
+          mkdir $out/bin
+
+          ln -sf ${lib.getExe cfg.package} $out/bin/switch-to-configuration
+
+          wrapProgram $out/bin/switch-to-configuration \
+            --add-flags activate \
+            --set NIXOS_CLI_ATTEMPTING_ACTIVATION 1 \
+            --set OUT $out \
+            --set TOPLEVEL ''${!toplevelVar} \
+            --set DISTRO_ID ${lib.escapeShellArg config.system.nixos.distroId} \
+            --set INSTALL_BOOTLOADER ${lib.escapeShellArg config.system.build.installBootLoader} \
+            --set PRE_SWITCH_CHECK ${lib.escapeShellArg config.system.preSwitchChecksScript} \
+            --set LOCALE_ARCHIVE ${config.i18n.glibcLocales}/lib/locale/locale-archive \
+            --set SYSTEMD ${config.systemd.package}
+        )
+      '';
+    })
+  ]);
 }
