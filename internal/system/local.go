@@ -1,8 +1,11 @@
 package system
 
 import (
+	"bufio"
 	"os"
 	"os/exec"
+	"regexp"
+	"strings"
 
 	"github.com/nix-community/nixos-cli/internal/logger"
 )
@@ -44,12 +47,50 @@ func (l *LocalSystem) Run(cmd *Command) (int, error) {
 	return 0, err
 }
 
+var nixosDistroIDRegex = regexp.MustCompile("^\"?nixos\"?$")
+
 func (l *LocalSystem) IsNixOS() bool {
-	// TODO: use os-release if this file does not exist
 	_, err := os.Stat("/etc/NIXOS")
-	return err == nil
+	if err == nil {
+		return true
+	}
+
+	osRelease, err := parseOSRelease()
+	if err != nil {
+		return false
+	}
+
+	distroID, ok := osRelease["ID"]
+	if !ok {
+		return false
+	}
+
+	return nixosDistroIDRegex.MatchString(distroID)
 }
 
 func (l *LocalSystem) Logger() *logger.Logger {
 	return l.logger
+}
+
+func parseOSRelease() (map[string]string, error) {
+	values := make(map[string]string)
+
+	osRelease, err := os.Open("/etc/os-release")
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = osRelease.Close() }()
+
+	s := bufio.NewScanner(osRelease)
+	s.Split(bufio.ScanLines)
+
+	for s.Scan() {
+		key, value, found := strings.Cut(s.Text(), "=")
+		if !found {
+			continue
+		}
+		values[key] = value
+	}
+
+	return values, nil
 }
