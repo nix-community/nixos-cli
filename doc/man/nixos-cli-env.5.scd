@@ -75,14 +75,41 @@ Among other things.
 
 	Mostly useful for internal implementation, rather than for end-users.
 
-*NIXOS_CLI_DEBUG_MODE*
-	Show log messages for when developing TUIs. Only useful for during
-	development.
-
 *NIXOS_CLI_SUPPRESS_NO_SETTINGS_WARNING*
 	Suppress the settings warning. Useful for non-NixOS systems where there is
 	no settings file configured by default and the warnings get noisy/clutter
 	logs.
+
+*NIXOS_NO_CHECK*
+	_nixos activate_ skips running its pre-switch checks if this is set to 1.
+
+*NIXOS_NO_SYNC*
+	_nixos activate_ skips syncing the Nix store to disk before activating. Can
+	speed up activations at the cost of risking data loss if interrupted.
+
+*STC_DISPLAY_ALL_UNITS*
+	Show all actual units that are being modified by _nixos activate_.
+
+## DEVELOPMENT MODE VARIABLES
+
+These variables are useful to know about for developers working on this CLI only.
+
+Do not set directly unless running this in development.
+
+*NIXOS_CLI_ATTEMPTING_ACTIVATION*
+	Used to control _nixos activate_'s execution, and prevent it from infinitely
+	recursing when a user invokes it directly.
+
+*NIXOS_CLI_DEBUG_MODE*
+	Show log messages for when developing TUIs. Only useful for during
+	development.
+
+*\_\_NIXOS_SWITCH_TO_CONFIGURATION_PARENT_EXE*
+	Set to prevent user activation invocations from infinitely recursing.
+
+	If this is not set correctly to the running executable during user
+	switching, then it is not being executed correctly and must immediately
+	exit.
 
 # SEE ALSO
 

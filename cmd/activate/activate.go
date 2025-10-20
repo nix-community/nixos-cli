@@ -14,11 +14,11 @@ func ActivateCommand() *cobra.Command {
 	var opts cmdOpts.ActivateOpts
 
 	commands := map[string]string{
-		"boot":         "Make this configuration the boot default",
+		"boot":         "Generate boot entries and make this the default configuration",
 		"check":        "Run pre-activation checks and exit",
 		"dry-activate": "Show what would be activated but do not perform it",
-		"switch":       "Activate this configuration and make it the boot default",
-		"test":         "Activate this configuration, but don't make it the boot default",
+		"switch":       "Activate this configuration, generate entries, and make this the default configuration",
+		"test":         "Activate this configuration, but do not generate boot entries",
 	}
 
 	cmd := cobra.Command{
