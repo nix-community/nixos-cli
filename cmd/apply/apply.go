@@ -48,9 +48,7 @@ func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 					return err
 				}
 			}
-			return nil
-		},
-		PreRunE: func(cmd *cobra.Command, args []string) error {
+
 			if opts.NoActivate && opts.NoBoot {
 				if opts.InstallBootloader {
 					return fmt.Errorf("--install-bootloader requires activation, remove --no-activate and/or --no-boot to use this option")
@@ -70,7 +68,19 @@ func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 					return fmt.Errorf("--impure is required when using --tag for flake configurations")
 				}
 			}
+
 			return nil
+		},
+		PreRun: func(cmd *cobra.Command, args []string) {
+			ctx := cmd.Context()
+			log := logger.FromContext(ctx)
+
+			if opts.Verbose {
+				log.SetLogLevel(logger.LogLevelDebug)
+			}
+
+			ctx = logger.WithLogger(ctx, log)
+			cmd.SetContext(ctx)
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return cmdUtils.CommandErrorHandler(applyMain(cmd, &opts))
@@ -178,9 +188,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 		}
 	}
 
-	if opts.Verbose {
-		log.Step("Looking for configuration...")
-	}
+	log.Step("Looking for configuration...")
 
 	var nixConfig configuration.Configuration
 	if opts.FlakeRef != "" {
@@ -190,7 +198,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 			return err
 		}
 	} else {
-		c, err := configuration.FindConfiguration(log, cfg, opts.NixOptions.Includes, opts.Verbose)
+		c, err := configuration.FindConfiguration(log, cfg, opts.NixOptions.Includes)
 		if err != nil {
 			log.Errorf("failed to find configuration: %v", err)
 			return err
@@ -231,7 +239,6 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 
 		if err := upgradeChannels(s, &upgradeChannelsOptions{
 			UpgradeAll: opts.UpgradeAllChannels,
-			Verbose:    opts.Verbose,
 		}); err != nil {
 			log.Warnf("failed to update channels: %v", err)
 			log.Warnf("continuing with existing channels", err)
@@ -258,9 +265,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 	generationTag := opts.GenerationTag
 	if generationTag == "" {
 		if tagVar := os.Getenv("NIXOS_GENERATION_TAG"); tagVar != "" {
-			if opts.Verbose {
-				log.Info("using explicitly set NIXOS_GENERATION_TAG variable for generation tag")
-			}
+			log.Debugf("using explicitly set NIXOS_GENERATION_TAG variable for generation tag")
 			generationTag = tagVar
 		}
 	}
@@ -304,7 +309,6 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 		DryBuild:       dryBuild,
 		UseNom:         useNom,
 		GenerationTag:  generationTag,
-		Verbose:        opts.Verbose,
 
 		CmdFlags: cmd.Flags(),
 		NixOpts:  &opts.NixOptions,
@@ -328,8 +332,8 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 	}
 
 	if buildType == configuration.SystemBuildTypeSystem {
-		if opts.Verbose && dryBuild {
-			log.Infof("this is a dry build, no activation will be performed")
+		if dryBuild {
+			log.Debugf("this is a dry build, no activation will be performed")
 		}
 		return nil
 	}
@@ -337,8 +341,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 	log.Step("Comparing changes...")
 
 	err = generation.RunDiffCommand(s, constants.CurrentSystem, resultLocation, &generation.DiffCommandOptions{
-		UseNvd:  cfg.UseNvd,
-		Verbose: opts.Verbose,
+		UseNvd: cfg.UseNvd,
 	})
 	if err != nil {
 		log.Errorf("failed to run diff command: %v", err)
@@ -385,11 +388,9 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 	createGeneration := !opts.Dry && !opts.NoBoot
 
 	if createGeneration {
-		if opts.Verbose {
-			log.Step("Setting system profile...")
-		}
+		log.Step("Setting system profile...")
 
-		if err := activation.AddNewNixProfile(s, opts.ProfileName, resultLocation, opts.Verbose); err != nil {
+		if err := activation.AddNewNixProfile(s, opts.ProfileName, resultLocation); err != nil {
 			log.Errorf("failed to set system profile: %v", err)
 			return err
 		}
@@ -414,7 +415,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 			}
 
 			log.Step("Rolling back system profile...")
-			if err := activation.SetNixProfileGeneration(s, "system", previousGenNumber, opts.Verbose); err != nil {
+			if err := activation.SetNixProfileGeneration(s, opts.ProfileName, previousGenNumber); err != nil {
 				log.Errorf("failed to rollback system profile: %v", err)
 				log.Info("make sure to rollback the system manually before deleting anything!")
 			}
@@ -438,7 +439,6 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 
 	err = activation.SwitchToConfiguration(s, resultLocation, stcAction, &activation.SwitchToConfigurationOptions{
 		InstallBootloader: opts.InstallBootloader,
-		Verbose:           opts.Verbose,
 		Specialisation:    specialisation,
 	})
 	if err != nil {
@@ -453,7 +453,6 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 const channelDirectory = constants.NixProfileDirectory + "/per-user/root/channels"
 
 type upgradeChannelsOptions struct {
-	Verbose    bool
 	UpgradeAll bool
 }
 
@@ -479,9 +478,7 @@ func upgradeChannels(s system.CommandRunner, opts *upgradeChannelsOptions) error
 		}
 	}
 
-	if opts.Verbose {
-		s.Logger().CmdArray(argv)
-	}
+	s.Logger().CmdArray(argv)
 
 	cmd := system.NewCommand(argv[0], argv[1:]...)
 	_, err := s.Run(cmd)

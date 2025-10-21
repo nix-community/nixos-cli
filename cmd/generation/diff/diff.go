@@ -43,6 +43,17 @@ func GenerationDiffCommand(genOpts *cmdOpts.GenerationOpts) *cobra.Command {
 			return nil
 		},
 		ValidArgsFunction: generation.CompleteGenerationNumber(&genOpts.ProfileName, 2),
+		PreRun: func(cmd *cobra.Command, args []string) {
+			ctx := cmd.Context()
+			log := logger.FromContext(ctx)
+
+			if opts.Verbose {
+				log.SetLogLevel(logger.LogLevelDebug)
+			}
+
+			ctx = logger.WithLogger(ctx, log)
+			cmd.SetContext(ctx)
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return cmdUtils.CommandErrorHandler(generationDiffMain(cmd, genOpts, &opts))
 		},
@@ -74,8 +85,7 @@ func generationDiffMain(cmd *cobra.Command, genOpts *cmdOpts.GenerationOpts, opt
 	afterDirectory := filepath.Join(profileDirectory, fmt.Sprintf("%v-%v-link", genOpts.ProfileName, opts.After))
 
 	err := generation.RunDiffCommand(s, beforeDirectory, afterDirectory, &generation.DiffCommandOptions{
-		UseNvd:  cfg.UseNvd,
-		Verbose: opts.Verbose,
+		UseNvd: cfg.UseNvd,
 	})
 	if err != nil {
 		log.Errorf("failed to run diff command: %v", err)

@@ -3,14 +3,17 @@ package logger
 type LogLevel int
 
 const (
-	LogLevelInfo   LogLevel = 0
-	LogLevelWarn   LogLevel = 1
-	LogLevelError  LogLevel = 2
-	LogLevelSilent LogLevel = 3
+	LogLevelDebug LogLevel = 0
+	LogLevelInfo  LogLevel = 1
+	LogLevelWarn  LogLevel = 2
+	LogLevelError LogLevel = 3
 )
 
 type Logger interface {
 	SetLogLevel(level LogLevel)
+	GetLogLevel() LogLevel
+	Debug(v ...any)
+	Debugf(format string, v ...any)
 	Info(v ...any)
 	Infof(format string, v ...any)
 	Warn(v ...any)

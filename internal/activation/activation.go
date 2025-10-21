@@ -9,6 +9,7 @@ import (
 
 	"github.com/nix-community/nixos-cli/internal/constants"
 	"github.com/nix-community/nixos-cli/internal/generation"
+	"github.com/nix-community/nixos-cli/internal/logger"
 	"github.com/nix-community/nixos-cli/internal/settings"
 	"github.com/nix-community/nixos-cli/internal/system"
 )
@@ -58,7 +59,7 @@ func EnsureSystemProfileDirectoryExists() error {
 	return nil
 }
 
-func AddNewNixProfile(s system.CommandRunner, profile string, closure string, verbose bool) error {
+func AddNewNixProfile(s system.CommandRunner, profile string, closure string) error {
 	if profile != "system" {
 		err := EnsureSystemProfileDirectoryExists()
 		if err != nil {
@@ -70,18 +71,14 @@ func AddNewNixProfile(s system.CommandRunner, profile string, closure string, ve
 
 	argv := []string{"nix-env", "--profile", profileDirectory, "--set", closure}
 
-	if verbose {
-		s.Logger().CmdArray(argv)
-	}
+	s.Logger().CmdArray(argv)
 
 	cmd := system.NewCommand(argv[0], argv[1:]...)
-
 	_, err := s.Run(cmd)
-
 	return err
 }
 
-func SetNixProfileGeneration(s system.CommandRunner, profile string, genNumber uint64, verbose bool) error {
+func SetNixProfileGeneration(s system.CommandRunner, profile string, genNumber uint64) error {
 	if profile != "system" {
 		err := EnsureSystemProfileDirectoryExists()
 		if err != nil {
@@ -93,14 +90,10 @@ func SetNixProfileGeneration(s system.CommandRunner, profile string, genNumber u
 
 	argv := []string{"nix-env", "--profile", profileDirectory, "--switch-generation", fmt.Sprintf("%d", genNumber)}
 
-	if verbose {
-		s.Logger().CmdArray(argv)
-	}
+	s.Logger().CmdArray(argv)
 
 	cmd := system.NewCommand(argv[0], argv[1:]...)
-
 	_, err := s.Run(cmd)
-
 	return err
 }
 
@@ -175,7 +168,6 @@ func (c SwitchToConfigurationAction) String() string {
 
 type SwitchToConfigurationOptions struct {
 	InstallBootloader bool
-	Verbose           bool
 	Specialisation    string
 }
 
@@ -189,9 +181,12 @@ func SwitchToConfiguration(s system.CommandRunner, generationLocation string, ac
 
 	argv := []string{commandPath, action.String()}
 
-	if opts.Verbose {
-		s.Logger().CmdArray(argv)
+	log := s.Logger()
+	if log.GetLogLevel() == logger.LogLevelDebug {
+		argv = append(argv, "-v")
 	}
+
+	s.Logger().CmdArray(argv)
 
 	cmd := system.NewCommand(argv[0], argv[1:]...)
 	if opts.InstallBootloader {
@@ -199,8 +194,6 @@ func SwitchToConfiguration(s system.CommandRunner, generationLocation string, ac
 	}
 
 	cmd.SetEnv("NIXOS_CLI_ATTEMPTING_ACTIVATION", "1")
-
 	_, err := s.Run(cmd)
-
 	return err
 }

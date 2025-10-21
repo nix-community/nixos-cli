@@ -108,7 +108,7 @@ func optionMain(cmd *cobra.Command, opts *cmdOpts.OptionOpts) error {
 			return err
 		}
 	} else {
-		c, err := configuration.FindConfiguration(log, cfg, opts.NixPathIncludes, false)
+		c, err := configuration.FindConfiguration(log, cfg, opts.NixPathIncludes)
 		if err != nil {
 			log.Errorf("failed to find configuration: %v", err)
 			return err

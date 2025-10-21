@@ -42,6 +42,17 @@ func GenerationSwitchCommand(genOpts *cmdOpts.GenerationOpts) *cobra.Command {
 			return nil
 		},
 		ValidArgsFunction: generation.CompleteGenerationNumber(&genOpts.ProfileName, 1),
+		PreRun: func(cmd *cobra.Command, args []string) {
+			ctx := cmd.Context()
+			log := logger.FromContext(ctx)
+
+			if opts.Verbose {
+				log.SetLogLevel(logger.LogLevelDebug)
+			}
+
+			ctx = logger.WithLogger(ctx, log)
+			cmd.SetContext(ctx)
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return cmdUtils.CommandErrorHandler(generationSwitchMain(cmd, genOpts, &opts))
 		},
@@ -126,8 +137,7 @@ func generationSwitchMain(cmd *cobra.Command, genOpts *cmdOpts.GenerationOpts, o
 	log.Step("Comparing changes...")
 
 	err := generation.RunDiffCommand(s, constants.CurrentSystem, generationLink, &generation.DiffCommandOptions{
-		UseNvd:  cfg.UseNvd,
-		Verbose: opts.Verbose,
+		UseNvd: cfg.UseNvd,
 	})
 	if err != nil {
 		log.Errorf("failed to run diff command: %v", err)
@@ -172,7 +182,7 @@ func generationSwitchMain(cmd *cobra.Command, genOpts *cmdOpts.GenerationOpts, o
 	if !opts.Dry {
 		log.Step("Setting system profile...")
 
-		if err := activation.SetNixProfileGeneration(s, genOpts.ProfileName, uint64(opts.Generation), opts.Verbose); err != nil {
+		if err := activation.SetNixProfileGeneration(s, genOpts.ProfileName, uint64(opts.Generation)); err != nil {
 			log.Errorf("failed to set system profile: %v", err)
 			return err
 		}
@@ -197,7 +207,7 @@ func generationSwitchMain(cmd *cobra.Command, genOpts *cmdOpts.GenerationOpts, o
 			}
 
 			log.Step("Rolling back system profile...")
-			if err := activation.SetNixProfileGeneration(s, "system", previousGenNumber, opts.Verbose); err != nil {
+			if err := activation.SetNixProfileGeneration(s, genOpts.ProfileName, previousGenNumber); err != nil {
 				log.Errorf("failed to rollback system profile: %v", err)
 				log.Info("make sure to rollback the system manually before deleting anything!")
 			}
@@ -212,7 +222,6 @@ func generationSwitchMain(cmd *cobra.Command, genOpts *cmdOpts.GenerationOpts, o
 	}
 
 	err = activation.SwitchToConfiguration(s, generationLink, stcAction, &activation.SwitchToConfigurationOptions{
-		Verbose:        opts.Verbose,
 		Specialisation: specialisation,
 	})
 	if err != nil {

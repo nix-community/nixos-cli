@@ -24,9 +24,20 @@ func GenerationRollbackCommand(genOpts *cmdOpts.GenerationOpts) *cobra.Command {
 	opts := cmdOpts.GenerationRollbackOpts{}
 
 	cmd := cobra.Command{
-		Use:   "rollback [flags] {GEN}",
+		Use:   "rollback [flags]",
 		Short: "Activate the previous generation",
 		Long:  "Rollback to the previous NixOS generation.",
+		PreRun: func(cmd *cobra.Command, args []string) {
+			ctx := cmd.Context()
+			log := logger.FromContext(ctx)
+
+			if opts.Verbose {
+				log.SetLogLevel(logger.LogLevelDebug)
+			}
+
+			ctx = logger.WithLogger(ctx, log)
+			cmd.SetContext(ctx)
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return cmdUtils.CommandErrorHandler(generationRollbackMain(cmd, genOpts, &opts))
 		},
@@ -74,8 +85,7 @@ func generationRollbackMain(cmd *cobra.Command, genOpts *cmdOpts.GenerationOpts,
 	log.Step("Comparing changes...")
 
 	err = generation.RunDiffCommand(s, constants.CurrentSystem, generationLink, &generation.DiffCommandOptions{
-		UseNvd:  cfg.UseNvd,
-		Verbose: opts.Verbose,
+		UseNvd: cfg.UseNvd,
 	})
 	if err != nil {
 		log.Errorf("failed to run diff command: %v", err)
@@ -120,7 +130,7 @@ func generationRollbackMain(cmd *cobra.Command, genOpts *cmdOpts.GenerationOpts,
 	if !opts.Dry {
 		log.Step("Setting system profile...")
 
-		if err := activation.SetNixProfileGeneration(s, genOpts.ProfileName, uint64(previousGen.Number), opts.Verbose); err != nil {
+		if err := activation.SetNixProfileGeneration(s, genOpts.ProfileName, uint64(previousGen.Number)); err != nil {
 			log.Errorf("failed to set system profile: %v", err)
 			return err
 		}
@@ -145,7 +155,7 @@ func generationRollbackMain(cmd *cobra.Command, genOpts *cmdOpts.GenerationOpts,
 			}
 
 			log.Step("Rolling back system profile...")
-			if err := activation.SetNixProfileGeneration(s, "system", previousGenNumber, opts.Verbose); err != nil {
+			if err := activation.SetNixProfileGeneration(s, genOpts.ProfileName, previousGenNumber); err != nil {
 				log.Errorf("failed to rollback system profile: %v", err)
 				log.Info("make sure to rollback the system manually before deleting anything!")
 			}
@@ -160,7 +170,6 @@ func generationRollbackMain(cmd *cobra.Command, genOpts *cmdOpts.GenerationOpts,
 	}
 
 	err = activation.SwitchToConfiguration(s, generationLink, stcAction, &activation.SwitchToConfigurationOptions{
-		Verbose:        opts.Verbose,
 		Specialisation: specialisation,
 	})
 	if err != nil {
