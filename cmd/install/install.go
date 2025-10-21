@@ -48,16 +48,27 @@ func InstallCommand() *cobra.Command {
 					return err
 				}
 			}
-			return nil
-		},
-		PreRunE: func(cmd *cobra.Command, args []string) error {
+
 			if len(opts.Root) > 0 && !filepath.IsAbs(opts.Root) {
 				return fmt.Errorf("--root must be an absolute path")
 			}
+
 			if len(opts.SystemClosure) > 0 && !filepath.IsAbs(opts.SystemClosure) {
 				return fmt.Errorf("--system must be an absolute path")
 			}
+
 			return nil
+		},
+		PreRun: func(cmd *cobra.Command, args []string) {
+			ctx := cmd.Context()
+			log := logger.FromContext(ctx)
+
+			if opts.Verbose {
+				log.SetLogLevel(logger.LogLevelDebug)
+			}
+
+			ctx = logger.WithLogger(ctx, log)
+			cmd.SetContext(ctx)
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return cmdUtils.CommandErrorHandler(installMain(cmd, &opts))
@@ -170,7 +181,7 @@ const (
 	defaultExtraSubstituters = "auto?trusted=1"
 )
 
-func copyChannel(cobraCmd *cobra.Command, s system.CommandRunner, mountpoint string, channelDirectory string, buildOptions any, verbose bool) error {
+func copyChannel(cobraCmd *cobra.Command, s system.CommandRunner, mountpoint string, channelDirectory string, buildOptions any) error {
 	log := s.Logger()
 
 	mountpointChannelDir := filepath.Join(mountpoint, constants.NixChannelDirectory)
@@ -199,9 +210,7 @@ func copyChannel(cobraCmd *cobra.Command, s system.CommandRunner, mountpoint str
 	argv = append(argv, "-p", mountpointChannelDir, "--set", channelPath)
 
 	cmd := system.NewCommand(argv[0], argv[1:]...)
-	if verbose {
-		log.CmdArray(argv)
-	}
+	log.CmdArray(argv)
 
 	_, err := s.Run(cmd)
 	if err != nil {
@@ -232,7 +241,7 @@ func copyChannel(cobraCmd *cobra.Command, s system.CommandRunner, mountpoint str
 	return nil
 }
 
-func createInitialGeneration(s system.CommandRunner, mountpoint string, closure string, verbose bool) error {
+func createInitialGeneration(s system.CommandRunner, mountpoint string, closure string) error {
 	systemProfileDir := filepath.Join(mountpoint, constants.NixProfileDirectory, "system")
 
 	log := s.Logger()
@@ -247,9 +256,7 @@ func createInitialGeneration(s system.CommandRunner, mountpoint string, closure 
 		"--set", closure, "--extra-substituters", defaultExtraSubstituters,
 	}
 
-	if verbose {
-		log.CmdArray(argv)
-	}
+	log.CmdArray(argv)
 
 	cmd := system.NewCommand(argv[0], argv[1:]...)
 	_, err := s.Run(cmd)
@@ -270,7 +277,7 @@ umount -R '%s' && rmdir '%s'
 `
 )
 
-func installBootloader(s system.CommandRunner, root string, verbose bool) error {
+func installBootloader(s system.CommandRunner, root string) error {
 	bootloaderScript := fmt.Sprintf(bootloaderTemplate, root, root, root, root)
 	mtabLocation := filepath.Join(root, "etc", "mtab")
 
@@ -285,15 +292,13 @@ func installBootloader(s system.CommandRunner, root string, verbose bool) error 
 	}
 
 	argv := []string{os.Args[0], "enter", "--root", root, "-c", bootloaderScript}
-	if verbose {
+	if log.GetLogLevel() == logger.LogLevelDebug {
 		argv = append(argv, "-v")
 	} else {
 		argv = append(argv, "-s")
 	}
 
-	if verbose {
-		log.CmdArray(argv)
-	}
+	log.CmdArray(argv)
 
 	cmd := system.NewCommand(argv[0], argv[1:]...)
 	cmd.SetEnv("NIXOS_INSTALL_BOOTLOADER", "1")
@@ -308,18 +313,17 @@ func installBootloader(s system.CommandRunner, root string, verbose bool) error 
 	return nil
 }
 
-func setRootPassword(s system.CommandRunner, mountpoint string, verbose bool) error {
+func setRootPassword(s system.CommandRunner, mountpoint string) error {
+	log := s.Logger()
 	argv := []string{os.Args[0], "enter", "--root", mountpoint, "-c", "/nix/var/nix/profiles/system/sw/bin/passwd"}
 
-	if verbose {
+	if log.GetLogLevel() == logger.LogLevelDebug {
 		argv = append(argv, "-v")
 	} else {
 		argv = append(argv, "-s")
 	}
 
-	if verbose {
-		s.Logger().CmdArray(argv)
-	}
+	s.Logger().CmdArray(argv)
 
 	cmd := system.NewCommand(argv[0], argv[1:]...)
 	cmd.SetEnv("NIXOS_CLI_DISABLE_STEPS", "1")
@@ -364,9 +368,7 @@ func installMain(cmd *cobra.Command, opts *cmdOpts.InstallOpts) error {
 	// the assumptions about `NIX_PATH` containing `nixos-config`, since it
 	// refers to the installer's configuration, not the target one to install.
 
-	if opts.Verbose {
-		log.Step("Finding configuration...")
-	}
+	log.Step("Finding configuration...")
 
 	var nixConfig configuration.Configuration
 	if build.Flake() {
@@ -375,9 +377,7 @@ func installMain(cmd *cobra.Command, opts *cmdOpts.InstallOpts) error {
 		var configLocation string
 
 		if nixosCfg, set := os.LookupEnv("NIXOS_CONFIG"); set {
-			if opts.Verbose {
-				log.Info("$NIXOS_CONFIG is set, using automatically")
-			}
+			log.Debug("$NIXOS_CONFIG is set, using automatically")
 			configLocation = nixosCfg
 		} else {
 			configLocation = filepath.Join(mountpoint, "etc", "nixos", "configuration.nix")
@@ -397,7 +397,7 @@ func installMain(cmd *cobra.Command, opts *cmdOpts.InstallOpts) error {
 
 	log.Step("Copying channel...")
 
-	err = copyChannel(cmd, s, mountpoint, opts.Channel, opts.NixOptions, opts.Verbose)
+	err = copyChannel(cmd, s, mountpoint, opts.Channel, opts.NixOptions)
 	if err != nil {
 		return err
 	}
@@ -417,7 +417,6 @@ func installMain(cmd *cobra.Command, opts *cmdOpts.InstallOpts) error {
 	}
 
 	systemBuildOptions := configuration.SystemBuildOptions{
-		Verbose:   opts.Verbose,
 		CmdFlags:  cmd.Flags(),
 		NixOpts:   opts.NixOptions,
 		Env:       envMap,
@@ -434,7 +433,7 @@ func installMain(cmd *cobra.Command, opts *cmdOpts.InstallOpts) error {
 
 	log.Step("Creating initial generation...")
 
-	if err := createInitialGeneration(s, mountpoint, resultLocation, opts.Verbose); err != nil {
+	if err := createInitialGeneration(s, mountpoint, resultLocation); err != nil {
 		return err
 	}
 
@@ -459,7 +458,7 @@ func installMain(cmd *cobra.Command, opts *cmdOpts.InstallOpts) error {
 
 	log.Step("Installing bootloader...")
 
-	if err := installBootloader(s, mountpoint, opts.Verbose); err != nil {
+	if err := installBootloader(s, mountpoint); err != nil {
 		return err
 	}
 
@@ -472,7 +471,7 @@ func installMain(cmd *cobra.Command, opts *cmdOpts.InstallOpts) error {
 			log.Warn("stdin is not a terminal; skipping setting root password")
 			log.Info(manualHint)
 		} else {
-			err := setRootPassword(s, mountpoint, opts.Verbose)
+			err := setRootPassword(s, mountpoint)
 			if err != nil {
 				log.Warnf("failed to set root password: %v", err)
 				log.Info(manualHint)

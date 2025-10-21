@@ -21,16 +21,12 @@ type LegacyConfiguration struct {
 	Builder system.CommandRunner
 }
 
-func FindLegacyConfiguration(log logger.Logger, includes []string, verbose bool) (*LegacyConfiguration, error) {
-	if verbose {
-		log.Infof("looking for legacy configuration")
-	}
+func FindLegacyConfiguration(log logger.Logger, includes []string) (*LegacyConfiguration, error) {
+	log.Debugf("looking for legacy configuration")
 
 	var configuration string
 	if nixosCfg, set := os.LookupEnv("NIXOS_CONFIG"); set {
-		if verbose {
-			log.Info("$NIXOS_CONFIG is set, using automatically")
-		}
+		log.Debugf("$NIXOS_CONFIG is set, using automatically")
 		configuration = nixosCfg
 	}
 
@@ -44,9 +40,7 @@ func FindLegacyConfiguration(log logger.Logger, includes []string, verbose bool)
 	}
 
 	if configuration == "" {
-		if verbose {
-			log.Infof("$NIXOS_CONFIG not set, using $NIX_PATH to find configuration")
-		}
+		log.Debugf("$NIXOS_CONFIG not set, using $NIX_PATH to find configuration")
 
 		nixPath := strings.Split(os.Getenv("NIX_PATH"), ":")
 		for _, entry := range nixPath {
@@ -120,6 +114,10 @@ func (l *LegacyConfiguration) EvalAttribute(attr string) (*string, error) {
 }
 
 func (l *LegacyConfiguration) BuildSystem(buildType SystemBuildType, opts *SystemBuildOptions) (string, error) {
+	if l.Builder == nil {
+		panic("LegacyConfiguration.Builder is nil")
+	}
+
 	nixCommand := "nix-build"
 	if opts.UseNom {
 		nixCommand = "nom-build"
@@ -147,10 +145,12 @@ func (l *LegacyConfiguration) BuildSystem(buildType SystemBuildType, opts *Syste
 		argv = append(argv, opts.ExtraArgs...)
 	}
 
-	if opts.Verbose {
+	log := l.Builder.Logger()
+	if log.GetLogLevel() == logger.LogLevelDebug {
 		argv = append(argv, "-v")
-		l.Builder.Logger().CmdArray(argv)
 	}
+
+	l.Builder.Logger().CmdArray(argv)
 
 	var stdout bytes.Buffer
 	cmd := system.NewCommand(nixCommand, argv[1:]...)
@@ -158,10 +158,6 @@ func (l *LegacyConfiguration) BuildSystem(buildType SystemBuildType, opts *Syste
 
 	if opts.GenerationTag != "" {
 		cmd.SetEnv("NIXOS_GENERATION_TAG", opts.GenerationTag)
-	}
-
-	if l.Builder == nil {
-		panic("LegacyConfiguration.Builder is nil")
 	}
 
 	for k, v := range opts.Env {

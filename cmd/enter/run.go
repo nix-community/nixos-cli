@@ -35,17 +35,14 @@ func enterMain(cmd *cobra.Command, opts *cmdOpts.EnterOpts) error {
 
 	isReexec := os.Getenv(NIXOS_REEXEC) == "1"
 	if !isReexec {
-		err := execSandboxedEnterProcess(log, opts.Verbose)
+		err := execSandboxedEnterProcess(log)
 		if err != nil {
 			log.Errorf("failed to exec sandboxed process with unshare: %v", err)
 		}
 		return err
 	}
 
-	if opts.Verbose {
-		log.Info("sandboxed process successfully")
-		log.Print()
-	}
+	log.Debug("sandboxed process successfully")
 
 	log.Step("Bind-mounting resources...")
 	log.Info("remounting root privately for namespace")
@@ -125,7 +122,7 @@ resolvConfDone:
 
 	log.Step("Activating system...")
 
-	err = activate(s, opts.RootLocation, systemClosure, opts.Verbose, opts.Silent)
+	err = activate(s, opts.RootLocation, systemClosure, opts.Silent)
 	if err != nil {
 		log.Errorf("failed to activate system: %v", err)
 		return err
@@ -146,7 +143,7 @@ resolvConfDone:
 		args = []string{bash, "--login"}
 	}
 
-	err = startChroot(s, opts.RootLocation, args, opts.Verbose)
+	err = startChroot(s, opts.RootLocation, args)
 	if err != nil {
 		log.Errorf("failed to start chroot: %v", err)
 		return err
@@ -157,10 +154,8 @@ resolvConfDone:
 
 const NIXOS_REEXEC = "_NIXOS_ENTER_REEXEC"
 
-func execSandboxedEnterProcess(log logger.Logger, verbose bool) error {
-	if verbose {
-		log.Infof("sandboxing process with unshare")
-	}
+func execSandboxedEnterProcess(log logger.Logger) error {
+	log.Debugf("sandboxing process with unshare")
 
 	argv := []string{"unshare", "--fork", "--mount", "--uts", "--mount-proc", "--pid"}
 	argv = append(argv, os.Args...)
@@ -173,9 +168,7 @@ func execSandboxedEnterProcess(log logger.Logger, verbose bool) error {
 	env := os.Environ()
 	env = append(env, NIXOS_REEXEC+"=1")
 
-	if verbose {
-		log.CmdArray(argv)
-	}
+	log.CmdArray(argv)
 
 	unsharePath, err := exec.LookPath(argv[0])
 	if err != nil {
@@ -223,15 +216,13 @@ func findResolvConfLocation(root string) (string, error) {
 	return finalLocation, nil
 }
 
-func activate(s system.CommandRunner, root string, systemClosure string, verbose bool, silent bool) error {
+func activate(s system.CommandRunner, root string, systemClosure string, silent bool) error {
 	localeArchive := filepath.Join(systemClosure, "sw", "lib", "locale", "locale-archive")
 	activateScript := filepath.Join(systemClosure, "activate")
 
 	argv := []string{"chroot", root, activateScript}
 
-	if verbose {
-		s.Logger().CmdArray(argv)
-	}
+	s.Logger().CmdArray(argv)
 
 	// Run the activation script.
 	activateCmd := system.NewCommand(argv[0], argv[1:]...)
@@ -252,9 +243,7 @@ func activate(s system.CommandRunner, root string, systemClosure string, verbose
 	systemdTmpfiles := filepath.Join(systemClosure, "sw", "bin", "systemd-tmpfiles")
 	argv = []string{"chroot", root, systemdTmpfiles, "--create", "--remove", "-E"}
 
-	if verbose {
-		s.Logger().CmdArray(argv)
-	}
+	s.Logger().CmdArray(argv)
 
 	tmpfilesCmd := system.NewCommand(argv[0], argv[1:]...)
 
@@ -266,13 +255,11 @@ func activate(s system.CommandRunner, root string, systemClosure string, verbose
 	return err
 }
 
-func startChroot(s system.CommandRunner, root string, args []string, verbose bool) error {
+func startChroot(s system.CommandRunner, root string, args []string) error {
 	argv := []string{"chroot", root}
 	argv = append(argv, args...)
 
-	if verbose {
-		s.Logger().CmdArray(argv)
-	}
+	s.Logger().CmdArray(argv)
 
 	execPath, err := exec.LookPath(argv[0])
 	if err != nil {

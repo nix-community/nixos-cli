@@ -96,7 +96,7 @@ func CompleteSpecialisationFlagFromConfig(flakeRefStr string, includes []string)
 		if flakeRefStr != "" {
 			nixConfig = configuration.FlakeRefFromString(flakeRefStr)
 		} else {
-			c, err := configuration.FindConfiguration(log, cfg, includes, false)
+			c, err := configuration.FindConfiguration(log, cfg, includes)
 			if err != nil {
 				log.Errorf("failed to find configuration: %v", err)
 				return []string{}, cobra.ShellCompDirectiveNoFileComp

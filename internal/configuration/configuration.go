@@ -15,7 +15,6 @@ type SystemBuildOptions struct {
 	DryBuild       bool
 	UseNom         bool
 	GenerationTag  string
-	Verbose        bool
 
 	// Command-line flags that were passed for the command context.
 	// This is needed to determine the proper Nix options to pass
@@ -41,11 +40,9 @@ func (e *AttributeEvaluationError) Error() string {
 	return fmt.Sprintf("failed to evaluate attribute %s", e.Attribute)
 }
 
-func FindConfiguration(log logger.Logger, cfg *settings.Settings, includes []string, verbose bool) (Configuration, error) {
+func FindConfiguration(log logger.Logger, cfg *settings.Settings, includes []string) (Configuration, error) {
 	if build.Flake() {
-		if verbose {
-			log.Info("looking for flake configuration")
-		}
+		log.Debug("looking for flake configuration")
 
 		f, err := FlakeRefFromEnv(cfg.ConfigLocation)
 		if err != nil {
@@ -56,20 +53,16 @@ func FindConfiguration(log logger.Logger, cfg *settings.Settings, includes []str
 			return nil, err
 		}
 
-		if verbose {
-			log.Infof("found flake configuration: %s#%s", f.URI, f.System)
-		}
+		log.Debugf("found flake configuration: %s#%s", f.URI, f.System)
 
 		return f, nil
 	} else {
-		c, err := FindLegacyConfiguration(log, includes, verbose)
+		c, err := FindLegacyConfiguration(log, includes)
 		if err != nil {
 			return nil, err
 		}
 
-		if verbose {
-			log.Infof("found legacy configuration at %s", c)
-		}
+		log.Debugf("found legacy configuration at %s", c.ConfigDirname)
 
 		return c, nil
 	}

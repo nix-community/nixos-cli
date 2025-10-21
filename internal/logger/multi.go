@@ -15,6 +15,22 @@ func (m *MultiLogger) SetLogLevel(level LogLevel) {
 	}
 }
 
+func (m *MultiLogger) GetLogLevel() LogLevel {
+	if len(m.loggers) == 0 {
+		return LogLevelInfo
+	}
+
+	minimumLevel := m.loggers[0].GetLogLevel()
+
+	for _, l := range m.loggers[1:] {
+		if lvl := l.GetLogLevel(); lvl < minimumLevel {
+			minimumLevel = lvl
+		}
+	}
+
+	return minimumLevel
+}
+
 func (m *MultiLogger) Print(v ...any) {
 	for _, l := range m.loggers {
 		l.Print(v...)
@@ -24,6 +40,18 @@ func (m *MultiLogger) Print(v ...any) {
 func (m *MultiLogger) Printf(format string, v ...any) {
 	for _, l := range m.loggers {
 		l.Printf(format, v...)
+	}
+}
+
+func (m *MultiLogger) Debug(v ...any) {
+	for _, l := range m.loggers {
+		l.Debug(v...)
+	}
+}
+
+func (m *MultiLogger) Debugf(format string, v ...any) {
+	for _, l := range m.loggers {
+		l.Debugf(format, v...)
 	}
 }
 

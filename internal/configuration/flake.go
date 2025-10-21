@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/nix-community/nixos-cli/internal/cmd/nixopts"
+	"github.com/nix-community/nixos-cli/internal/logger"
 	"github.com/nix-community/nixos-cli/internal/system"
 )
 
@@ -34,7 +35,7 @@ func FlakeRefFromString(s string) *FlakeRef {
 		if resolved, err := filepath.EvalSymlinks(uri); err == nil {
 			uri = resolved
 		}
-    }
+	}
 
 	if split > -1 {
 		return &FlakeRef{
@@ -104,6 +105,10 @@ func (f *FlakeRef) EvalAttribute(attr string) (*string, error) {
 }
 
 func (f *FlakeRef) BuildSystem(buildType SystemBuildType, opts *SystemBuildOptions) (string, error) {
+	if f.Builder == nil {
+		panic("FlakeRef.Builder is nil")
+	}
+
 	nixCommand := "nix"
 	if opts.UseNom {
 		nixCommand = "nom"
@@ -131,10 +136,11 @@ func (f *FlakeRef) BuildSystem(buildType SystemBuildType, opts *SystemBuildOptio
 		argv = append(argv, opts.ExtraArgs...)
 	}
 
-	if opts.Verbose {
+	log := f.Builder.Logger()
+	if log.GetLogLevel() == logger.LogLevelDebug {
 		argv = append(argv, "-v")
-		f.Builder.Logger().CmdArray(argv)
 	}
+	f.Builder.Logger().CmdArray(argv)
 
 	var stdout bytes.Buffer
 	cmd := system.NewCommand(nixCommand, argv[1:]...)
@@ -146,10 +152,6 @@ func (f *FlakeRef) BuildSystem(buildType SystemBuildType, opts *SystemBuildOptio
 
 	for k, v := range opts.Env {
 		cmd.SetEnv(k, v)
-	}
-
-	if f.Builder == nil {
-		panic("FlakeRef.Builder is nil")
 	}
 
 	_, err := f.Builder.Run(cmd)

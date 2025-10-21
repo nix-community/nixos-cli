@@ -17,7 +17,7 @@ type SyslogLogger struct {
 }
 
 func NewSyslogLogger(tag string) (*SyslogLogger, error) {
-	w, err := syslog.New(syslog.LOG_INFO|syslog.LOG_USER, tag)
+	w, err := syslog.New(syslog.LOG_DEBUG|syslog.LOG_USER, tag)
 	if err != nil {
 		return nil, err
 	}
@@ -32,6 +32,26 @@ func NewSyslogLogger(tag string) (*SyslogLogger, error) {
 
 func (l *SyslogLogger) SetLogLevel(level LogLevel) {
 	l.level = level
+}
+
+func (l *SyslogLogger) GetLogLevel() LogLevel {
+	return l.level
+}
+
+func (l *SyslogLogger) Debug(v ...any) {
+	if l.level > LogLevelDebug {
+		return
+	}
+
+	_ = l.writer.Debug(fmt.Sprint(v...))
+}
+
+func (l *SyslogLogger) Debugf(format string, v ...any) {
+	if l.level > LogLevelDebug {
+		return
+	}
+
+	_ = l.writer.Debug(fmt.Sprintf(format, v...))
 }
 
 func (l *SyslogLogger) Print(v ...any) {
@@ -91,7 +111,7 @@ func (l *SyslogLogger) Errorf(format string, v ...any) {
 }
 
 func (l *SyslogLogger) CmdArray(argv []string) {
-	if l.level > LogLevelInfo {
+	if l.level > LogLevelDebug {
 		return
 	}
 

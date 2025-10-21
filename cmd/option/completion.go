@@ -16,7 +16,7 @@ import (
 func loadOptions(log logger.Logger, cfg *settings.Settings, includes []string) (option.NixosOptionSource, error) {
 	s := system.NewLocalSystem(log)
 
-	nixosConfig, err := configuration.FindConfiguration(log, cfg, includes, false)
+	nixosConfig, err := configuration.FindConfiguration(log, cfg, includes)
 	if err != nil {
 		log.Errorf("failed to find configuration: %v", err)
 		return nil, err

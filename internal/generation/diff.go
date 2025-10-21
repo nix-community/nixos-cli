@@ -7,8 +7,7 @@ import (
 )
 
 type DiffCommandOptions struct {
-	UseNvd  bool
-	Verbose bool
+	UseNvd bool
 }
 
 func RunDiffCommand(s system.CommandRunner, before string, after string, opts *DiffCommandOptions) error {
@@ -31,9 +30,7 @@ func RunDiffCommand(s system.CommandRunner, before string, after string, opts *D
 		argv = []string{"nvd", "diff", before, after}
 	}
 
-	if opts.Verbose {
-		s.Logger().CmdArray(argv)
-	}
+	s.Logger().CmdArray(argv)
 
 	cmd := system.NewCommand(argv[0], argv[1:]...)
 	_, err := s.Run(cmd)
