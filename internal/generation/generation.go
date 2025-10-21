@@ -146,7 +146,7 @@ const (
 	GenerationLinkTemplateRegex = `^%s-(\d+)-link$`
 )
 
-func CollectGenerationsInProfile(log *logger.Logger, profile string) ([]Generation, error) {
+func CollectGenerationsInProfile(log logger.Logger, profile string) ([]Generation, error) {
 	profileDirectory := constants.NixProfileDirectory
 	if profile != "system" {
 		profileDirectory = constants.NixSystemProfileDirectory

@@ -45,7 +45,7 @@ var (
 	}
 )
 
-func findPCIDevices(h *hardwareConfigSettings, log *logger.Logger) {
+func findPCIDevices(h *hardwareConfigSettings, log logger.Logger) {
 	entries, err := os.ReadDir(pciDeviceDirname)
 	if err != nil {
 		log.Warnf("failed to read %v: %v", pciDeviceDirname, err)
@@ -120,7 +120,7 @@ findDevices:
 	}
 }
 
-func findUSBDevices(h *hardwareConfigSettings, log *logger.Logger) {
+func findUSBDevices(h *hardwareConfigSettings, log logger.Logger) {
 	entries, err := os.ReadDir(usbDeviceDirname)
 	if err != nil {
 		log.Warnf("failed to read %s: %v", usbDeviceDirname, err)
@@ -148,7 +148,7 @@ func findUSBDevices(h *hardwareConfigSettings, log *logger.Logger) {
 	}
 }
 
-func findGenericDevicesInDir(h *hardwareConfigSettings, log *logger.Logger, deviceDirname string) {
+func findGenericDevicesInDir(h *hardwareConfigSettings, log logger.Logger, deviceDirname string) {
 	entries, err := os.ReadDir(deviceDirname)
 	if err != nil {
 		log.Warnf("failed to read %v: %v", deviceDirname, err)

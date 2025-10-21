@@ -21,7 +21,7 @@ type LegacyConfiguration struct {
 	Builder system.CommandRunner
 }
 
-func FindLegacyConfiguration(log *logger.Logger, includes []string, verbose bool) (*LegacyConfiguration, error) {
+func FindLegacyConfiguration(log logger.Logger, includes []string, verbose bool) (*LegacyConfiguration, error) {
 	if verbose {
 		log.Infof("looking for legacy configuration")
 	}

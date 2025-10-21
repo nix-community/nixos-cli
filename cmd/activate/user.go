@@ -38,7 +38,7 @@ func execUserSwitchProcess(uid uint32, gid uint32, runtimePath string) error {
 	return cmd.Run()
 }
 
-func userSwitch(log *logger.Logger, parentExe string) error {
+func userSwitch(log logger.Logger, parentExe string) error {
 	childExe, err := filepath.EvalSymlinks("/proc/self/exe")
 	if err != nil {
 		log.Errorf("failed to get path of exe: %v", err)

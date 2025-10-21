@@ -73,7 +73,7 @@ func generationDiffMain(cmd *cobra.Command, genOpts *cmdOpts.GenerationOpts, opt
 	beforeDirectory := filepath.Join(profileDirectory, fmt.Sprintf("%v-%v-link", genOpts.ProfileName, opts.Before))
 	afterDirectory := filepath.Join(profileDirectory, fmt.Sprintf("%v-%v-link", genOpts.ProfileName, opts.After))
 
-	err := generation.RunDiffCommand(log, s, beforeDirectory, afterDirectory, &generation.DiffCommandOptions{
+	err := generation.RunDiffCommand(s, beforeDirectory, afterDirectory, &generation.DiffCommandOptions{
 		UseNvd:  cfg.UseNvd,
 		Verbose: opts.Verbose,
 	})
