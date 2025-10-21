@@ -55,7 +55,7 @@ Flags:
 func mainCommand() (*cobra.Command, error) {
 	opts := cmdOpts.MainOpts{}
 
-	log := logger.NewLogger()
+	log := logger.NewConsoleLogger()
 	cmdCtx := logger.WithLogger(context.Background(), log)
 
 	configLocation := os.Getenv("NIXOS_CLI_CONFIG")

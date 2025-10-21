@@ -209,7 +209,7 @@ func clearScreen() {
 	fmt.Print(CLEAR + MV_TOP_LEFT)
 }
 
-func runGenerationSwitchCmd(log *logger.Logger, generation uint64, profile string) error {
+func runGenerationSwitchCmd(log logger.Logger, generation uint64, profile string) error {
 	argv := []string{os.Args[0], "generation", "-p", profile, "switch", fmt.Sprintf("%v", generation)}
 
 	cmd := exec.Command(argv[0], argv[1:]...)
@@ -223,7 +223,7 @@ func runGenerationSwitchCmd(log *logger.Logger, generation uint64, profile strin
 	return cmd.Run()
 }
 
-func runGenerationDeleteCmd(log *logger.Logger, generations []uint64, profile string) error {
+func runGenerationDeleteCmd(log logger.Logger, generations []uint64, profile string) error {
 	argv := []string{os.Args[0], "generation", "-p", profile, "delete"}
 	for _, v := range generations {
 		argv = append(argv, fmt.Sprintf("%v", v))
@@ -293,7 +293,7 @@ func newGenerationList(generations []generation.Generation) list.Model {
 	return l
 }
 
-func generationUI(log *logger.Logger, profile string, generations []generation.Generation) error {
+func generationUI(log logger.Logger, profile string, generations []generation.Generation) error {
 	closeLogFile, _ := cmdUtils.ConfigureBubbleTeaLogger("genlist")
 	defer closeLogFile()
 

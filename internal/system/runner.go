@@ -9,7 +9,7 @@ import (
 
 type CommandRunner interface {
 	Run(cmd *Command) (int, error)
-	Logger() *logger.Logger
+	Logger() logger.Logger
 }
 
 type Command struct {

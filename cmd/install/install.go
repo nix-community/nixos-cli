@@ -121,7 +121,7 @@ Check the Nix manual page for more details on what options are available.
 	return &cmd
 }
 
-func validateMountpoint(log *logger.Logger, mountpoint string) error {
+func validateMountpoint(log logger.Logger, mountpoint string) error {
 	stat, err := os.Stat(mountpoint)
 	if err != nil {
 		log.Errorf("failed to stat %v: %v", mountpoint, err)
@@ -170,7 +170,9 @@ const (
 	defaultExtraSubstituters = "auto?trusted=1"
 )
 
-func copyChannel(cobraCmd *cobra.Command, s system.CommandRunner, log *logger.Logger, mountpoint string, channelDirectory string, buildOptions any, verbose bool) error {
+func copyChannel(cobraCmd *cobra.Command, s system.CommandRunner, mountpoint string, channelDirectory string, buildOptions any, verbose bool) error {
+	log := s.Logger()
+
 	mountpointChannelDir := filepath.Join(mountpoint, constants.NixChannelDirectory)
 
 	channelPath := channelDirectory
@@ -395,7 +397,7 @@ func installMain(cmd *cobra.Command, opts *cmdOpts.InstallOpts) error {
 
 	log.Step("Copying channel...")
 
-	err = copyChannel(cmd, s, log, mountpoint, opts.Channel, opts.NixOptions, opts.Verbose)
+	err = copyChannel(cmd, s, mountpoint, opts.Channel, opts.NixOptions, opts.Verbose)
 	if err != nil {
 		return err
 	}

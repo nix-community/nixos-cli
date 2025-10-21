@@ -336,7 +336,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 
 	log.Step("Comparing changes...")
 
-	err = generation.RunDiffCommand(log, s, constants.CurrentSystem, resultLocation, &generation.DiffCommandOptions{
+	err = generation.RunDiffCommand(s, constants.CurrentSystem, resultLocation, &generation.DiffCommandOptions{
 		UseNvd:  cfg.UseNvd,
 		Verbose: opts.Verbose,
 	})

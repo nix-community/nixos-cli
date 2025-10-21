@@ -20,11 +20,11 @@ func initMain(cmd *cobra.Command, opts *cmdOpts.InitOpts) error {
 	cfg := settings.FromContext(cmd.Context())
 	s := system.NewLocalSystem(log)
 
-	virtType := determineVirtualisationType(s, log)
+	virtType := determineVirtualisationType(s)
 
 	log.Step("Generating hardware-configuration.nix...")
 
-	hwConfigNixText, err := generateHwConfigNix(s, log, cfg, virtType, opts)
+	hwConfigNixText, err := generateHwConfigNix(s, cfg, virtType, opts)
 	if err != nil {
 		log.Errorf("failed to generate hardware-configuration.nix: %v", err)
 		return err

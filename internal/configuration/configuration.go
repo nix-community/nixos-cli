@@ -41,7 +41,7 @@ func (e *AttributeEvaluationError) Error() string {
 	return fmt.Sprintf("failed to evaluate attribute %s", e.Attribute)
 }
 
-func FindConfiguration(log *logger.Logger, cfg *settings.Settings, includes []string, verbose bool) (Configuration, error) {
+func FindConfiguration(log logger.Logger, cfg *settings.Settings, includes []string, verbose bool) (Configuration, error) {
 	if build.Flake() {
 		if verbose {
 			log.Info("looking for flake configuration")

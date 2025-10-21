@@ -11,10 +11,10 @@ import (
 )
 
 type LocalSystem struct {
-	logger *logger.Logger
+	logger logger.Logger
 }
 
-func NewLocalSystem(logger *logger.Logger) *LocalSystem {
+func NewLocalSystem(logger logger.Logger) *LocalSystem {
 	return &LocalSystem{
 		logger: logger,
 	}
@@ -68,7 +68,7 @@ func (l *LocalSystem) IsNixOS() bool {
 	return nixosDistroIDRegex.MatchString(distroID)
 }
 
-func (l *LocalSystem) Logger() *logger.Logger {
+func (l *LocalSystem) Logger() logger.Logger {
 	return l.logger
 }
 

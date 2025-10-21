@@ -125,7 +125,7 @@ func generationSwitchMain(cmd *cobra.Command, genOpts *cmdOpts.GenerationOpts, o
 
 	log.Step("Comparing changes...")
 
-	err := generation.RunDiffCommand(log, s, constants.CurrentSystem, generationLink, &generation.DiffCommandOptions{
+	err := generation.RunDiffCommand(s, constants.CurrentSystem, generationLink, &generation.DiffCommandOptions{
 		UseNvd:  cfg.UseNvd,
 		Verbose: opts.Verbose,
 	})

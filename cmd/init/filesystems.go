@@ -34,7 +34,7 @@ type LUKSInformation struct {
 	DevicePath string
 }
 
-func findSwapDevices(log *logger.Logger) []string {
+func findSwapDevices(log logger.Logger) []string {
 	swapDevices := []string{}
 
 	swapDeviceList, err := os.Open(swapDeviceListFilename)
@@ -67,7 +67,7 @@ func findSwapDevices(log *logger.Logger) []string {
 	return swapDevices
 }
 
-func findFilesystems(log *logger.Logger, rootDir string) []Filesystem {
+func findFilesystems(log logger.Logger, rootDir string) []Filesystem {
 	filesystems := []Filesystem{}
 
 	foundFileystems := make(map[string]string, 0)
@@ -219,7 +219,9 @@ func findFilesystems(log *logger.Logger, rootDir string) []Filesystem {
 	return filesystems
 }
 
-func lvmDevicesExist(s system.CommandRunner, log *logger.Logger) bool {
+func lvmDevicesExist(s system.CommandRunner) bool {
+	log := s.Logger()
+
 	cmd := system.NewCommand("lsblk", "-o", "TYPE")
 
 	var stdout bytes.Buffer
@@ -238,7 +240,7 @@ func lvmDevicesExist(s system.CommandRunner, log *logger.Logger) bool {
 	return strings.Contains(stdout.String(), "lvm")
 }
 
-func bcachefsFilesystemsExist(log *logger.Logger) bool {
+func bcachefsFilesystemsExist(log logger.Logger) bool {
 	entries, err := os.ReadDir("/dev")
 	if err != nil {
 		log.Warnf("failed to read /dev: %v", err)

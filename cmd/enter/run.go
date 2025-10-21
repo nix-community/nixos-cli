@@ -157,7 +157,7 @@ resolvConfDone:
 
 const NIXOS_REEXEC = "_NIXOS_ENTER_REEXEC"
 
-func execSandboxedEnterProcess(log *logger.Logger, verbose bool) error {
+func execSandboxedEnterProcess(log logger.Logger, verbose bool) error {
 	if verbose {
 		log.Infof("sandboxing process with unshare")
 	}

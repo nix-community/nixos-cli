@@ -36,7 +36,7 @@ func (c CPUManufacturer) CPUType() string {
 	}
 }
 
-func getCPUInfo(log *logger.Logger) *CPUInfo {
+func getCPUInfo(log logger.Logger) *CPUInfo {
 	result := &CPUInfo{
 		VirtualisationEnabled: false,
 		Manufacturer:          manufacturerUnknown,
@@ -108,7 +108,9 @@ func (v VirtualisationType) String() string {
 	}
 }
 
-func determineVirtualisationType(s system.CommandRunner, log *logger.Logger) VirtualisationType {
+func determineVirtualisationType(s system.CommandRunner) VirtualisationType {
+	log := s.Logger()
+
 	cmd := system.NewCommand("systemd-detect-virt")
 
 	var stdout bytes.Buffer

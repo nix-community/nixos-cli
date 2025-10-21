@@ -73,7 +73,7 @@ func generationRollbackMain(cmd *cobra.Command, genOpts *cmdOpts.GenerationOpts,
 
 	log.Step("Comparing changes...")
 
-	err = generation.RunDiffCommand(log, s, constants.CurrentSystem, generationLink, &generation.DiffCommandOptions{
+	err = generation.RunDiffCommand(s, constants.CurrentSystem, generationLink, &generation.DiffCommandOptions{
 		UseNvd:  cfg.UseNvd,
 		Verbose: opts.Verbose,
 	})
@@ -172,7 +172,7 @@ func generationRollbackMain(cmd *cobra.Command, genOpts *cmdOpts.GenerationOpts,
 	return nil
 }
 
-func findPreviousGeneration(log *logger.Logger, profileName string) (*generation.Generation, error) {
+func findPreviousGeneration(log logger.Logger, profileName string) (*generation.Generation, error) {
 	generations, err := genUtils.LoadGenerations(log, profileName, false)
 	if err != nil {
 		return nil, err

@@ -5,7 +5,7 @@ import (
 	"github.com/nix-community/nixos-cli/internal/logger"
 )
 
-func LoadGenerations(log *logger.Logger, profileName string, reverse bool) ([]generation.Generation, error) {
+func LoadGenerations(log logger.Logger, profileName string, reverse bool) ([]generation.Generation, error) {
 	generations, err := generation.CollectGenerationsInProfile(log, profileName)
 	if err != nil {
 		switch v := err.(type) {

@@ -27,7 +27,9 @@ var configurationNixTemplate string
 //go:embed flake.nix.txt
 var flakeNixTemplate string
 
-func generateHwConfigNix(s system.CommandRunner, log *logger.Logger, cfg *settings.Settings, virtType VirtualisationType, opts *cmdOpts.InitOpts) (string, error) {
+func generateHwConfigNix(s system.CommandRunner, cfg *settings.Settings, virtType VirtualisationType, opts *cmdOpts.InitOpts) (string, error) {
+	log := s.Logger()
+
 	imports := []string{}
 	initrdAvailableModules := []string{}
 	initrdModules := []string{}
@@ -114,7 +116,7 @@ func generateHwConfigNix(s system.CommandRunner, log *logger.Logger, cfg *settin
 		networkInterfaceLines = append(networkInterfaceLines, fmt.Sprintf("  # networking.interfaces.%v.useDHCP = lib.mkDefault true;", i))
 	}
 
-	if lvmDevicesExist(s, log) {
+	if lvmDevicesExist(s) {
 		initrdModules = append(initrdModules, "dm-snapshot")
 	}
 
@@ -172,7 +174,7 @@ func generateHwConfigNix(s system.CommandRunner, log *logger.Logger, cfg *settin
 	), nil
 }
 
-func generateConfigNix(log *logger.Logger, cfg *settings.Settings, virtType VirtualisationType) (string, error) {
+func generateConfigNix(log logger.Logger, cfg *settings.Settings, virtType VirtualisationType) (string, error) {
 	var bootloaderConfig string
 
 	if _, err := os.Stat("/sys/firmware/efi/efivars"); err == nil {

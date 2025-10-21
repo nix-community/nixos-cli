@@ -3,7 +3,6 @@ package generation
 import (
 	"os/exec"
 
-	"github.com/nix-community/nixos-cli/internal/logger"
 	"github.com/nix-community/nixos-cli/internal/system"
 )
 
@@ -12,7 +11,9 @@ type DiffCommandOptions struct {
 	Verbose bool
 }
 
-func RunDiffCommand(log *logger.Logger, s system.CommandRunner, before string, after string, opts *DiffCommandOptions) error {
+func RunDiffCommand(s system.CommandRunner, before string, after string, opts *DiffCommandOptions) error {
+	log := s.Logger()
+
 	useNvd := opts.UseNvd
 
 	if opts.UseNvd {
@@ -35,8 +36,6 @@ func RunDiffCommand(log *logger.Logger, s system.CommandRunner, before string, a
 	}
 
 	cmd := system.NewCommand(argv[0], argv[1:]...)
-
 	_, err := s.Run(cmd)
-
 	return err
 }
