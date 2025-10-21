@@ -8,8 +8,8 @@ import (
 	"sort"
 	"strconv"
 
+	cmdUtils "github.com/nix-community/nixos-cli/internal/cmd/utils"
 	"github.com/nix-community/nixos-cli/internal/constants"
-	"github.com/nix-community/nixos-cli/internal/logger"
 	"github.com/spf13/cobra"
 )
 
@@ -40,7 +40,7 @@ func CompleteProfileFlag(_ *cobra.Command, args []string, toComplete string) ([]
 
 func CompleteGenerationNumber(profile *string, limit int) cobra.CompletionFunc {
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		log := logger.FromContext(cmd.Context())
+		log, _ := cmdUtils.PrepareCompletionResources()
 
 		if limit != 0 && len(args) >= limit {
 			return []string{}, cobra.ShellCompDirectiveNoFileComp
@@ -80,7 +80,7 @@ func CompleteGenerationNumber(profile *string, limit int) cobra.CompletionFunc {
 
 func CompleteGenerationNumberFlag(profile *string) cobra.CompletionFunc {
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		log := logger.FromContext(cmd.Context())
+		log, _ := cmdUtils.PrepareCompletionResources()
 
 		generations, err := CollectGenerationsInProfile(log, *profile)
 		if err != nil {
