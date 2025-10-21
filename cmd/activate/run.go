@@ -382,7 +382,11 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 	}
 	defer func() { _ = unix.Flock(int(lockfile.Fd()), unix.LOCK_UN) }()
 
-	// TODO: syslog init?
+	if syslogLogger, err := logger.NewSyslogLogger("nixos-cli-activate"); err == nil {
+		log = logger.NewMultiLogger(log, syslogLogger)
+	} else {
+		log.Warnf("failed to initialize syslog logger: %v", err)
+	}
 
 	if skipCheck := os.Getenv("NIXOS_NO_CHECK"); skipCheck == "" {
 		log.Info("running pre-switch checks")
