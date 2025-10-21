@@ -99,7 +99,7 @@ func (l *ConsoleLogger) CmdArray(argv []string) {
 		return
 	}
 
-	msg := color.New(color.FgBlue).Sprintf("$ %v", utils.EscapeAndJoinArgs(argv))
+	msg := blue.Sprintf("$ %v", utils.EscapeAndJoinArgs(argv))
 	l.print.Printf("%v\n", msg)
 }
 
