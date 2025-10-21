@@ -211,8 +211,7 @@ func completeSpecialisationFlag(profileName string) cobra.CompletionFunc {
 	}
 
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		// I was too lazy to not
-		log := logger.FromContext(cmd.Context())
+		log, _ := cmdUtils.PrepareCompletionResources()
 
 		previousGen, err := findPreviousGeneration(log, profileName)
 		if err != nil {
