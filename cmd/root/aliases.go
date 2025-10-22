@@ -3,8 +3,8 @@ package root
 import (
 	"fmt"
 	"os"
-	"os/exec"
 
+	"github.com/carapace-sh/carapace"
 	"github.com/nix-community/nixos-cli/internal/utils"
 	"github.com/spf13/cobra"
 )
@@ -40,37 +40,35 @@ func addAliasCmd(parent *cobra.Command, alias string, args []string) error {
 			root.SetArgs(fullArgsList)
 			return root.Execute()
 		},
-		ValidArgsFunction: func(cmd *cobra.Command, passedArgs []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-			// HACK: So this is a rather lazy way of implementing completion for aliases.
-			// I couldn't figure out how to get completions from the flag, so I decided
-			// to just run the hidden completion command with the resolved arguments
-			// and anything else that was passed. This should be negligible from a
-			// performance perspective, but it's definitely a piece of shit.
-			// Also, if you know, you know.
-
-			// evil completion command hacking
-			completionArgv := []string{os.Args[0], "__complete"} // what the fuck?
-			completionArgv = append(completionArgv, args...)
-			completionArgv = append(completionArgv, passedArgs...)
-			completionArgv = append(completionArgv, toComplete)
-
-			completionCmd := exec.Command(completionArgv[0], completionArgv[1:]...)
-			completionCmd.Stdout = os.Stdout
-			completionCmd.Stderr = os.Stderr
-
-			// The completion command should always run.
-			if err := completionCmd.Run(); err != nil {
-				cobra.CompDebugln("failed to run completion command: "+err.Error(), true)
-				os.Exit(1)
-			}
-
-			os.Exit(0)
-
-			return []string{}, cobra.ShellCompDirectiveNoFileComp
-		},
 	}
 
 	parent.AddCommand(cmd)
+
+	carapace.Gen(cmd).PositionalAnyCompletion(
+		carapace.ActionCallback(
+			func(c carapace.Context) carapace.Action {
+				// HACK: So this is a rather lazy way of implementing completion for aliases.
+				// I couldn't figure out how to get completions from the flag, so I decided
+				// to just run the hidden completion command with the resolved arguments
+				// and anything else that was passed. This should be negligible from a
+				// performance perspective, but it's definitely a piece of shit.
+				// Also, if you know, you know.
+
+				// evil completion command hacking
+				completionArgv := []string{os.Args[0], "_carapace", "export", ""} // what the fuck?
+				completionArgv = append(completionArgv, args...)
+				completionArgv = append(completionArgv, c.Args...)
+				completionArgv = append(completionArgv, c.Value)
+
+				return carapace.ActionExecCommand(completionArgv[0], completionArgv[1:]...)(func(output []byte) carapace.Action {
+					if string(output) == "" {
+						return carapace.ActionValues()
+					}
+					return carapace.ActionImport(output)
+				})
+			},
+		),
+	)
 
 	return nil
 }
