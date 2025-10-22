@@ -10,7 +10,7 @@
 }:
 buildGoModule (finalAttrs: {
   pname = "nixos-cli";
-  version = "0.14.0";
+  version = "0.14.0-dev";
   src = nix-gitignore.gitignoreSource [] ./.;
 
   vendorHash = "sha256-e5EAWmSQ4+gykmPaCplYdEOKZuTXlNWsMU7x8Zhc7m0=";
