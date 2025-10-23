@@ -17,6 +17,7 @@ var (
 
 type ConsoleLogger struct {
 	print *log.Logger
+	cmd   *log.Logger
 	debug *log.Logger
 	info  *log.Logger
 	warn  *log.Logger
@@ -31,6 +32,7 @@ func NewConsoleLogger() *ConsoleLogger {
 	return &ConsoleLogger{
 		print: log.New(os.Stderr, "", 0),
 		debug: log.New(os.Stderr, blue.Sprint("debug: "), 0),
+		cmd:   log.New(os.Stderr, blue.Sprint("$ "), 0),
 		info:  log.New(os.Stderr, green.Sprint("info: "), 0),
 		warn:  log.New(os.Stderr, boldYellow.Sprint("warning: "), 0),
 		error: log.New(os.Stderr, boldRed.Sprint("error: "), 0),
@@ -124,8 +126,8 @@ func (l *ConsoleLogger) CmdArray(argv []string) {
 		return
 	}
 
-	msg := blue.Sprintf("$ %v", utils.EscapeAndJoinArgs(argv))
-	l.debug.Printf("%v\n", msg)
+	msg := blue.Sprintf("%v", utils.EscapeAndJoinArgs(argv))
+	l.cmd.Printf("%v\n", msg)
 }
 
 func (l *ConsoleLogger) Step(message string) {
@@ -150,6 +152,7 @@ func (l *ConsoleLogger) Step(message string) {
 // Call this when the colors have been enabled or disabled.
 func (l *ConsoleLogger) RefreshColorPrefixes() {
 	l.debug.SetPrefix(blue.Sprint("debug: "))
+	l.cmd.SetPrefix(blue.Sprint("$ "))
 	l.info.SetPrefix(green.Sprint("info: "))
 	l.warn.SetPrefix(boldYellow.Sprint("warning: "))
 	l.error.SetPrefix(boldRed.Sprint("error: "))
