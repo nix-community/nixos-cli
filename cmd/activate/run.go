@@ -16,9 +16,9 @@ import (
 	"syscall"
 	"time"
 
+	shlex "github.com/carapace-sh/carapace-shlex"
 	systemdDbus "github.com/coreos/go-systemd/v22/dbus"
 	"github.com/coreos/go-systemd/v22/login1"
-	"github.com/google/shlex"
 
 	"github.com/nix-community/nixos-cli/internal/activation"
 	cmdOpts "github.com/nix-community/nixos-cli/internal/cmd/opts"
@@ -139,10 +139,11 @@ func runPreSwitchCheck(
 		return err
 	}
 
-	args = append(args, toplevel)
-	args = append(args, action.String())
+	argv := args.Strings()
+	argv = append(argv, toplevel)
+	argv = append(argv, action.String())
 
-	cmd := system.NewCommand(args[0], args[1:]...)
+	cmd := system.NewCommand(argv[0], argv[1:]...)
 	_, err = s.Run(cmd)
 	return err
 }
@@ -156,9 +157,11 @@ func installBootloader(
 	if err != nil {
 		return err
 	}
-	args = append(args, toplevel)
 
-	cmd := system.NewCommand(args[0], args[1:]...)
+	argv := args.Strings()
+	argv = append(argv, toplevel)
+
+	cmd := system.NewCommand(argv[0], argv[1:]...)
 	_, err = s.Run(cmd)
 	return err
 }
