@@ -2,6 +2,7 @@ package system
 
 import (
 	"bufio"
+	"io"
 	"os"
 	"os/exec"
 	"regexp"
@@ -55,7 +56,13 @@ func (l *LocalSystem) IsNixOS() bool {
 		return true
 	}
 
-	osRelease, err := parseOSRelease()
+	osReleaseFile, err := os.Open("/etc/os-release")
+	if err != nil {
+		return false
+	}
+	defer func() { _ = osReleaseFile.Close() }()
+
+	osRelease, err := parseOSRelease(osReleaseFile)
 	if err != nil {
 		return false
 	}
@@ -72,16 +79,14 @@ func (l *LocalSystem) Logger() logger.Logger {
 	return l.logger
 }
 
-func parseOSRelease() (map[string]string, error) {
+func (l *LocalSystem) IsRemote() bool {
+	return false
+}
+
+func parseOSRelease(r io.Reader) (map[string]string, error) {
 	values := make(map[string]string)
 
-	osRelease, err := os.Open("/etc/os-release")
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = osRelease.Close() }()
-
-	s := bufio.NewScanner(osRelease)
+	s := bufio.NewScanner(r)
 	s.Split(bufio.ScanLines)
 
 	for s.Scan() {
