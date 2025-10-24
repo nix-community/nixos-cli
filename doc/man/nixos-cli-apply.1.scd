@@ -84,11 +84,24 @@ global *--config* flag as such:
 
 # OPTIONS
 
+*--build-host* <HOST>
+	Instead of building the new configuration locally, use the specified *HOST*
+	to perform the build. The host needs to be accessible with SSH, and must be
+	able to perform Nix builds.
+
+	*HOST* is a simple SSH address with the format "_user@address:port_".
+
+	SSH keys must be loaded into _ssh-agent_ for them to be used by the program.
+	If an agent is not detected, then an error will be displayed.
+
+	If *--target-host* is not set, the build will be copied back to the local
+	machine when done.
+
 *-d*, *--dry*
 	Perform a dry run. Show what would be built or executed without making
 	changes.
 
-	Cannot be specified alongside **--output**.
+	Cannot be specified alongside *--output*.
 	
 	There are two modes of dry-ness: dry activation and dry builds.
 
@@ -97,7 +110,7 @@ global *--config* flag as such:
 	a real configuration to be built beforehand.
 
 	Dry builds of the configuration can be achieved by passing *--no-activate*
-	and *--no-build*, as well as *--output*. If any of these options are not
+	and *--no-boot*, as well as *--output*. If any of these options are not
 	passed, then dry activation is assumed.
 
 	The list of changes is not guaranteed to be complete for dry activations.
@@ -146,6 +159,23 @@ global *--config* flag as such:
 	Additionally, a tag may be inferred from Git commit messages if the
 	option *apply.use_git_commit_msg* is enabled. This only works for local
 	paths, and will not work with remote flake refs.
+
+*--target-host* <HOST>
+	Deploy the built configuration to the specified *HOST* and activate it. The
+	host needs to be accessible with SSH. For activation-related code to run,
+	root access is required.
+
+	If this is left empty, activation of the system will happen locally.
+
+	*HOST* is a simple SSH address with the format "_user@address:port_".
+
+	If *--build-host* is not explicitly specified or is left empty, building
+	will take place locally.
+
+	Note that this program honors the _nixpkgs.crossSystem_ setting of the given
+	configuration but disregards the true architecture of the target host.
+	Hence, the nixpkgs.crossSystem setting has to match the target platform, or
+	else activation will fail.
 
 *--upgrade*
 	Upgrade the root user's _nixos_ Nix channel before building the

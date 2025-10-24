@@ -1,8 +1,8 @@
 package cmdOpts
 
 import (
-	"github.com/nix-community/nixos-cli/internal/configuration"
 	"github.com/nix-community/nixos-cli/internal/activation"
+	"github.com/nix-community/nixos-cli/internal/configuration"
 )
 
 type MainOpts struct {
@@ -20,22 +20,24 @@ type AliasesOpts struct {
 }
 
 type ApplyOpts struct {
+	AlwaysConfirm         bool
+	BuildHost             string
+	BuildVM               bool
+	BuildVMWithBootloader bool
 	Dry                   bool
+	FlakeRef              string
+	GenerationTag         string
 	InstallBootloader     bool
 	NoActivate            bool
 	NoBoot                bool
 	OutputPath            string
 	ProfileName           string
 	Specialisation        string
-	GenerationTag         string
-	UpgradeChannels       bool
+	TargetHost            string
 	UpgradeAllChannels    bool
+	UpgradeChannels       bool
 	UseNom                bool
 	Verbose               bool
-	BuildVM               bool
-	BuildVMWithBootloader bool
-	AlwaysConfirm         bool
-	FlakeRef              string
 
 	NixOptions ApplyNixOptions
 }

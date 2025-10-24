@@ -99,6 +99,8 @@ in {
         EOF
       '';
 
+      # FIXME: should this be configurable? Not all users would want to preserve
+      # SSH_AUTH_SOCK, for example.
       security.sudo.extraConfig = ''
         # Preserve NIXOS_CONFIG and NIXOS_CLI_CONFIG in sudo invocations of
         # `nixos apply`. This is required in order to keep ownership across
@@ -109,6 +111,7 @@ in {
         Defaults env_keep += "NIXOS_CLI_DISABLE_STEPS"
         Defaults env_keep += "NIXOS_CLI_DEBUG_MODE"
         Defaults env_keep += "NIXOS_CLI_SUPPRESS_NO_SETTINGS_WARNING"
+        Defaults env_keep += "SSH_AUTH_SOCK"
       '';
     }
     (lib.mkIf cfg.prebuildOptionCache {

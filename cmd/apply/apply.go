@@ -1,6 +1,7 @@
 package apply
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -100,6 +101,8 @@ func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 	cmd.Flags().BoolVar(&opts.BuildVM, "vm", false, "Build a NixOS VM script")
 	cmd.Flags().BoolVar(&opts.BuildVMWithBootloader, "vm-with-bootloader", false, "Build a NixOS VM script with a bootloader")
 	cmd.Flags().BoolVarP(&opts.AlwaysConfirm, "yes", "y", false, "Automatically confirm activation")
+	cmd.Flags().StringVar(&opts.BuildHost, "build-host", "", "Use specified `user@host:port` to perform build")
+	cmd.Flags().StringVar(&opts.TargetHost, "target-host", "", "Deploy to a remote machine at `user@host:port`")
 
 	nixopts.AddQuietNixOption(&cmd, &opts.NixOptions.Quiet)
 	nixopts.AddPrintBuildLogsNixOption(&cmd, &opts.NixOptions.PrintBuildLogs)
@@ -151,7 +154,7 @@ Arguments:
 	}
 	helpTemplate += `
 This command also forwards Nix options passed here to all relevant Nix invocations.
-Check the man page nixos-cli-apply(5) for more details on what options are available.
+Check the man page nixos-cli-apply(1) for more details on what options are available.
 `
 
 	cmdUtils.SetHelpFlagText(&cmd)
@@ -163,12 +166,39 @@ Check the man page nixos-cli-apply(5) for more details on what options are avail
 func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 	log := logger.FromContext(cmd.Context())
 	cfg := settings.FromContext(cmd.Context())
-	s := system.NewLocalSystem(log)
+	localSystem := system.NewLocalSystem(log)
 
-	if !s.IsNixOS() {
-		msg := "this command only is only supported on NixOS systems"
-		log.Errorf(msg)
-		return fmt.Errorf("%v", msg)
+	var targetHost system.System
+
+	if opts.TargetHost != "" {
+		log.Debugf("connecting to %s", opts.TargetHost)
+		host, err := system.NewSSHSystem(opts.TargetHost, log)
+		if err != nil {
+			if errors.Is(err, system.ErrAgentNotStarted) {
+				log.Errorf("an SSH agent is not running")
+				log.Info("you must add your identity key(s) to an SSH agent if using --target-host")
+			} else {
+				log.Errorf("%v", err)
+			}
+			return err
+		}
+
+		defer host.Close()
+		targetHost = host
+	} else {
+		targetHost = localSystem
+	}
+
+	if !targetHost.IsNixOS() {
+		var err error
+		switch targetHost.(type) {
+		case *system.SSHSystem:
+			err = fmt.Errorf("target host %s is not a NixOS system", opts.TargetHost)
+		case *system.LocalSystem:
+			err = fmt.Errorf("this system is not a NixOS system")
+		}
+		log.Error(err)
+		return err
 	}
 
 	buildType := configuration.SystemBuildTypeSystemActivation
@@ -180,13 +210,40 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 		buildType = configuration.SystemBuildTypeSystem
 	}
 
-	if os.Geteuid() != 0 {
+	// The local host may need to re-execute as root in order
+	// to gain access to activation commands. Do this as early as
+	// possible to prevent excessive initialization code from
+	// running.
+	if os.Geteuid() != 0 && !targetHost.IsRemote() && buildType == configuration.SystemBuildTypeSystemActivation {
 		err := utils.ExecAsRoot(cfg.RootCommand)
 		if err != nil {
 			log.Errorf("failed to re-exec command as root: %v", err)
 			return err
 		}
 	}
+
+	var buildHost system.System
+
+	if opts.BuildHost != "" {
+		log.Debugf("connecting to %s", opts.BuildHost)
+		host, err := system.NewSSHSystem(opts.BuildHost, log)
+		if err != nil {
+			if errors.Is(err, system.ErrAgentNotStarted) {
+				log.Errorf("an SSH agent is not running")
+				log.Info("you must add your identity key(s) to an SSH agent if using --build-host")
+			} else {
+				log.Errorf("%v", err)
+			}
+			return err
+		}
+
+		defer host.Close()
+		buildHost = host
+	} else {
+		buildHost = localSystem
+	}
+
+	_ = buildHost
 
 	log.Step("Looking for configuration...")
 
@@ -206,7 +263,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 		nixConfig = c
 	}
 
-	nixConfig.SetBuilder(s)
+	nixConfig.SetBuilder(localSystem)
 
 	var configDirname string
 	switch c := nixConfig.(type) {
@@ -237,11 +294,11 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 	if !build.Flake() && (opts.UpgradeChannels || opts.UpgradeAllChannels) {
 		log.Step("Upgrading channels...")
 
-		if err := upgradeChannels(s, &upgradeChannelsOptions{
+		if err := upgradeChannels(localSystem, &upgradeChannelsOptions{
 			UpgradeAll: opts.UpgradeAllChannels,
 		}); err != nil {
 			log.Warnf("failed to update channels: %v", err)
-			log.Warnf("continuing with existing channels", err)
+			log.Warnf("continuing with existing channels")
 		}
 	}
 
@@ -340,7 +397,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 
 	log.Step("Comparing changes...")
 
-	err = generation.RunDiffCommand(s, constants.CurrentSystem, resultLocation, &generation.DiffCommandOptions{
+	err = generation.RunDiffCommand(localSystem, constants.CurrentSystem, resultLocation, &generation.DiffCommandOptions{
 		UseNvd: cfg.UseNvd,
 	})
 	if err != nil {
@@ -390,7 +447,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 	if createGeneration {
 		log.Step("Setting system profile...")
 
-		if err := activation.AddNewNixProfile(s, opts.ProfileName, resultLocation); err != nil {
+		if err := activation.AddNewNixProfile(localSystem, opts.ProfileName, resultLocation); err != nil {
 			log.Errorf("failed to set system profile: %v", err)
 			return err
 		}
@@ -415,7 +472,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 			}
 
 			log.Step("Rolling back system profile...")
-			if err := activation.SetNixProfileGeneration(s, opts.ProfileName, previousGenNumber); err != nil {
+			if err := activation.SetNixProfileGeneration(localSystem, opts.ProfileName, previousGenNumber); err != nil {
 				log.Errorf("failed to rollback system profile: %v", err)
 				log.Info("make sure to rollback the system manually before deleting anything!")
 			}
@@ -437,7 +494,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 		panic("unknown switch to configuration action to take, this is a bug")
 	}
 
-	err = activation.SwitchToConfiguration(s, resultLocation, stcAction, &activation.SwitchToConfigurationOptions{
+	err = activation.SwitchToConfiguration(localSystem, resultLocation, stcAction, &activation.SwitchToConfigurationOptions{
 		InstallBootloader: opts.InstallBootloader,
 		Specialisation:    specialisation,
 	})
