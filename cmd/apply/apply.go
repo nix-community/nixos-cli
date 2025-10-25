@@ -142,6 +142,8 @@ func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 	_ = cmd.RegisterFlagCompletionFunc("specialisation", generation.CompleteSpecialisationFlagFromConfig(opts.FlakeRef, opts.NixOptions.Includes))
 
 	cmd.MarkFlagsMutuallyExclusive("dry", "output")
+	cmd.MarkFlagsMutuallyExclusive("output", "build-host")
+	cmd.MarkFlagsMutuallyExclusive("output", "target-host")
 	cmd.MarkFlagsMutuallyExclusive("vm", "vm-with-bootloader")
 	cmd.MarkFlagsMutuallyExclusive("no-activate", "specialisation")
 
