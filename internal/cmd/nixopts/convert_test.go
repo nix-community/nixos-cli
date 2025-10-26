@@ -9,12 +9,12 @@ import (
 )
 
 type nixOptions struct {
-	Quiet          bool
-	PrintBuildLogs bool
-	MaxJobs        int
-	LogFormat      string
-	Builders       []string
-	Options        map[string]string
+	Quiet          bool              `nixCategory:"build,copy"`
+	PrintBuildLogs bool              `nixCategory:"build"`
+	MaxJobs        int               `nixCategory:"build,copy"`
+	LogFormat      string            `nixCategory:"build"`
+	Builders       []string          `nixCategory:"build"`
+	Options        map[string]string `nixCategory:"build,eval"`
 }
 
 func createTestCmd() (*cobra.Command, *nixOptions) {
@@ -94,6 +94,53 @@ func TestNixOptionsToArgsList(t *testing.T) {
 
 			if !reflect.DeepEqual(args, tt.expected) {
 				t.Errorf("NixOptionsToArgsList() = %v, want %v", args, tt.expected)
+			}
+		})
+	}
+}
+
+func TestNixOptionsToArgsListByCategory(t *testing.T) {
+	tests := []struct {
+		name       string
+		category   string
+		passedArgs []string
+		expected   []string
+	}{
+		{
+			name:       "Build category only includes build-related flags",
+			category:   "build",
+			passedArgs: []string{"--quiet", "--max-jobs", "2", "--log-format", "json", "--builders", "builder1"},
+			expected:   []string{"--quiet", "--max-jobs", "2", "--log-format", "json", "--builders", "builder1"},
+		},
+		{
+			name:       "Eval category only includes eval-related flags",
+			category:   "eval",
+			passedArgs: []string{"--option", "foo=bar", "--quiet"},
+			expected:   []string{"--option", "foo", "bar"},
+		},
+		{
+			name:       "Copy category only includes copy-related flags",
+			category:   "copy",
+			passedArgs: []string{"--quiet", "--max-jobs", "3"},
+			expected:   []string{"--quiet", "--max-jobs", "3"},
+		},
+		{
+			name:       "Category with no matching flags returns empty slice",
+			category:   "lock",
+			passedArgs: []string{"--quiet", "--max-jobs", "3"},
+			expected:   []string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd, opts := createTestCmd()
+			cmd.SetArgs(tt.passedArgs)
+			_ = cmd.Execute()
+
+			args := nixopts.NixOptionsToArgsListByCategory(cmd.Flags(), opts, tt.category)
+			if !reflect.DeepEqual(args, tt.expected) {
+				t.Errorf("NixOptionsToArgsListByCategory(%s) = %v, want %v", tt.category, args, tt.expected)
 			}
 		})
 	}
