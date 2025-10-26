@@ -116,6 +116,7 @@ func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 	nixopts.AddImpureNixOption(&cmd, &opts.NixOptions.Impure)
 	nixopts.AddOfflineNixOption(&cmd, &opts.NixOptions.Offline)
 	nixopts.AddNoNetNixOption(&cmd, &opts.NixOptions.NoNet)
+	nixopts.AddSubstituteOnDestinationNixOption(&cmd, &opts.NixOptions.SubstituteOnDestination)
 	nixopts.AddMaxJobsNixOption(&cmd, &opts.NixOptions.MaxJobs)
 	nixopts.AddCoresNixOption(&cmd, &opts.NixOptions.Cores)
 	nixopts.AddBuildersNixOption(&cmd, &opts.NixOptions.Builders)

@@ -230,6 +230,7 @@ The following options are supported:
 - *--impure*
 - *--offline*
 - *--no-net*
+- *--substitute-on-destination*, *--use-substitutes*
 - *--max-jobs*, *-j*
 - *--cores*
 - *--builders*
@@ -251,8 +252,8 @@ The following options are supported on flake-enabled CLIs:
 - *--override-input* <INPUT=VALUE>
 
 *--override-input* is specified slightly differently; for *nixos-cli* to pass it
-through properly, pass the input name and value as a single argument, rather
-than as two arguments in the actual Nix CLI.
+through properly, pass the input name and value as a single argument separated
+by an equals sign, rather than as two arguments in the actual Nix CLI.
 
 # SEE ALSO
 
