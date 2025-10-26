@@ -137,6 +137,14 @@ func (s *SSHSystem) Run(cmd *Command) (int, error) {
 	session.Stdout = cmd.Stdout
 	session.Stderr = cmd.Stderr
 
+	// FIXME: for now, this requires AcceptEnv inside the target
+	// system's sshd_config for the variables in question.
+	// Otherwise, setting variables in this manner will fail.
+	//
+	// It is possible to run these commands inside of a shell
+	// wrapper that exports the proper variables, but the
+	// quoting effort is far too excessive here to make it safe
+	// from arbitrary execution, so leave this for a later time.
 	for k, v := range cmd.Env {
 		if err := session.Setenv(k, v); err != nil {
 			s.logger.Debugf("warning: failed to set remote env %s: %v", k, err)
@@ -190,6 +198,22 @@ func (s *SSHSystem) Address() string {
 
 func (s *SSHSystem) IsRemote() bool {
 	return true
+}
+
+func (s *SSHSystem) HasCommand(name string) bool {
+	session, err := s.client.NewSession()
+	if err != nil {
+		return false
+	}
+	defer func() { _ = session.Close() }()
+
+	session.Stdout = nil
+	session.Stderr = nil
+
+	cmdStr := shlex.Join([]string{"command", "-v", name})
+
+	err = session.Run(cmdStr)
+	return err == nil
 }
 
 func (s *SSHSystem) Close() {

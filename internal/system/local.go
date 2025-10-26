@@ -83,6 +83,11 @@ func (l *LocalSystem) IsRemote() bool {
 	return false
 }
 
+func (l *LocalSystem) HasCommand(name string) bool {
+	_, err := exec.LookPath(name)
+	return err == nil
+}
+
 func parseOSRelease(r io.Reader) (map[string]string, error) {
 	values := make(map[string]string)
 

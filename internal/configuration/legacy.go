@@ -113,11 +113,7 @@ func (l *LegacyConfiguration) EvalAttribute(attr string) (*string, error) {
 	return &value, nil
 }
 
-func (l *LegacyConfiguration) BuildSystem(buildType SystemBuildType, opts *SystemBuildOptions) (string, error) {
-	if l.Builder == nil {
-		panic("LegacyConfiguration.Builder is nil")
-	}
-
+func (l *LegacyConfiguration) buildLocalSystem(s *system.LocalSystem, buildType SystemBuildType, opts *SystemBuildOptions) (string, error) {
 	nixCommand := "nix-build"
 	if opts.UseNom {
 		nixCommand = "nom-build"
@@ -145,12 +141,13 @@ func (l *LegacyConfiguration) BuildSystem(buildType SystemBuildType, opts *Syste
 		argv = append(argv, opts.ExtraArgs...)
 	}
 
-	log := l.Builder.Logger()
+	log := s.Logger()
+
 	if log.GetLogLevel() == logger.LogLevelDebug {
 		argv = append(argv, "-v")
 	}
 
-	l.Builder.Logger().CmdArray(argv)
+	s.Logger().CmdArray(argv)
 
 	var stdout bytes.Buffer
 	cmd := system.NewCommand(nixCommand, argv[1:]...)
@@ -166,5 +163,77 @@ func (l *LegacyConfiguration) BuildSystem(buildType SystemBuildType, opts *Syste
 
 	_, err := l.Builder.Run(cmd)
 
-	return strings.Trim(stdout.String(), "\n "), err
+	return strings.TrimSpace(stdout.String()), err
+}
+
+func (l *LegacyConfiguration) buildRemoteSystem(s *system.SSHSystem, buildType SystemBuildType, opts *SystemBuildOptions) (string, error) {
+	log := s.Logger()
+
+	localSystem := system.NewLocalSystem(log)
+
+	extraBuildFlags := nixopts.NixOptionsToArgsListByCategory(opts.CmdFlags, opts.NixOpts, "build")
+
+	// 1. Determine the drv path.
+	// Equivalent of `nix-instantiate -A "${attr}" ${extraBuildFlags[@]}`
+	instantiateArgv := []string{"nix-instantiate", "<nixpkgs/nixos>", "-A", buildType.BuildAttr()}
+	instantiateArgv = append(instantiateArgv, extraBuildFlags...)
+
+	var drvPathBuf bytes.Buffer
+	instantiateCmd := system.NewCommand(instantiateArgv[0], instantiateArgv[1:]...)
+	instantiateCmd.Stdout = &drvPathBuf
+
+	if opts.GenerationTag != "" {
+		instantiateCmd.SetEnv("NIXOS_GENERATION_TAG", opts.GenerationTag)
+	}
+
+	log.CmdArray(instantiateArgv)
+
+	if _, err := localSystem.Run(instantiateCmd); err != nil {
+		return "", fmt.Errorf("failed to instantiate configuration: %v", err)
+	}
+
+	drvPath := strings.TrimSpace(drvPathBuf.String())
+
+	// 2. Copy the drv path over to the builder.
+	// $ nix-copy-closure --to "$buildHost" "$drv"
+	if err := system.CopyClosures(localSystem, s, []string{drvPath}); err != nil {
+		return "", fmt.Errorf("failed to copy drv to build host: %v", err)
+	}
+
+	// 3. Realise the copied drv on the builder.
+	// $ nix-store -r "$drv" "${buildArgs[@]}"
+	realiseArgv := []string{"nix-store", "-r", drvPath}
+
+	realiseNixOptions := nixopts.NixOptionsToArgsList(opts.CmdFlags, opts.NixOpts)
+	realiseArgv = append(realiseArgv, realiseNixOptions...)
+
+	// Mimic `nixos-rebuild` behavior of using -k option
+	// for all commands except for switch and boot
+	if buildType != SystemBuildTypeSystemActivation {
+		realiseArgv = append(realiseArgv, "-k")
+	}
+
+	log.CmdArray(realiseArgv)
+
+	var realisedPathBuf bytes.Buffer
+	realiseDrvCmd := system.NewCommand(realiseArgv[0], realiseArgv[1:]...)
+	realiseDrvCmd.Stdout = &realisedPathBuf
+
+	_, err := s.Run(realiseDrvCmd)
+	return strings.TrimSpace(realisedPathBuf.String()), err
+}
+
+func (l *LegacyConfiguration) BuildSystem(buildType SystemBuildType, opts *SystemBuildOptions) (string, error) {
+	if l.Builder == nil {
+		panic("LegacyConfiguration.Builder is nil")
+	}
+
+	switch s := l.Builder.(type) {
+	case *system.SSHSystem:
+		return l.buildRemoteSystem(s, buildType, opts)
+	case *system.LocalSystem:
+		return l.buildLocalSystem(s, buildType, opts)
+	default:
+		return "", fmt.Errorf("building is not implemented for this system type")
+	}
 }
