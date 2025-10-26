@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -246,8 +245,6 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 		buildHost = localSystem
 	}
 
-	_ = buildHost
-
 	log.Step("Looking for configuration...")
 
 	var nixConfig configuration.Configuration
@@ -266,7 +263,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 		nixConfig = c
 	}
 
-	nixConfig.SetBuilder(localSystem)
+	nixConfig.SetBuilder(buildHost)
 
 	var configDirname string
 	switch c := nixConfig.(type) {
@@ -312,10 +309,11 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 	}
 
 	useNom := cfg.Apply.UseNom || opts.UseNom
-	nomPath, _ := exec.LookPath("nom")
-	nomFound := nomPath != ""
+	nomFound := buildHost.HasCommand("nom")
 	if opts.UseNom && !nomFound {
-		log.Error("--use-nom was specified, but `nom` is not executable")
+		err := fmt.Errorf("--use-nom was specified, but `nom` is not executable")
+		log.Error(err)
+		return err
 	} else if cfg.Apply.UseNom && !nomFound {
 		log.Warn("apply.use_nom is specified in config, but `nom` is not executable")
 		log.Warn("falling back to `nix` command for building")
@@ -380,14 +378,22 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 		return err
 	}
 
+	if !dryBuild {
+		copyFlags := nixopts.NixOptionsToArgsListByCategory(cmd.Flags(), opts.NixOptions, "copy")
+		err := system.CopyClosures(buildHost, targetHost, []string{resultLocation}, copyFlags...)
+		if err != nil {
+			log.Errorf("failed to copy system closure to target host: %v", err)
+			return err
+		}
+	}
+
 	if buildType.IsVM() && !dryBuild {
 		matches, err := filepath.Glob(fmt.Sprintf("%v/bin/run-*-vm", resultLocation))
 		if err != nil || len(matches) == 0 {
-			msg := fmt.Sprintf("Failed to find VM binary; look in %v for the script to run the VM.", resultLocation)
-			log.Errorf(msg)
-			return fmt.Errorf("%v", msg)
+			log.Warnf("failed to find VM binary; look in %v for the script to run the VM", resultLocation)
+		} else {
+			log.Infof("done; the virtual machine can be started by running `%v`", matches[0])
 		}
-		log.Printf("Done. The virtual machine can be started by running `%v`.\n", matches[0])
 		return nil
 	}
 

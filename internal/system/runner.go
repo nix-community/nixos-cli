@@ -10,6 +10,7 @@ import (
 type CommandRunner interface {
 	Run(cmd *Command) (int, error)
 	Logger() logger.Logger
+	HasCommand(cmd string) bool
 }
 
 type Command struct {

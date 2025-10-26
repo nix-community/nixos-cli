@@ -14,7 +14,7 @@ type System interface {
 
 // Invoke the `nix-copy-closure` command to copy between two types of
 // systems.
-func CopyClosures(src System, dest System, paths ...string) error {
+func CopyClosures(src System, dest System, paths []string, extraArgs ...string) error {
 	log := src.Logger()
 
 	if len(paths) == 0 {
@@ -63,6 +63,7 @@ func CopyClosures(src System, dest System, paths ...string) error {
 		return nil
 	}
 
+	argv = append(argv, extraArgs...)
 	if log.GetLogLevel() == logger.LogLevelDebug {
 		argv = append(argv, "-v")
 	}
