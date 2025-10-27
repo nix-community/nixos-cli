@@ -60,6 +60,8 @@ func ActivateCommand() *cobra.Command {
 		cmd.Flags().StringVarP(&opts.Specialisation, "specialisation", "s", "", "Activate specialisation `name`")
 	}
 
+	cmd.Flags().BoolVarP(&opts.Verbose, "verbose", "v", false, "Show verbose logging")
+
 	cmdUtils.SetHelpFlagText(&cmd)
 	cmd.SetHelpTemplate(cmd.HelpTemplate() + "\nActions:\n" + cmdUtils.AlignedOptions(commands))
 

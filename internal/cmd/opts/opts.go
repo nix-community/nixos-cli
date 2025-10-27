@@ -13,6 +13,7 @@ type MainOpts struct {
 type ActivateOpts struct {
 	Action         activation.SwitchToConfigurationAction
 	Specialisation string
+	Verbose        bool
 }
 
 type AliasesOpts struct {
