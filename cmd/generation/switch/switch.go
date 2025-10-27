@@ -159,7 +159,7 @@ func generationSwitchMain(cmd *cobra.Command, genOpts *cmdOpts.GenerationOpts, o
 
 	specialisation := opts.Specialisation
 	if specialisation == "" {
-		defaultSpecialisation, err := activation.FindDefaultSpecialisationFromConfig(generationLink)
+		defaultSpecialisation, err := activation.FindDefaultSpecialisationFromConfig(s, generationLink)
 		if err != nil {
 			log.Warnf("unable to find default specialisation from config: %v", err)
 		} else {
@@ -167,13 +167,13 @@ func generationSwitchMain(cmd *cobra.Command, genOpts *cmdOpts.GenerationOpts, o
 		}
 	}
 
-	if !activation.VerifySpecialisationExists(generationLink, specialisation) {
+	if !activation.VerifySpecialisationExists(s, generationLink, specialisation) {
 		log.Warnf("specialisation '%v' does not exist", specialisation)
 		log.Warn("using base configuration without specialisations")
 		specialisation = ""
 	}
 
-	previousGenNumber, err := activation.GetCurrentGenerationNumber(genOpts.ProfileName)
+	previousGenNumber, err := activation.GetCurrentGenerationNumber(s, genOpts.ProfileName)
 	if err != nil {
 		log.Errorf("%v", err)
 		return err

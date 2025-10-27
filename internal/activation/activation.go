@@ -16,9 +16,15 @@ import (
 
 // Parse the generation's `nixos-cli` configuration to find the default specialisation
 // for that generation.
-func FindDefaultSpecialisationFromConfig(generationDirname string) (string, error) {
+func FindDefaultSpecialisationFromConfig(s system.System, generationDirname string) (string, error) {
 	generationCfgFilename := filepath.Join(generationDirname, constants.DefaultConfigLocation)
-	generationCfg, err := settings.ParseSettings(generationCfgFilename)
+
+	settingsContent, err := s.FS().ReadFile(generationCfgFilename)
+	if err != nil {
+		return "", err
+	}
+
+	generationCfg, err := settings.ParseSettingsFromString(string(settingsContent))
 	if err != nil {
 		return "", err
 	}
@@ -28,28 +34,28 @@ func FindDefaultSpecialisationFromConfig(generationDirname string) (string, erro
 
 // Make sure a specialisation exists in a given generation and can be activated by
 // checking for the presence of the switch-to-configuration script.
-func VerifySpecialisationExists(generationDirname string, specialisation string) bool {
+func VerifySpecialisationExists(s system.System, generationDirname string, specialisation string) bool {
 	if specialisation == "" {
 		// The base config always exists.
 		return true
 	}
 
 	specialisationStcFilename := filepath.Join(generationDirname, "specialisation", specialisation, "bin", "switch-to-configuration")
-	if _, err := os.Stat(specialisationStcFilename); err != nil {
+	if _, err := s.FS().Stat(specialisationStcFilename); err != nil {
 		return false
 	}
 
 	return true
 }
 
-func EnsureSystemProfileDirectoryExists() error {
+func EnsureSystemProfileDirectoryExists(s system.System) error {
 	// The system profile directory sometimes doesn't exist,
 	// and does need to be manually created if this is the case.
 	// This kinda sucks, since it requires root execution, but
 	// there's not really a better way to ensure that this
 	// profile's directory exists.
 
-	err := os.MkdirAll(constants.NixSystemProfileDirectory, 0o755)
+	err := s.FS().MkdirAll(constants.NixSystemProfileDirectory, 0o755)
 	if err != nil {
 		if err != os.ErrExist {
 			return fmt.Errorf("failed to create nix system profile directory: %w", err)
@@ -59,9 +65,9 @@ func EnsureSystemProfileDirectoryExists() error {
 	return nil
 }
 
-func AddNewNixProfile(s system.CommandRunner, profile string, closure string) error {
+func AddNewNixProfile(s system.System, profile string, closure string) error {
 	if profile != "system" {
-		err := EnsureSystemProfileDirectoryExists()
+		err := EnsureSystemProfileDirectoryExists(s)
 		if err != nil {
 			return err
 		}
@@ -78,9 +84,9 @@ func AddNewNixProfile(s system.CommandRunner, profile string, closure string) er
 	return err
 }
 
-func SetNixProfileGeneration(s system.CommandRunner, profile string, genNumber uint64) error {
+func SetNixProfileGeneration(s system.System, profile string, genNumber uint64) error {
 	if profile != "system" {
-		err := EnsureSystemProfileDirectoryExists()
+		err := EnsureSystemProfileDirectoryExists(s)
 		if err != nil {
 			return err
 		}
@@ -97,14 +103,14 @@ func SetNixProfileGeneration(s system.CommandRunner, profile string, genNumber u
 	return err
 }
 
-func GetCurrentGenerationNumber(profile string) (uint64, error) {
+func GetCurrentGenerationNumber(s system.System, profile string) (uint64, error) {
 	genLinkRegex, err := regexp.Compile(fmt.Sprintf(generation.GenerationLinkTemplateRegex, profile))
 	if err != nil {
 		return 0, fmt.Errorf("failed to compile generation regex: %w", err)
 	}
 
 	profileDirectory := generation.GetProfileDirectoryFromName(profile)
-	currentGenerationLink, err := os.Readlink(profileDirectory)
+	currentGenerationLink, err := s.FS().ReadLink(profileDirectory)
 	if err != nil {
 		return 0, fmt.Errorf("unable to determine current generation: %v", err)
 	}

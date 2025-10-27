@@ -54,7 +54,7 @@ func infoMain(cmd *cobra.Command, opts *cmdOpts.InfoOpts) error {
 	}
 
 	// Only support the `system` profile for now.
-	currentGenNumber, err := activation.GetCurrentGenerationNumber("system")
+	currentGenNumber, err := activation.GetCurrentGenerationNumber(s, "system")
 	if err != nil {
 		log.Warnf("failed to determine current generation number: %v", err)
 		return err
