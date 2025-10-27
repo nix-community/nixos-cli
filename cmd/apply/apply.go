@@ -406,7 +406,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 
 	log.Step("Comparing changes...")
 
-	err = generation.RunDiffCommand(localSystem, constants.CurrentSystem, resultLocation, &generation.DiffCommandOptions{
+	err = generation.RunDiffCommand(targetHost, constants.CurrentSystem, resultLocation, &generation.DiffCommandOptions{
 		UseNvd: cfg.UseNvd,
 	})
 	if err != nil {
@@ -414,22 +414,30 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 	}
 
 	if !opts.AlwaysConfirm {
-		log.Printf("\n")
-		confirm, err := cmdUtils.ConfirmationInput("Activate this configuration?")
-		if err != nil {
-			log.Errorf("failed to get confirmation: %v", err)
-			return err
-		}
-		if !confirm {
-			msg := "confirmation was not given, skipping activation"
-			log.Warn(msg)
-			return fmt.Errorf("%v", msg)
+		// FIXME: Currently, the ConfirmationInput() function does not like
+		// taking input properly when the target host is remote, Because of this
+		// we should skip interactive confirmation here for now until this can get
+		// fixed.
+		if !targetHost.IsRemote() {
+			log.Printf("\n")
+			confirm, err := cmdUtils.ConfirmationInput("Activate this configuration?")
+			if err != nil {
+				log.Errorf("failed to get confirmation: %v", err)
+				return err
+			}
+			if !confirm {
+				msg := "confirmation was not given, skipping activation"
+				log.Warn(msg)
+				return fmt.Errorf("%v", msg)
+			}
+		} else {
+			log.Debug("skipping confirmation prompt since target is remote")
 		}
 	}
 
 	specialisation := opts.Specialisation
 	if specialisation == "" {
-		defaultSpecialisation, err := activation.FindDefaultSpecialisationFromConfig(resultLocation)
+		defaultSpecialisation, err := activation.FindDefaultSpecialisationFromConfig(targetHost, resultLocation)
 		if err != nil {
 			log.Warnf("unable to find default specialisation from config: %v", err)
 		} else {
@@ -437,13 +445,13 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 		}
 	}
 
-	if !activation.VerifySpecialisationExists(resultLocation, specialisation) {
+	if !activation.VerifySpecialisationExists(targetHost, resultLocation, specialisation) {
 		log.Warnf("specialisation '%v' does not exist", specialisation)
 		log.Warn("using base configuration without specialisations")
 		specialisation = ""
 	}
 
-	previousGenNumber, err := activation.GetCurrentGenerationNumber(opts.ProfileName)
+	previousGenNumber, err := activation.GetCurrentGenerationNumber(targetHost, opts.ProfileName)
 	if err != nil {
 		log.Errorf("%v", err)
 		return err
@@ -456,7 +464,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 	if createGeneration {
 		log.Step("Setting system profile...")
 
-		if err := activation.AddNewNixProfile(localSystem, opts.ProfileName, resultLocation); err != nil {
+		if err := activation.AddNewNixProfile(targetHost, opts.ProfileName, resultLocation); err != nil {
 			log.Errorf("failed to set system profile: %v", err)
 			return err
 		}
@@ -481,7 +489,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 			}
 
 			log.Step("Rolling back system profile...")
-			if err := activation.SetNixProfileGeneration(localSystem, opts.ProfileName, previousGenNumber); err != nil {
+			if err := activation.SetNixProfileGeneration(targetHost, opts.ProfileName, previousGenNumber); err != nil {
 				log.Errorf("failed to rollback system profile: %v", err)
 				log.Info("make sure to rollback the system manually before deleting anything!")
 			}
@@ -503,7 +511,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 		panic("unknown switch to configuration action to take, this is a bug")
 	}
 
-	err = activation.SwitchToConfiguration(localSystem, resultLocation, stcAction, &activation.SwitchToConfigurationOptions{
+	err = activation.SwitchToConfiguration(targetHost, resultLocation, stcAction, &activation.SwitchToConfigurationOptions{
 		InstallBootloader: opts.InstallBootloader,
 		Specialisation:    specialisation,
 	})
