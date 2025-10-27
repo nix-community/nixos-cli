@@ -21,6 +21,10 @@ func NewLocalSystem(logger logger.Logger) *LocalSystem {
 	}
 }
 
+func (l *LocalSystem) FS() Filesystem {
+	return &LocalFilesystem{}
+}
+
 func (l *LocalSystem) Run(cmd *Command) (int, error) {
 	command := exec.Command(cmd.Name, cmd.Args...)
 

@@ -10,6 +10,7 @@ type System interface {
 	CommandRunner
 	IsNixOS() bool
 	IsRemote() bool
+	FS() Filesystem
 }
 
 // Invoke the `nix-copy-closure` command to copy between two types of

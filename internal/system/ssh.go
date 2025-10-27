@@ -115,6 +115,10 @@ func NewSSHSystem(host string, log logger.Logger) (*SSHSystem, error) {
 	return s, nil
 }
 
+func (s *SSHSystem) FS() Filesystem {
+	return &SFTPFilesystem{client: s.sftp}
+}
+
 func (s *SSHSystem) Logger() logger.Logger {
 	return s.logger
 }
