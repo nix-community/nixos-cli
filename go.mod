@@ -13,6 +13,7 @@ require (
 	github.com/go-git/go-git/v5 v5.13.1
 	github.com/knadh/koanf/parsers/toml/v2 v2.2.0
 	github.com/knadh/koanf/providers/file v1.2.0
+	github.com/knadh/koanf/providers/rawbytes v1.0.0
 	github.com/knadh/koanf/v2 v2.2.2
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/pkg/sftp v1.13.10

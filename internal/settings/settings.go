@@ -9,6 +9,7 @@ import (
 
 	"github.com/knadh/koanf/parsers/toml/v2"
 	"github.com/knadh/koanf/providers/file"
+	"github.com/knadh/koanf/providers/rawbytes"
 	"github.com/knadh/koanf/v2"
 )
 
@@ -174,6 +175,23 @@ func ParseSettings(location string) (*Settings, error) {
 	k := koanf.New(".")
 
 	if err := k.Load(file.Provider(location), toml.Parser()); err != nil {
+		return nil, err
+	}
+
+	cfg := NewSettings()
+
+	err := k.Unmarshal("", cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	return cfg, nil
+}
+
+func ParseSettingsFromString(input string) (*Settings, error) {
+	k := koanf.New(".")
+
+	if err := k.Load(rawbytes.Provider([]byte(input)), toml.Parser()); err != nil {
 		return nil, err
 	}
 
