@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"syscall"
 )
@@ -38,4 +39,22 @@ func EscapeAndJoinArgs(args []string) string {
 	}
 
 	return strings.Join(escapedArgs, " ")
+}
+
+var specialCharsPattern = regexp.MustCompile(`[^\w@%+=:,./-]`)
+
+// Quote returns a shell-escaped version of the string s. The returned value
+// is a string that can safely be used as one token in a shell command line.
+//
+// Taken directly from github.com/alessio/shellescape.
+func Quote(s string) string {
+	if len(s) == 0 {
+		return "''"
+	}
+
+	if specialCharsPattern.MatchString(s) {
+		return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'"
+	}
+
+	return s
 }

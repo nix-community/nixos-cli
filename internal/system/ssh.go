@@ -9,10 +9,13 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strings"
 
 	shlex "github.com/carapace-sh/carapace-shlex"
 	"github.com/nix-community/nixos-cli/internal/logger"
+	"github.com/nix-community/nixos-cli/internal/utils"
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
@@ -141,25 +144,13 @@ func (s *SSHSystem) Run(cmd *Command) (int, error) {
 	session.Stdout = cmd.Stdout
 	session.Stderr = cmd.Stderr
 
-	// FIXME: for now, this requires AcceptEnv inside the target
-	// system's sshd_config for the variables in question.
-	// Otherwise, setting variables in this manner will fail.
-	//
-	// It is possible to run these commands inside of a shell
-	// wrapper that exports the proper variables, but the
-	// quoting effort is far too excessive here to make it safe
-	// from arbitrary execution, so leave this for a later time.
-	for k, v := range cmd.Env {
-		if err := session.Setenv(k, v); err != nil {
-			s.logger.Debugf("warning: failed to set remote env %s: %v", k, err)
-		}
+	argv := append([]string{cmd.Name}, cmd.Args...)
+	fullCmd, err := buildSafeShellWrapper(argv, cmd.Env)
+	if err != nil {
+		return 0, err
 	}
 
-	argv := append([]string{cmd.Name}, cmd.Args...)
-	fullCmd := shlex.Join(argv)
-
 	err = session.Run(fullCmd)
-
 	if err == nil {
 		return 0, nil
 	}
@@ -169,6 +160,63 @@ func (s *SSHSystem) Run(cmd *Command) (int, error) {
 	}
 
 	return 0, err
+}
+
+var envVarNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+// Build a safe `sh -c` invocation that can support setting
+// environment variables for a process, even without the proper
+// AcceptEnv settings existing on the SSH system.
+//
+// Creates a string with the contents:
+// `sh -c 'export KEY='val'; export KEY2='val2'; set -- 'arg0' 'arg1'; exec "$@"'`
+func buildSafeShellWrapper(argv []string, env map[string]string) (string, error) {
+	if len(argv) == 0 {
+		return "", errors.New("argv must contain at least one element")
+	}
+
+	for k, v := range env {
+		if !envVarNamePattern.MatchString(k) {
+			return "", errors.New("invalid env var name: " + k)
+		}
+		if strings.IndexByte(v, 0) != -1 {
+			return "", errors.New("NUL (0x00) bytes are not allowed in env values or args")
+		}
+	}
+	for _, a := range argv {
+		if strings.IndexByte(a, 0) != -1 {
+			return "", errors.New("NUL (0x00) bytes are not allowed in env values or args")
+		}
+	}
+
+	// deterministic ordering for env exports
+	keys := make([]string, 0, len(env))
+	for k := range env {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	var b strings.Builder
+	for _, k := range keys {
+		q := utils.Quote(env[k])
+		b.WriteString("export ")
+		b.WriteString(k)
+		b.WriteByte('=')
+		b.WriteString(q)
+		b.WriteString("; ")
+	}
+
+	// set positional parameters
+	b.WriteString("set --")
+	for _, a := range argv {
+		q := utils.Quote(a)
+		b.WriteByte(' ')
+		b.WriteString(q)
+	}
+	b.WriteString("; exec \"$@\"")
+
+	snippet := b.String()
+	return fmt.Sprintf("sh -c %v", utils.Quote(snippet)), nil
 }
 
 func (s *SSHSystem) IsNixOS() bool {
