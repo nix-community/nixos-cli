@@ -11,8 +11,8 @@ import (
 	"github.com/nix-community/nixos-cli/internal/activation"
 	"github.com/nix-community/nixos-cli/internal/build"
 	"github.com/nix-community/nixos-cli/internal/cmd/nixopts"
-	"github.com/nix-community/nixos-cli/internal/cmd/opts"
-	"github.com/nix-community/nixos-cli/internal/cmd/utils"
+	cmdOpts "github.com/nix-community/nixos-cli/internal/cmd/opts"
+	cmdUtils "github.com/nix-community/nixos-cli/internal/cmd/utils"
 	"github.com/nix-community/nixos-cli/internal/configuration"
 	"github.com/nix-community/nixos-cli/internal/constants"
 	"github.com/nix-community/nixos-cli/internal/generation"
@@ -99,6 +99,7 @@ func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 	cmd.Flags().BoolVarP(&opts.Verbose, "verbose", "v", opts.Verbose, "Show verbose logging")
 	cmd.Flags().BoolVar(&opts.BuildVM, "vm", false, "Build a NixOS VM script")
 	cmd.Flags().BoolVar(&opts.BuildVMWithBootloader, "vm-with-bootloader", false, "Build a NixOS VM script with a bootloader")
+	cmd.Flags().BoolVar(&opts.RemoteRoot, "remote-root", false, "Prefix activation commands with an escalation command like sudo")
 	cmd.Flags().BoolVarP(&opts.AlwaysConfirm, "yes", "y", false, "Automatically confirm activation")
 	cmd.Flags().StringVar(&opts.BuildHost, "build-host", "", "Use specified `user@host:port` to perform build")
 	cmd.Flags().StringVar(&opts.TargetHost, "target-host", "", "Deploy to a remote machine at `user@host:port`")
@@ -464,7 +465,15 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 	if createGeneration {
 		log.Step("Setting system profile...")
 
-		if err := activation.AddNewNixProfile(targetHost, opts.ProfileName, resultLocation); err != nil {
+		if err := activation.AddNewNixProfile(
+			targetHost,
+			opts.ProfileName,
+			resultLocation,
+			&activation.AddNewNixProfileOptions{
+				RootCommand:    cfg.RootCommand,
+				UseRootCommand: opts.RemoteRoot && targetHost.IsRemote(),
+			},
+		); err != nil {
 			log.Errorf("failed to set system profile: %v", err)
 			return err
 		}
@@ -489,7 +498,15 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 			}
 
 			log.Step("Rolling back system profile...")
-			if err := activation.SetNixProfileGeneration(targetHost, opts.ProfileName, previousGenNumber); err != nil {
+
+			if err := activation.SetNixProfileGeneration(
+				targetHost,
+				opts.ProfileName,
+				previousGenNumber, &activation.SetNixProfileGenerationOptions{
+					RootCommand:    cfg.RootCommand,
+					UseRootCommand: opts.RemoteRoot && targetHost.IsRemote(),
+				},
+			); err != nil {
 				log.Errorf("failed to rollback system profile: %v", err)
 				log.Info("make sure to rollback the system manually before deleting anything!")
 			}
@@ -514,6 +531,8 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 	err = activation.SwitchToConfiguration(targetHost, resultLocation, stcAction, &activation.SwitchToConfigurationOptions{
 		InstallBootloader: opts.InstallBootloader,
 		Specialisation:    specialisation,
+		UseRootCommand:    opts.RemoteRoot && targetHost.IsRemote(),
+		RootCommand:       cfg.RootCommand,
 	})
 	if err != nil {
 		rollbackProfile = true

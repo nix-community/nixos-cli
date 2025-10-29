@@ -33,6 +33,7 @@ type ApplyOpts struct {
 	NoBoot                bool
 	OutputPath            string
 	ProfileName           string
+	RemoteRoot            bool
 	Specialisation        string
 	TargetHost            string
 	UpgradeAllChannels    bool

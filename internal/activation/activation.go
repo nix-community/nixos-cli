@@ -65,7 +65,12 @@ func EnsureSystemProfileDirectoryExists(s system.System) error {
 	return nil
 }
 
-func AddNewNixProfile(s system.System, profile string, closure string) error {
+type AddNewNixProfileOptions struct {
+	RootCommand    string
+	UseRootCommand bool
+}
+
+func AddNewNixProfile(s system.System, profile string, closure string, opts *AddNewNixProfileOptions) error {
 	if profile != "system" {
 		err := EnsureSystemProfileDirectoryExists(s)
 		if err != nil {
@@ -80,11 +85,20 @@ func AddNewNixProfile(s system.System, profile string, closure string) error {
 	s.Logger().CmdArray(argv)
 
 	cmd := system.NewCommand(argv[0], argv[1:]...)
+	if opts.UseRootCommand {
+		cmd.RunAsRoot(opts.RootCommand)
+	}
+
 	_, err := s.Run(cmd)
 	return err
 }
 
-func SetNixProfileGeneration(s system.System, profile string, genNumber uint64) error {
+type SetNixProfileGenerationOptions struct {
+	RootCommand    string
+	UseRootCommand bool
+}
+
+func SetNixProfileGeneration(s system.System, profile string, genNumber uint64, opts *SetNixProfileGenerationOptions) error {
 	if profile != "system" {
 		err := EnsureSystemProfileDirectoryExists(s)
 		if err != nil {
@@ -99,6 +113,10 @@ func SetNixProfileGeneration(s system.System, profile string, genNumber uint64) 
 	s.Logger().CmdArray(argv)
 
 	cmd := system.NewCommand(argv[0], argv[1:]...)
+	if opts.UseRootCommand {
+		cmd.RunAsRoot(opts.RootCommand)
+	}
+
 	_, err := s.Run(cmd)
 	return err
 }
@@ -175,6 +193,8 @@ func (c SwitchToConfigurationAction) String() string {
 type SwitchToConfigurationOptions struct {
 	InstallBootloader bool
 	Specialisation    string
+	UseRootCommand    bool
+	RootCommand       string
 }
 
 func SwitchToConfiguration(s system.CommandRunner, generationLocation string, action SwitchToConfigurationAction, opts *SwitchToConfigurationOptions) error {
@@ -195,6 +215,10 @@ func SwitchToConfiguration(s system.CommandRunner, generationLocation string, ac
 	s.Logger().CmdArray(argv)
 
 	cmd := system.NewCommand(argv[0], argv[1:]...)
+	if opts.UseRootCommand {
+		cmd.RunAsRoot(opts.RootCommand)
+	}
+
 	if opts.InstallBootloader {
 		cmd.SetEnv("NIXOS_INSTALL_BOOTLOADER", "1")
 	}
