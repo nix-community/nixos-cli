@@ -36,3 +36,15 @@ func NewCommand(name string, args ...string) *Command {
 func (c *Command) SetEnv(key string, value string) {
 	c.Env[key] = value
 }
+
+func (c *Command) RunAsRoot(rootCmd string) *Command {
+	if rootCmd == "" {
+		return c
+	}
+
+	newArgs := append([]string{c.Name}, c.Args...)
+	c.Name = rootCmd
+	c.Args = newArgs
+
+	return c
+}
