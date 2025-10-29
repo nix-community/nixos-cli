@@ -136,6 +136,17 @@ global *--config* flag as such:
 
 	Default: *system*
 
+*--remote-root*
+	Prefix remote activation commands with an escalation command like _sudo_.
+
+	Only applies for remote hosts.
+
+	This is applicable to switching the active Nix profile and for running
+	the _switch-to-configuration_ script, so users may need to type in a
+	password twice if NOPASSWD is not set for that user.
+
+	This is defined by the setting _root_command_.
+
 *-s*, *--specialisation* <NAME>
 	Activate a specialisation *NAME* from the available specialisations.
 

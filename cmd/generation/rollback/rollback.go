@@ -130,7 +130,12 @@ func generationRollbackMain(cmd *cobra.Command, genOpts *cmdOpts.GenerationOpts,
 	if !opts.Dry {
 		log.Step("Setting system profile...")
 
-		if err := activation.SetNixProfileGeneration(s, genOpts.ProfileName, uint64(previousGen.Number)); err != nil {
+		if err := activation.SetNixProfileGeneration(
+			s,
+			genOpts.ProfileName,
+			uint64(previousGen.Number),
+			&activation.SetNixProfileGenerationOptions{},
+		); err != nil {
 			log.Errorf("failed to set system profile: %v", err)
 			return err
 		}
@@ -155,7 +160,12 @@ func generationRollbackMain(cmd *cobra.Command, genOpts *cmdOpts.GenerationOpts,
 			}
 
 			log.Step("Rolling back system profile...")
-			if err := activation.SetNixProfileGeneration(s, genOpts.ProfileName, previousGenNumber); err != nil {
+			if err := activation.SetNixProfileGeneration(
+				s,
+				genOpts.ProfileName,
+				previousGenNumber,
+				&activation.SetNixProfileGenerationOptions{},
+			); err != nil {
 				log.Errorf("failed to rollback system profile: %v", err)
 				log.Info("make sure to rollback the system manually before deleting anything!")
 			}
