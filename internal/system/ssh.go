@@ -7,11 +7,13 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"os/signal"
 	"os/user"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
+	"syscall"
 
 	shlex "github.com/carapace-sh/carapace-shlex"
 	"github.com/nix-community/nixos-cli/internal/logger"
@@ -20,6 +22,7 @@ import (
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
 	"golang.org/x/crypto/ssh/knownhosts"
+	"golang.org/x/term"
 )
 
 type SSHSystem struct {
@@ -140,17 +143,85 @@ func (s *SSHSystem) Run(cmd *Command) (int, error) {
 		}
 	}()
 
-	session.Stdin = cmd.Stdin
-	session.Stdout = cmd.Stdout
-	session.Stderr = cmd.Stderr
-
 	argv := append([]string{cmd.Name}, cmd.Args...)
 	fullCmd, err := buildSafeShellWrapper(argv, cmd.Env)
 	if err != nil {
 		return 0, err
 	}
 
+	// sudo and other root-escalating commands need a PTY if running
+	// in interactive mode.
+	//
+	// As such, we need to do the handling for this ourselves, which requires a few steps:
+	//
+	// 1. Request the PTY using the current terminal's size.
+	// 2. Put the terminal into raw mode.
+	// 3. Run the command.
+	// 4. Restore terminal back to original state.
+	//
+	// The preferred way to avoid interactive input from root-escalating
+	// commands is to have a user that can run such a command with a no-password
+	// policy such as sudo's NOPASSWD directive, and to deploy using that.
+	if isRootCommand(cmd.Name) && isTerminal(cmd.Stdin) {
+		file := cmd.Stdin.(*os.File)
+		w, h, err := term.GetSize(int(file.Fd()))
+		if err != nil {
+			return 0, fmt.Errorf("failed to get terminal size: %w", err)
+		}
+
+		termType := os.Getenv("TERM")
+		if termType == "" {
+			termType = "xterm"
+		}
+
+		modes := ssh.TerminalModes{
+			ssh.ECHO:          0,     // disable echoing
+			ssh.TTY_OP_ISPEED: 14400, // input speed = 14.4kbaud
+			ssh.TTY_OP_OSPEED: 14400, // output speed = 14.4kbaud
+		}
+
+		if err := session.RequestPty(termType, h, w, modes); err != nil {
+			return 0, fmt.Errorf("failed to allocate pty for process: %w", err)
+		}
+
+		fd := int(file.Fd())
+		oldState, err := term.MakeRaw(fd)
+		restoreLocal := func() {
+			_ = term.Restore(fd, oldState)
+		}
+		if err != nil {
+			log.Warnf("unable to make local terminal raw: %v", err)
+		} else {
+			defer restoreLocal()
+		}
+	}
+
+	session.Stdin = cmd.Stdin
+	session.Stdout = cmd.Stdout
+	session.Stderr = cmd.Stderr
+
+	// Forward stop signals to the remote process
+	done := make(chan struct{})
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	defer func() {
+		signal.Stop(sigCh)
+		close(sigCh)
+	}()
+
+	go func() {
+		for {
+			select {
+			case sig := <-sigCh:
+				_ = session.Signal(ssh.Signal(sig.String()))
+			case <-done:
+				return
+			}
+		}
+	}()
+
 	err = session.Run(fullCmd)
+	close(done)
 	if err == nil {
 		return 0, nil
 	}
@@ -272,4 +343,23 @@ func (s *SSHSystem) Close() {
 	_ = s.sftp.Close()
 	_ = s.client.Close()
 	_ = s.conn.Close()
+}
+
+func isTerminal(r io.Reader) bool {
+	file, ok := r.(*os.File)
+	if !ok {
+		return false
+	}
+
+	fd := file.Fd()
+	return term.IsTerminal(int(fd))
+}
+
+func isRootCommand(cmd string) bool {
+	switch cmd {
+	case "sudo", "doas", "run0":
+		return true
+	default:
+		return false
+	}
 }
