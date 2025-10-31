@@ -5,8 +5,10 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"regexp"
 	"strings"
+	"syscall"
 
 	"github.com/nix-community/nixos-cli/internal/logger"
 )
@@ -37,16 +39,38 @@ func (l *LocalSystem) Run(cmd *Command) (int, error) {
 		command.Env = append(command.Env, key+"="+value)
 	}
 
+	// Forward stop signals to the local process
+	done := make(chan struct{})
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	defer func() {
+		signal.Stop(sigCh)
+		close(sigCh)
+	}()
+
+	go func() {
+		for {
+			select {
+			case sig := <-sigCh:
+				if command.Process != nil {
+					err := command.Process.Signal(sig)
+					if err != nil {
+						l.Logger().Warnf("failed to forward signal to process: %v", err)
+					}
+				}
+			case <-done:
+				return
+			}
+		}
+	}()
+
 	err := command.Run()
+	close(done)
 
 	if exitErr, ok := err.(*exec.ExitError); ok {
 		if status, ok := exitErr.Sys().(interface{ ExitStatus() int }); ok {
 			return status.ExitStatus(), err
 		}
-	}
-
-	if err == nil {
-		return 0, nil
 	}
 
 	return 0, err
