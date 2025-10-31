@@ -16,6 +16,7 @@ import (
 	"syscall"
 
 	shlex "github.com/carapace-sh/carapace-shlex"
+	cmdUtils "github.com/nix-community/nixos-cli/internal/cmd/utils"
 	"github.com/nix-community/nixos-cli/internal/logger"
 	"github.com/nix-community/nixos-cli/internal/utils"
 	"github.com/pkg/sftp"
@@ -88,15 +89,18 @@ func NewSSHSystem(host string, log logger.Logger) (*SSHSystem, error) {
 
 	auth := []ssh.AuthMethod{ssh.PublicKeysCallback(agentClient.Signers)}
 
-	knownHostsKeyCallback, err := knownhosts.New(filepath.Join(os.Getenv("HOME"), ".ssh", "known_hosts"))
+	knownHostsFile := filepath.Join(os.Getenv("HOME"), ".ssh", "known_hosts")
+	knownHostsKeyCallback, err := knownhosts.New(knownHostsFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create known hosts callback: %v", err)
 	}
 
+	hostKeyCallback := wrappedKnownHostsCallback(log, knownHostsKeyCallback, knownHostsFile)
+
 	client, err := ssh.Dial("tcp", net.JoinHostPort(address, port), &ssh.ClientConfig{
 		User:            username,
 		Auth:            auth,
-		HostKeyCallback: knownHostsKeyCallback,
+		HostKeyCallback: hostKeyCallback,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to %s: %w", host, err)
@@ -119,6 +123,71 @@ func NewSSHSystem(host string, log logger.Logger) (*SSHSystem, error) {
 	}
 
 	return s, nil
+}
+
+// This mimics the automatic addition of known_hosts entries
+// to the known_hosts file that OpenSSH performs.
+//
+// Only occurs if the key is not already in known_hosts and
+// if running in interactive mode in a terminal. Otherwise,
+// this will result in failure to connect.
+func wrappedKnownHostsCallback(log logger.Logger, origCallback ssh.HostKeyCallback, knownHostsPath string) ssh.HostKeyCallback {
+	return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+		err := origCallback(hostname, remote, key)
+		if err == nil {
+			return nil
+		}
+
+		var keyErr *knownhosts.KeyError
+		if errors.As(err, &keyErr) {
+			// Only allow adding the key like OpenSSH does if the
+			// stdin terminal can accept input.
+			if !term.IsTerminal(int(os.Stdin.Fd())) {
+				return err
+			}
+
+			if len(keyErr.Want) == 0 {
+				fingerprint := ssh.FingerprintSHA256(key)
+				log.Infof("the authenticity of host '%s' (%s) can't be established", hostname, key.Type())
+				log.Infof("SHA256 fingerprint: %s", fingerprint)
+
+				confirm, err := cmdUtils.ConfirmationInput("Are you sure you want to continue connecting (yes/no)?")
+				if err != nil {
+					log.Errorf("failed to get confirmation: %v", err)
+					return err
+				}
+				if !confirm {
+					return fmt.Errorf("user declined unknown host")
+				}
+
+				f, err := os.OpenFile(knownHostsPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+				if err != nil {
+					return fmt.Errorf("failed to open known_hosts: %w", err)
+				}
+				defer func() { _ = f.Close() }()
+
+				line := knownhosts.Line([]string{hostname}, key)
+				if _, err := f.WriteString(line + "\n"); err != nil {
+					return fmt.Errorf("failed to write to known_hosts: %w", err)
+				}
+
+				log.Warnf("permanently added '%s' (%s) to the list of known hosts", hostname, key.Type())
+				return nil
+			}
+
+			return fmt.Errorf("WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!\n"+
+				"It is possible that someone is doing something nasty!\n"+
+				"Offending key for host %s found in %s\n"+
+				"Expected: %s\nGot: %s",
+				hostname,
+				knownHostsPath,
+				ssh.FingerprintSHA256(keyErr.Want[0].Key),
+				ssh.FingerprintSHA256(key),
+			)
+		}
+
+		return err
+	}
 }
 
 func (s *SSHSystem) FS() Filesystem {
