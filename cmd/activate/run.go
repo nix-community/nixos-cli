@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -448,7 +449,34 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 	// in a TTY and tty* systemd unit(s) are restarted.
 	signal.Ignore(syscall.SIGHUP)
 
-	ctx := context.Background()
+	// Also, make sure termination is done gracefully.
+	//
+	// This is a three-tier warning system: the first cancellation
+	// results in a warning, while the second results in a graceful
+	// shutdown, and any subsequent ones will abort the process
+	// forcefully.
+	ctx, cancel := context.WithCancel(context.Background())
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(signals)
+
+	var signalCount uint64 = 0
+	go func() {
+		for range signals {
+			count := atomic.AddUint64(&signalCount, 1)
+			switch count {
+			case 1:
+				log.Warnf("received cancel signal; interruption of this program can result in an unexpected system state until reboot")
+				log.Infof("signal again to gracefully shutdown")
+			case 2:
+				log.Warnf("received cancel signal again: cancelling gracefully...")
+				cancel()
+			default:
+				log.Errorf("received cancel signal a third time: aborting immediately!")
+				os.Exit(1)
+			}
+		}
+	}()
 
 	systemd, err := systemdDbus.NewWithContext(ctx)
 	if err != nil {
