@@ -104,7 +104,7 @@ func getRequiredVars() (*RequiredVars, error) {
 }
 
 func execInSwitchContext(
-	s system.CommandRunner,
+	s system.System,
 	log logger.Logger,
 	action activation.SwitchToConfigurationAction,
 	specialisation string,

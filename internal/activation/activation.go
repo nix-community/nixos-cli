@@ -3,9 +3,12 @@ package activation
 import (
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"regexp"
 	"strconv"
+	"strings"
+	"syscall"
 
 	"github.com/nix-community/nixos-cli/internal/constants"
 	"github.com/nix-community/nixos-cli/internal/generation"
@@ -197,7 +200,7 @@ type SwitchToConfigurationOptions struct {
 	RootCommand       string
 }
 
-func SwitchToConfiguration(s system.CommandRunner, generationLocation string, action SwitchToConfigurationAction, opts *SwitchToConfigurationOptions) error {
+func SwitchToConfiguration(s system.System, generationLocation string, action SwitchToConfigurationAction, opts *SwitchToConfigurationOptions) error {
 	var commandPath string
 	if opts.Specialisation != "" {
 		commandPath = filepath.Join(generationLocation, "specialisation", opts.Specialisation, "bin", "switch-to-configuration")
@@ -223,9 +226,31 @@ func SwitchToConfiguration(s system.CommandRunner, generationLocation string, ac
 		cmd.SetEnv("NIXOS_INSTALL_BOOTLOADER", "1")
 	}
 
-	cmd.ForwardSignals = false
+	// For local systems, ignore signals and try not to die.
+	// If the switch-to-configuration process is interrupted,
+	// it's better to let nixos apply keep running in order
+	// for it to rollback profiles if interrupted.
+	//
+	// This is a really dirty way of going about it; however, process
+	// groups are really hard to control over SSH, so this was the
+	// cleanest way to propagate signals without the spawning process
+	// dying immediately at the time of writing.
+	if usesNixOSActivateCommand(s, commandPath) && !s.IsRemote() {
+		cmd.ForwardSignals = false
+		signal.Ignore(syscall.SIGTERM, syscall.SIGINT)
+		defer signal.Reset(syscall.SIGTERM, syscall.SIGINT)
+	}
 
 	cmd.SetEnv("NIXOS_CLI_ATTEMPTING_ACTIVATION", "1")
 	_, err := s.Run(cmd)
 	return err
+}
+
+func usesNixOSActivateCommand(s system.System, commandPath string) bool {
+	contents, err := s.FS().ReadFile(commandPath)
+	if err != nil {
+		return false
+	}
+
+	return strings.Contains(string(contents), "NIXOS_CLI_ATTEMPTING_ACTIVATION")
 }
