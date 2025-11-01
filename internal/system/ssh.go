@@ -269,25 +269,26 @@ func (s *SSHSystem) Run(cmd *Command) (int, error) {
 	session.Stdout = cmd.Stdout
 	session.Stderr = cmd.Stderr
 
-	// Forward stop signals to the remote process
 	done := make(chan struct{})
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	defer func() {
-		signal.Stop(sigCh)
-		close(sigCh)
-	}()
+	if cmd.ForwardSignals {
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+		defer func() {
+			signal.Stop(sigCh)
+			close(sigCh)
+		}()
 
-	go func() {
-		for {
-			select {
-			case sig := <-sigCh:
-				_ = session.Signal(ssh.Signal(sig.String()))
-			case <-done:
-				return
+		go func() {
+			for {
+				select {
+				case sig := <-sigCh:
+					_ = session.Signal(ssh.Signal(sig.String()))
+				case <-done:
+					return
+				}
 			}
-		}
-	}()
+		}()
+	}
 
 	err = session.Run(fullCmd)
 	close(done)

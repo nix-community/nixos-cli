@@ -14,22 +14,24 @@ type CommandRunner interface {
 }
 
 type Command struct {
-	Name   string
-	Args   []string
-	Stdin  io.Reader
-	Stdout io.Writer
-	Stderr io.Writer
-	Env    map[string]string
+	Name           string
+	Args           []string
+	Stdin          io.Reader
+	Stdout         io.Writer
+	Stderr         io.Writer
+	Env            map[string]string
+	ForwardSignals bool
 }
 
 func NewCommand(name string, args ...string) *Command {
 	return &Command{
-		Name:   name,
-		Args:   args,
-		Stdin:  os.Stdin,
-		Stdout: os.Stdout,
-		Stderr: os.Stderr,
-		Env:    make(map[string]string),
+		Name:           name,
+		Args:           args,
+		Stdin:          os.Stdin,
+		Stdout:         os.Stdout,
+		Stderr:         os.Stderr,
+		Env:            make(map[string]string),
+		ForwardSignals: true,
 	}
 }
 

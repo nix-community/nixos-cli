@@ -39,30 +39,31 @@ func (l *LocalSystem) Run(cmd *Command) (int, error) {
 		command.Env = append(command.Env, key+"="+value)
 	}
 
-	// Forward stop signals to the local process
 	done := make(chan struct{})
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	defer func() {
-		signal.Stop(sigCh)
-		close(sigCh)
-	}()
+	if cmd.ForwardSignals {
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+		defer func() {
+			signal.Stop(sigCh)
+			close(sigCh)
+		}()
 
-	go func() {
-		for {
-			select {
-			case sig := <-sigCh:
-				if command.Process != nil {
-					err := command.Process.Signal(sig)
-					if err != nil {
-						l.Logger().Warnf("failed to forward signal to process: %v", err)
+		go func() {
+			for {
+				select {
+				case sig := <-sigCh:
+					if command.Process != nil {
+						err := command.Process.Signal(sig)
+						if err != nil {
+							l.Logger().Warnf("failed to forward signal to process: %v", err)
+						}
 					}
+				case <-done:
+					return
 				}
-			case <-done:
-				return
 			}
-		}
-	}()
+		}()
+	}
 
 	err := command.Run()
 	close(done)

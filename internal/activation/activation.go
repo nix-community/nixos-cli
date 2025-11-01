@@ -223,6 +223,8 @@ func SwitchToConfiguration(s system.CommandRunner, generationLocation string, ac
 		cmd.SetEnv("NIXOS_INSTALL_BOOTLOADER", "1")
 	}
 
+	cmd.ForwardSignals = false
+
 	cmd.SetEnv("NIXOS_CLI_ATTEMPTING_ACTIVATION", "1")
 	_, err := s.Run(cmd)
 	return err
