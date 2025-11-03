@@ -76,8 +76,25 @@ tabular, `grep`-able output like the old behavior of `nixos-rebuild` uses, use
 
 Default specialisations are managed through the `nixos-cli` configuration.
 
-In the future, setting build and target hosts for remote building/activation
-using SSH will be supported.
+#### Remote Deployments
+
+Remote building is supported by using `--build-host <HOST>`, where **HOST** is
+an SSH URL to a machine that can use Nix to build artifacts.
+
+Remote deployment is supported through the usage of two flags `--target-host`,
+and `--remote-root`, and is done over SSH.
+
+In order for remote deployments to succeed, a user with root escalation access
+(through usage of the `root_command` setting, for example `sudo`) or the root
+user must be used through SSH.
+
+If using a non-root user, the `--remote-root` flag must be used. This
+automatically escalates to `root` using the command defined in the
+`root_command` setting.
+
+In order to access remote machines, prefer using an SSH agent and keys. Password
+access is supported, but not recommended, and can be buggy. If you find any
+issues, report them on the issue tracker.
 
 ### `nixos-enter`
 
