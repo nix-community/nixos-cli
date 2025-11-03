@@ -404,24 +404,24 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 	}
 
 	if !opts.AlwaysConfirm {
-		// FIXME: Currently, the ConfirmationInput() function does not like
-		// taking input properly when the target host is remote, Because of this
-		// we should skip interactive confirmation here for now until this can get
-		// fixed.
-		if !targetHost.IsRemote() {
-			log.Printf("\n")
-			confirm, err := cmdUtils.ConfirmationInput("Activate this configuration?")
-			if err != nil {
-				log.Errorf("failed to get confirmation: %v", err)
-				return err
-			}
-			if !confirm {
-				msg := "confirmation was not given, skipping activation"
-				log.Warn(msg)
-				return fmt.Errorf("%v", msg)
-			}
-		} else {
-			log.Debug("skipping confirmation prompt since target is remote")
+		log.Printf("\n")
+		confirm, err := cmdUtils.ConfirmationInput("Activate this configuration?")
+		if err != nil {
+			log.Errorf("failed to get confirmation: %v", err)
+			return err
+		}
+		if !confirm {
+			msg := "confirmation was not given, skipping activation"
+			log.Warn(msg)
+			return fmt.Errorf("%v", msg)
+		}
+	}
+
+	if t, ok := targetHost.(*system.SSHSystem); ok && opts.RemoteRoot {
+		err = t.EnsureRemoteRootPassword(cfg.RootCommand)
+		if err != nil {
+			log.Error(err)
+			return err
 		}
 	}
 
