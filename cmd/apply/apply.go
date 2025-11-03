@@ -1,7 +1,6 @@
 package apply
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -177,12 +176,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 		log.Debugf("connecting to %s", opts.TargetHost)
 		host, err := system.NewSSHSystem(opts.TargetHost, log)
 		if err != nil {
-			if errors.Is(err, system.ErrAgentNotStarted) {
-				log.Errorf("an SSH agent is not running")
-				log.Info("you must add your identity key(s) to an SSH agent if using --target-host")
-			} else {
-				log.Errorf("%v", err)
-			}
+			log.Errorf("%v", err)
 			return err
 		}
 
@@ -231,12 +225,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 		log.Debugf("connecting to %s", opts.BuildHost)
 		host, err := system.NewSSHSystem(opts.BuildHost, log)
 		if err != nil {
-			if errors.Is(err, system.ErrAgentNotStarted) {
-				log.Errorf("an SSH agent is not running")
-				log.Info("you must add your identity key(s) to an SSH agent if using --build-host")
-			} else {
-				log.Errorf("%v", err)
-			}
+			log.Errorf("%v", err)
 			return err
 		}
 

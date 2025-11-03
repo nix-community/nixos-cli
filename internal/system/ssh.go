@@ -1,6 +1,7 @@
 package system
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -27,16 +28,15 @@ import (
 )
 
 type SSHSystem struct {
-	conn   net.Conn
-	client *ssh.Client
-	sftp   *sftp.Client
-	user   string
-	host   string
-	port   string
-	logger logger.Logger
+	conn     net.Conn
+	client   *ssh.Client
+	sftp     *sftp.Client
+	user     string
+	address  string
+	port     string
+	password []byte
+	logger   logger.Logger
 }
-
-var ErrAgentNotStarted = fmt.Errorf("SSH_AUTH_SOCK not set; please start or forward an SSH agent")
 
 func NewSSHSystem(host string, log logger.Logger) (*SSHSystem, error) {
 	if host == "" {
@@ -76,24 +76,36 @@ func NewSSHSystem(host string, log logger.Logger) (*SSHSystem, error) {
 		port = "22"
 	}
 
-	sshAuthSock := os.Getenv("SSH_AUTH_SOCK")
-	if sshAuthSock == "" {
-		return nil, ErrAgentNotStarted
-	}
+	auth := []ssh.AuthMethod{}
 
-	conn, err := net.Dial("unix", sshAuthSock)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to SSH socket: %s", err)
+	var conn net.Conn
+	if sock := os.Getenv("SSH_AUTH_SOCK"); sock != "" {
+		conn, err = net.Dial("unix", sock)
+		if err == nil {
+			agentClient := agent.NewClient(conn)
+			auth = append(auth, ssh.PublicKeysCallback(agentClient.Signers))
+		} else {
+			log.Debug("failed to connect to SSH agent")
+			log.Debug("falling back to password auth")
+		}
 	}
-	agentClient := agent.NewClient(conn)
-
-	auth := []ssh.AuthMethod{ssh.PublicKeysCallback(agentClient.Signers)}
 
 	knownHostsFile := filepath.Join(os.Getenv("HOME"), ".ssh", "known_hosts")
 	knownHostsKeyCallback, err := knownhosts.New(knownHostsFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create known hosts callback: %v", err)
 	}
+
+	var password []byte
+	passwordCallback := ssh.PasswordCallback(func() (string, error) {
+		bytePassword, err := promptForPassword(username, address)
+		if err != nil {
+			return "", err
+		}
+		password = bytePassword
+		return string(bytePassword), nil
+	})
+	auth = append(auth, passwordCallback)
 
 	hostKeyCallback := wrappedKnownHostsCallback(log, knownHostsKeyCallback, knownHostsFile)
 
@@ -113,16 +125,63 @@ func NewSSHSystem(host string, log logger.Logger) (*SSHSystem, error) {
 	}
 
 	s := &SSHSystem{
-		conn:   conn,
-		client: client,
-		sftp:   sftpClient,
-		user:   username,
-		host:   address,
-		port:   port,
-		logger: log,
+		conn:     conn,
+		client:   client,
+		sftp:     sftpClient,
+		user:     username,
+		address:  address,
+		port:     port,
+		password: password,
+		logger:   log,
 	}
 
 	return s, nil
+}
+
+func (s *SSHSystem) EnsureRemoteRootPassword(rootCmd string) error {
+	// If the password already exists, presumably we already have sudo
+	// permissions and don't need to check. If the logged-in user doesn't,
+	// then the first command that requires sudo will say as much and exit,
+	// so no need to verify it explicitly here.
+	if s.password != nil {
+		return nil
+	}
+
+	s.Logger().Info("please input password to run commands as root")
+
+	bytePassword, err := promptForPassword(s.user, s.address)
+	if err != nil {
+		return err
+	}
+
+	s.password = bytePassword
+
+	if err := s.testRemoteRoot(rootCmd); err != nil {
+		return fmt.Errorf("failed to verify %s password: %s", rootCmd, err)
+	}
+
+	return nil
+}
+
+func (s *SSHSystem) testRemoteRoot(rootCmd string) error {
+	cmd := NewCommand("true").RunAsRoot(rootCmd)
+
+	_, err := s.Run(cmd)
+	return err
+}
+
+func promptForPassword(username string, address string) ([]byte, error) {
+	fd := int(os.Stdin.Fd())
+	if !term.IsTerminal(fd) {
+		return nil, fmt.Errorf("cannot prompt for password: stdin is not a terminal")
+	}
+
+	fmt.Fprintf(os.Stderr, "Password for %s@%s: ", username, address)
+	_ = os.Stdin.Sync()
+
+	bytePassword, err := term.ReadPassword(int(os.Stdin.Fd()))
+	fmt.Fprintln(os.Stderr)
+	return bytePassword, err
 }
 
 // This mimics the automatic addition of known_hosts entries
@@ -212,60 +271,56 @@ func (s *SSHSystem) Run(cmd *Command) (int, error) {
 		}
 	}()
 
+	if isRootCommand(cmd.Name) {
+		// Pass `sudo` passwords from `stdin` if they are present.
+		// This requires the `-S` flag.
+		//
+		// Processes will likely never expect stdin to be set for SSH
+		// if they are running as root, since this seems to be a
+		// fairly uncommon scenario to need to pass things through
+		// stdin while simultaneously needing root, and we will likely
+		// never need something like that here.
+		//
+		// As such, we're replacing the entire stdin with this password.
+		if cmd.Name == "sudo" && s.password != nil {
+			cmd.Args = append([]string{"-S", "-p", ""}, cmd.Args...)
+			pw := append(s.password, '\n')
+			session.Stdin = bytes.NewReader(pw)
+		} else if isTerminal(cmd.Stdin) {
+			session.Stdin = cmd.Stdin
+			// sudo and other root-escalating commands need a PTY if running
+			// in interactive mode.
+			//
+			// As such, we need to do the handling for this ourselves, which requires a few steps:
+			//
+			// 1. Request the PTY using the current terminal's size.
+			// 2. Put the terminal into raw mode.
+			// 3. Run the command.
+			// 4. Restore terminal back to original state.
+			//
+			// The preferred way to avoid interactive input from root-escalating
+			// commands is to have a user that can run such a command with a no-password
+			// policy such as sudo's NOPASSWD directive, and to deploy using that.
+			//
+			// FIXME: Entering passwords interactively with `sudo` and a PTY
+			// seems to have a bug where the first attempt is wrong due to
+			// the PTY discarding the first inputted byte.
+			restoreLocal, err := requestRootPasswordPTY(session, cmd.Stdin)
+
+			if err != nil {
+				log.Warnf("unable to make local terminal raw: %v", err)
+			} else {
+				defer restoreLocal()
+			}
+		}
+	}
+
 	argv := append([]string{cmd.Name}, cmd.Args...)
 	fullCmd, err := buildSafeShellWrapper(argv, cmd.Env)
 	if err != nil {
 		return 0, err
 	}
 
-	// sudo and other root-escalating commands need a PTY if running
-	// in interactive mode.
-	//
-	// As such, we need to do the handling for this ourselves, which requires a few steps:
-	//
-	// 1. Request the PTY using the current terminal's size.
-	// 2. Put the terminal into raw mode.
-	// 3. Run the command.
-	// 4. Restore terminal back to original state.
-	//
-	// The preferred way to avoid interactive input from root-escalating
-	// commands is to have a user that can run such a command with a no-password
-	// policy such as sudo's NOPASSWD directive, and to deploy using that.
-	if isRootCommand(cmd.Name) && isTerminal(cmd.Stdin) {
-		file := cmd.Stdin.(*os.File)
-		w, h, err := term.GetSize(int(file.Fd()))
-		if err != nil {
-			return 0, fmt.Errorf("failed to get terminal size: %w", err)
-		}
-
-		termType := os.Getenv("TERM")
-		if termType == "" {
-			termType = "xterm"
-		}
-
-		modes := ssh.TerminalModes{
-			ssh.ECHO:          0,     // disable echoing
-			ssh.TTY_OP_ISPEED: 14400, // input speed = 14.4kbaud
-			ssh.TTY_OP_OSPEED: 14400, // output speed = 14.4kbaud
-		}
-
-		if err := session.RequestPty(termType, h, w, modes); err != nil {
-			return 0, fmt.Errorf("failed to allocate pty for process: %w", err)
-		}
-
-		fd := int(file.Fd())
-		oldState, err := term.MakeRaw(fd)
-		restoreLocal := func() {
-			_ = term.Restore(fd, oldState)
-		}
-		if err != nil {
-			log.Warnf("unable to make local terminal raw: %v", err)
-		} else {
-			defer restoreLocal()
-		}
-	}
-
-	session.Stdin = cmd.Stdin
 	session.Stdout = cmd.Stdout
 	session.Stderr = cmd.Stderr
 
@@ -300,6 +355,39 @@ func (s *SSHSystem) Run(cmd *Command) (int, error) {
 	}
 
 	return 0, err
+}
+
+func requestRootPasswordPTY(session *ssh.Session, stdin io.Reader) (func(), error) {
+	file := stdin.(*os.File)
+	w, h, err := term.GetSize(int(file.Fd()))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get terminal size: %w", err)
+	}
+
+	termType := os.Getenv("TERM")
+	if termType == "" {
+		termType = "xterm"
+	}
+
+	modes := ssh.TerminalModes{
+		ssh.ECHO:          0,     // disable echoing
+		ssh.TTY_OP_ISPEED: 14400, // input speed = 14.4kbaud
+		ssh.TTY_OP_OSPEED: 14400, // output speed = 14.4kbaud
+	}
+
+	if err := session.RequestPty(termType, h, w, modes); err != nil {
+		return nil, fmt.Errorf("failed to allocate pty for process: %w", err)
+	}
+
+	fd := int(file.Fd())
+	oldState, err := term.MakeRaw(fd)
+	if err != nil {
+		return nil, err
+	}
+
+	return func() {
+		_ = term.Restore(fd, oldState)
+	}, nil
 }
 
 var envVarNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
@@ -385,7 +473,7 @@ func (s *SSHSystem) IsNixOS() bool {
 }
 
 func (s *SSHSystem) Address() string {
-	return fmt.Sprintf("%s@%s:%s", s.user, s.host, s.port)
+	return fmt.Sprintf("%s@%s:%s", s.user, s.address, s.port)
 }
 
 func (s *SSHSystem) IsRemote() bool {
@@ -411,7 +499,10 @@ func (s *SSHSystem) HasCommand(name string) bool {
 func (s *SSHSystem) Close() {
 	_ = s.sftp.Close()
 	_ = s.client.Close()
-	_ = s.conn.Close()
+
+	if s.conn != nil {
+		_ = s.conn.Close()
+	}
 }
 
 func isTerminal(r io.Reader) bool {
@@ -426,7 +517,7 @@ func isTerminal(r io.Reader) bool {
 
 func isRootCommand(cmd string) bool {
 	switch cmd {
-	case "sudo", "doas", "run0":
+	case "sudo", "doas":
 		return true
 	default:
 		return false
