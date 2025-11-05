@@ -29,6 +29,7 @@ type ApplyOpts struct {
 	FlakeRef              string
 	GenerationTag         string
 	InstallBootloader     bool
+	BuildImage            string
 	NoActivate            bool
 	NoBoot                bool
 	OutputPath            string

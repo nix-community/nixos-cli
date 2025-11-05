@@ -68,6 +68,13 @@ func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 				}
 			}
 
+			// Set a special hidden _list value for this
+			// flag in order to list available images and
+			// exit.
+			if cmd.Flags().Changed("image") && opts.BuildImage == "" {
+				opts.BuildImage = "_list"
+			}
+
 			return nil
 		},
 		PreRun: func(cmd *cobra.Command, args []string) {
@@ -90,6 +97,7 @@ func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 	cmd.Flags().BoolVar(&opts.InstallBootloader, "install-bootloader", false, "(Re)install the bootloader on the configured device(s)")
 	cmd.Flags().BoolVar(&opts.NoActivate, "no-activate", false, "Do not activate the built configuration")
 	cmd.Flags().BoolVar(&opts.NoBoot, "no-boot", false, "Do not create boot entry for this generation")
+	cmd.Flags().StringVarP(&opts.BuildImage, "image", "i", "", "Build a pre-configured disk-image `variant`")
 	cmd.Flags().StringVarP(&opts.OutputPath, "output", "o", "", "Symlink the output to `location`")
 	cmd.Flags().StringVarP(&opts.ProfileName, "profile-name", "p", "system", "Store generations using the profile `name`")
 	cmd.Flags().StringVarP(&opts.Specialisation, "specialisation", "s", "", "Activate the specialisation with `name`")
@@ -144,7 +152,7 @@ func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 	cmd.MarkFlagsMutuallyExclusive("dry", "output")
 	cmd.MarkFlagsMutuallyExclusive("output", "build-host")
 	cmd.MarkFlagsMutuallyExclusive("output", "target-host")
-	cmd.MarkFlagsMutuallyExclusive("vm", "vm-with-bootloader")
+	cmd.MarkFlagsMutuallyExclusive("vm", "vm-with-bootloader", "image")
 	cmd.MarkFlagsMutuallyExclusive("no-activate", "specialisation")
 
 	helpTemplate := cmd.HelpTemplate()
