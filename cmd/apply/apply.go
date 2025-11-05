@@ -206,24 +206,26 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 		return err
 	}
 
-	buildType := configuration.SystemBuildTypeSystemActivation
-	if opts.BuildVM {
-		buildType = configuration.SystemBuildTypeVM
-	} else if opts.BuildVMWithBootloader {
-		buildType = configuration.SystemBuildTypeVMWithBootloader
-	} else if opts.NoActivate && opts.NoBoot {
-		buildType = configuration.SystemBuildTypeSystem
+	var buildType configuration.BuildType
+	if opts.BuildVM || opts.BuildVMWithBootloader {
+		buildType = &configuration.VMBuild{WithBootloader: opts.BuildVMWithBootloader}
+	} else {
+		buildType = &configuration.SystemBuild{Activate: !opts.NoActivate && !opts.NoBoot}
 	}
 
 	// The local host may need to re-execute as root in order
 	// to gain access to activation commands. Do this as early as
 	// possible to prevent excessive initialization code from
 	// running.
-	if os.Geteuid() != 0 && !targetHost.IsRemote() && buildType == configuration.SystemBuildTypeSystemActivation {
-		err := utils.ExecAsRoot(cfg.RootCommand)
-		if err != nil {
-			log.Errorf("failed to re-exec command as root: %v", err)
-			return err
+	if os.Geteuid() != 0 && !targetHost.IsRemote() {
+		// Only re-execute if running activation on local system for the
+		// system build type.
+		if v, ok := buildType.(*configuration.SystemBuild); ok && v.Activate {
+			err := utils.ExecAsRoot(cfg.RootCommand)
+			if err != nil {
+				log.Errorf("failed to re-exec command as root: %v", err)
+				return err
+			}
 		}
 	}
 
@@ -300,10 +302,11 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 		}
 	}
 
-	if buildType.IsVM() {
-		log.Step("Building VM...")
-	} else {
+	switch buildType.(type) {
+	case *configuration.SystemBuild:
 		log.Step("Building configuration...")
+	case *configuration.VMBuild:
+		log.Step("Building VM...")
 	}
 
 	useNom := cfg.Apply.UseNom || opts.UseNom
@@ -352,8 +355,11 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 	}
 
 	// Dry activation requires a real build, so --dry-run shouldn't be set
-	// if --activate or --boot is set
-	dryBuild := opts.Dry && buildType == configuration.SystemBuildTypeSystem
+	// if running activation scripts.
+	dryBuild := opts.Dry
+	if v, ok := buildType.(*configuration.SystemBuild); !ok || v.Activate {
+		dryBuild = false
+	}
 
 	outputPath := opts.OutputPath
 	if outputPath != "" && !filepath.IsAbs(outputPath) {
@@ -385,21 +391,25 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 		}
 	}
 
-	if buildType.IsVM() && !dryBuild {
-		matches, err := filepath.Glob(fmt.Sprintf("%v/bin/run-*-vm", resultLocation))
-		if err != nil || len(matches) == 0 {
-			log.Warnf("failed to find VM binary; look in %v for the script to run the VM", resultLocation)
-		} else {
-			log.Infof("done; the virtual machine can be started by running `%v`", matches[0])
+	switch v := buildType.(type) {
+	case *configuration.VMBuild:
+		if !dryBuild {
+			matches, err := filepath.Glob(fmt.Sprintf("%v/bin/run-*-vm", resultLocation))
+			if err != nil || len(matches) == 0 {
+				log.Warnf("failed to find VM binary; look in %v for the script to run the VM", resultLocation)
+			} else {
+				log.Infof("done; the virtual machine can be started by running `%v`", matches[0])
+			}
+			return nil
 		}
-		return nil
-	}
-
-	if buildType == configuration.SystemBuildTypeSystem {
+	case *configuration.SystemBuild:
 		if dryBuild {
 			log.Debugf("this is a dry build, no activation will be performed")
 		}
-		return nil
+
+		if !v.Activate {
+			return nil
+		}
 	}
 
 	log.Step("Comparing changes...")

@@ -28,7 +28,7 @@ type SystemBuildOptions struct {
 type Configuration interface {
 	SetBuilder(builder system.CommandRunner)
 	EvalAttribute(attr string) (*string, error)
-	BuildSystem(buildType SystemBuildType, opts *SystemBuildOptions) (string, error)
+	BuildSystem(buildType BuildType, opts *SystemBuildOptions) (string, error)
 }
 
 type AttributeEvaluationError struct {
@@ -68,36 +68,30 @@ func FindConfiguration(log logger.Logger, cfg *settings.Settings, includes []str
 	}
 }
 
-type SystemBuildType int
+type BuildType interface {
+	BuildAttr() string
+}
 
-const (
-	SystemBuildTypeSystem SystemBuildType = iota
-	SystemBuildTypeSystemActivation
-	SystemBuildTypeVM
-	SystemBuildTypeVMWithBootloader
-)
+type SystemBuild struct {
+	Activate bool
+}
 
-func (b SystemBuildType) BuildAttr() string {
-	switch b {
-	case SystemBuildTypeSystem, SystemBuildTypeSystemActivation:
-		if build.Flake() {
-			return "toplevel"
-		} else {
-			return "system"
-		}
-	case SystemBuildTypeVM:
-		return "vm"
-	case SystemBuildTypeVMWithBootloader:
-		return "vmWithBootLoader"
-	default:
-		panic("unknown build type")
+func (s *SystemBuild) BuildAttr() string {
+	if build.Flake() {
+		return "toplevel"
+	} else {
+		return "system"
 	}
 }
 
-func (b SystemBuildType) IsVM() bool {
-	return b == SystemBuildTypeVM || b == SystemBuildTypeVMWithBootloader
+type VMBuild struct {
+	WithBootloader bool
 }
 
-func (b SystemBuildType) IsSystem() bool {
-	return b == SystemBuildTypeSystem || b == SystemBuildTypeSystemActivation
+func (v *VMBuild) BuildAttr() string {
+	if v.WithBootloader {
+		return "vmWithBootLoader"
+	} else {
+		return "vm"
+	}
 }

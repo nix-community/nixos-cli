@@ -105,7 +105,7 @@ func (f *FlakeRef) EvalAttribute(attr string) (*string, error) {
 	return &value, nil
 }
 
-func (f *FlakeRef) buildLocalSystem(s *system.LocalSystem, buildType SystemBuildType, opts *SystemBuildOptions) (string, error) {
+func (f *FlakeRef) buildLocalSystem(s *system.LocalSystem, buildType BuildType, opts *SystemBuildOptions) (string, error) {
 	nixCommand := "nix"
 	if opts.UseNom {
 		nixCommand = "nom"
@@ -157,7 +157,7 @@ func (f *FlakeRef) buildLocalSystem(s *system.LocalSystem, buildType SystemBuild
 	return strings.Trim(stdout.String(), "\n "), err
 }
 
-func (f *FlakeRef) buildRemoteSystem(s *system.SSHSystem, buildType SystemBuildType, opts *SystemBuildOptions) (string, error) {
+func (f *FlakeRef) buildRemoteSystem(s *system.SSHSystem, buildType BuildType, opts *SystemBuildOptions) (string, error) {
 	evalArgs := nixopts.NixOptionsToArgsListByCategory(opts.CmdFlags, opts.NixOpts, "lock")
 	buildArgs := nixopts.NixOptionsToArgsListByCategory(opts.CmdFlags, opts.NixOpts, "build")
 
@@ -223,7 +223,7 @@ func (f *FlakeRef) buildRemoteSystem(s *system.SSHSystem, buildType SystemBuildT
 	return strings.TrimSpace(realisedPathBuf.String()), err
 }
 
-func (f *FlakeRef) BuildSystem(buildType SystemBuildType, opts *SystemBuildOptions) (string, error) {
+func (f *FlakeRef) BuildSystem(buildType BuildType, opts *SystemBuildOptions) (string, error) {
 	if f.Builder == nil {
 		panic("FlakeRef.Builder is nil")
 	}
