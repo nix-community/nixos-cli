@@ -325,7 +325,6 @@ func (s *SSHSystem) Run(cmd *Command) (int, error) {
 	session.Stderr = cmd.Stderr
 
 	// Forward stop signals to the remote process
-	done := make(chan struct{})
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	defer func() {
@@ -334,18 +333,15 @@ func (s *SSHSystem) Run(cmd *Command) (int, error) {
 	}()
 
 	go func() {
-		for {
-			select {
-			case sig := <-sigCh:
-				_ = session.Signal(ssh.Signal(sig.String()))
-			case <-done:
-				return
+		for sig := range sigCh {
+			s := osSignalToSSHSignal(sig)
+			if err := session.Signal(s); err != nil {
+				log.Warnf("failed to forward signal '%v': %v", s, err)
 			}
 		}
 	}()
 
 	err = session.Run(fullCmd)
-	close(done)
 	if err == nil {
 		return 0, nil
 	}
@@ -355,6 +351,39 @@ func (s *SSHSystem) Run(cmd *Command) (int, error) {
 	}
 
 	return 0, err
+}
+
+func osSignalToSSHSignal(s os.Signal) ssh.Signal {
+	switch s {
+	case syscall.SIGABRT:
+		return "ABRT"
+	case syscall.SIGALRM:
+		return "ALRM"
+	case syscall.SIGFPE:
+		return "FPE"
+	case syscall.SIGHUP:
+		return "HUP"
+	case syscall.SIGILL:
+		return "ILL"
+	case syscall.SIGINT:
+		return "INT"
+	case syscall.SIGKILL:
+		return "KILL"
+	case syscall.SIGPIPE:
+		return "PIPE"
+	case syscall.SIGQUIT:
+		return "QUIT"
+	case syscall.SIGSEGV:
+		return "SEGV"
+	case syscall.SIGTERM:
+		return "TERM"
+	case syscall.SIGUSR1:
+		return "USR1"
+	case syscall.SIGUSR2:
+		return "USR2"
+	default:
+		return ""
+	}
 }
 
 func requestRootPasswordPTY(session *ssh.Session, stdin io.Reader) (func(), error) {
