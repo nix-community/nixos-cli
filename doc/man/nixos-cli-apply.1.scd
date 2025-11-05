@@ -115,6 +115,13 @@ global *--config* flag as such:
 
 	The list of changes is not guaranteed to be complete for dry activations.
 
+*-i*, *--image* <VARIANT>
+	Build a disk-image variant, pre-configured for the given platform/provider.
+
+	If *VARIANT* is not provided (i.e. passing _-i ""_), or an invalid one is
+	provided, then a list of available images is displayed, and the program
+	exits.
+
 *--install-bootloader*
 	(Re)install the bootloader to the configured target device(s). The
 	bootloader configuration is managed by their NixOS modules, so this behavior
