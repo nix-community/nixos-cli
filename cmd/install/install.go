@@ -425,7 +425,7 @@ func installMain(cmd *cobra.Command, opts *cmdOpts.InstallOpts) error {
 
 	log.Step("Building system...")
 
-	resultLocation, err := nixConfig.BuildSystem(configuration.SystemBuildTypeSystem, &systemBuildOptions)
+	resultLocation, err := nixConfig.BuildSystem(&configuration.SystemBuild{}, &systemBuildOptions)
 	if err != nil {
 		log.Errorf("failed to build system: %v", err)
 		return err

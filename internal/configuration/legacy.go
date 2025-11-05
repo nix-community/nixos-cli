@@ -113,7 +113,7 @@ func (l *LegacyConfiguration) EvalAttribute(attr string) (*string, error) {
 	return &value, nil
 }
 
-func (l *LegacyConfiguration) buildLocalSystem(s *system.LocalSystem, buildType SystemBuildType, opts *SystemBuildOptions) (string, error) {
+func (l *LegacyConfiguration) buildLocalSystem(s *system.LocalSystem, buildType BuildType, opts *SystemBuildOptions) (string, error) {
 	nixCommand := "nix-build"
 	if opts.UseNom {
 		nixCommand = "nom-build"
@@ -122,8 +122,8 @@ func (l *LegacyConfiguration) buildLocalSystem(s *system.LocalSystem, buildType 
 	argv := []string{nixCommand, "<nixpkgs/nixos>", "-A", buildType.BuildAttr()}
 
 	// Mimic `nixos-rebuild` behavior of using -k option
-	// for all commands except for switch and boot
-	if buildType != SystemBuildTypeSystemActivation {
+	// for all commands except for `switch` and `boot`
+	if v, ok := buildType.(*SystemBuild); !ok || !v.Activate {
 		argv = append(argv, "-k")
 	}
 
@@ -166,7 +166,7 @@ func (l *LegacyConfiguration) buildLocalSystem(s *system.LocalSystem, buildType 
 	return strings.TrimSpace(stdout.String()), err
 }
 
-func (l *LegacyConfiguration) buildRemoteSystem(s *system.SSHSystem, buildType SystemBuildType, opts *SystemBuildOptions) (string, error) {
+func (l *LegacyConfiguration) buildRemoteSystem(s *system.SSHSystem, buildType BuildType, opts *SystemBuildOptions) (string, error) {
 	log := s.Logger()
 
 	localSystem := system.NewLocalSystem(log)
@@ -208,8 +208,8 @@ func (l *LegacyConfiguration) buildRemoteSystem(s *system.SSHSystem, buildType S
 	realiseArgv = append(realiseArgv, realiseNixOptions...)
 
 	// Mimic `nixos-rebuild` behavior of using -k option
-	// for all commands except for switch and boot
-	if buildType != SystemBuildTypeSystemActivation {
+	// for all commands except for `switch` and `boot`
+	if v, ok := buildType.(*SystemBuild); !ok || !v.Activate {
 		realiseArgv = append(realiseArgv, "-k")
 	}
 
@@ -223,7 +223,7 @@ func (l *LegacyConfiguration) buildRemoteSystem(s *system.SSHSystem, buildType S
 	return strings.TrimSpace(realisedPathBuf.String()), err
 }
 
-func (l *LegacyConfiguration) BuildSystem(buildType SystemBuildType, opts *SystemBuildOptions) (string, error) {
+func (l *LegacyConfiguration) BuildSystem(buildType BuildType, opts *SystemBuildOptions) (string, error) {
 	if l.Builder == nil {
 		panic("LegacyConfiguration.Builder is nil")
 	}
