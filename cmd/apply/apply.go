@@ -1,9 +1,12 @@
 package apply
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/go-git/go-git/v5"
@@ -209,6 +212,8 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 	var buildType configuration.BuildType
 	if opts.BuildVM || opts.BuildVMWithBootloader {
 		buildType = &configuration.VMBuild{WithBootloader: opts.BuildVMWithBootloader}
+	} else if opts.BuildImage != "" {
+		buildType = &configuration.ImageBuild{Variant: opts.BuildImage}
 	} else {
 		buildType = &configuration.SystemBuild{Activate: !opts.NoActivate && !opts.NoBoot}
 	}
@@ -302,6 +307,30 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 		}
 	}
 
+	// Confirm if the requested image exists, or list available images
+	// if no parameter is specified/is empty.
+	if imgBuild, ok := buildType.(*configuration.ImageBuild); ok {
+		images, err := getAvailableImageAttrs(cmd, localSystem, nixConfig, &opts.NixOptions)
+		if err != nil {
+			log.Errorf("failed to get available images: %v", err)
+			return err
+		}
+
+		if imgBuild.Variant == "_list" {
+			for _, image := range images {
+				fmt.Println(image)
+			}
+			return nil
+		}
+
+		if slices.Index(images, imgBuild.Variant) < 0 {
+			err := fmt.Errorf("image type '%s' is not available", imgBuild.Variant)
+			log.Error(err)
+			log.Info("pass an empty string to `--image` to get a list of available images")
+			return err
+		}
+	}
+
 	switch buildType.(type) {
 	case *configuration.SystemBuild:
 		log.Step("Building configuration...")
@@ -357,7 +386,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 	// Dry activation requires a real build, so --dry-run shouldn't be set
 	// if running activation scripts.
 	dryBuild := opts.Dry
-	if v, ok := buildType.(*configuration.SystemBuild); !ok || v.Activate {
+	if v, ok := buildType.(*configuration.SystemBuild); ok && v.Activate {
 		dryBuild = false
 	}
 
@@ -392,6 +421,18 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 	}
 
 	switch v := buildType.(type) {
+	case *configuration.ImageBuild:
+		if !dryBuild {
+			imagePath, err := getImageName(cmd, localSystem, nixConfig, v.Variant, &opts.NixOptions)
+			if err != nil {
+				log.Infof("finished building image in %s", resultLocation)
+			} else {
+				location := filepath.Join(resultLocation, imagePath)
+				log.Infof("done; the built image is located at %s", location)
+			}
+		}
+
+		return nil
 	case *configuration.VMBuild:
 		if !dryBuild {
 			matches, err := filepath.Glob(fmt.Sprintf("%v/bin/run-*-vm", resultLocation))
@@ -400,8 +441,9 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 			} else {
 				log.Infof("done; the virtual machine can be started by running `%v`", matches[0])
 			}
-			return nil
 		}
+
+		return nil
 	case *configuration.SystemBuild:
 		if dryBuild {
 			log.Debugf("this is a dry build, no activation will be performed")
@@ -618,4 +660,98 @@ func getLatestGitCommitMessage(pathToRepo string, ignoreDirty bool) (string, err
 	}
 
 	return commit.Message, nil
+}
+
+func getAvailableImageAttrs(
+	cobraCmd *cobra.Command,
+	s system.System,
+	cfg configuration.Configuration,
+	nixOpts *cmdOpts.ApplyNixOpts,
+) ([]string, error) {
+	var argv []string
+	var attr string
+
+	switch v := cfg.(type) {
+	case *configuration.FlakeRef:
+		evalArgs := nixopts.NixOptionsToArgsListByCategory(cobraCmd.Flags(), nixOpts, "lock")
+
+		attr = fmt.Sprintf("%s#nixosConfigurations.%s.config.system.build.images", v.URI, v.System)
+		argv = []string{"nix", "eval", "--json", attr, "--apply", "builtins.attrNames"}
+		argv = append(argv, evalArgs...)
+	case *configuration.LegacyConfiguration:
+		buildArgs := nixopts.NixOptionsToArgsListByCategory(cobraCmd.Flags(), nixOpts, "build")
+
+		expr := "with import <nixpkgs/nixos> {}; builtins.attrNames config.system.build.images"
+		argv = []string{"nix-instantiate", "--eval", "--strict", "--json", "--expr", expr}
+		argv = append(argv, buildArgs...)
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	cmd := system.NewCommand(argv[0], argv[1:]...)
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	_, err := s.Run(cmd)
+	if err != nil {
+		return nil, &configuration.AttributeEvaluationError{
+			Attribute:        attr,
+			EvaluationOutput: stderr.String(),
+		}
+	}
+
+	var imageAttrs []string
+	err = json.NewDecoder(&stdout).Decode(&imageAttrs)
+	if err != nil {
+		return nil, err
+	}
+
+	return imageAttrs, nil
+}
+
+func getImageName(
+	cobraCmd *cobra.Command,
+	s system.System,
+	cfg configuration.Configuration,
+	imgName string,
+	nixOpts *cmdOpts.ApplyNixOpts,
+) (string, error) {
+	var argv []string
+	var attr string
+
+	switch v := cfg.(type) {
+	case *configuration.FlakeRef:
+		evalArgs := nixopts.NixOptionsToArgsListByCategory(cobraCmd.Flags(), nixOpts, "lock")
+
+		attr = fmt.Sprintf("%s#nixosConfigurations.%s.config.system.build.images.%s.passthru.filePath", v.URI, v.System, imgName)
+		argv = []string{"nix", "eval", "--raw", attr}
+		argv = append(argv, evalArgs...)
+	case *configuration.LegacyConfiguration:
+		buildArgs := nixopts.NixOptionsToArgsListByCategory(cobraCmd.Flags(), nixOpts, "build")
+
+		expr := fmt.Sprintf("with import <nixpkgs/nixos> {}; config.system.build.images.%s.passthru.filePath", imgName)
+		argv = []string{"nix-instantiate", "--eval", "--strict", "--raw", "--expr", expr}
+
+		argv = append(argv, buildArgs...)
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	cmd := system.NewCommand(argv[0], argv[1:]...)
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	s.Logger().CmdArray(argv)
+
+	_, err := s.Run(cmd)
+	if err != nil {
+		return "", &configuration.AttributeEvaluationError{
+			Attribute:        attr,
+			EvaluationOutput: stderr.String(),
+		}
+	}
+
+	return strings.TrimSpace(stdout.String()), nil
 }

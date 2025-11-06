@@ -95,3 +95,11 @@ func (v *VMBuild) BuildAttr() string {
 		return "vm"
 	}
 }
+
+type ImageBuild struct {
+	Variant string
+}
+
+func (i *ImageBuild) BuildAttr() string {
+	return fmt.Sprintf("images.%s", i.Variant)
+}

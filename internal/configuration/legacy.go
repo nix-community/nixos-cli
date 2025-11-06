@@ -119,7 +119,16 @@ func (l *LegacyConfiguration) buildLocalSystem(s *system.LocalSystem, buildType 
 		nixCommand = "nom-build"
 	}
 
-	argv := []string{nixCommand, "<nixpkgs/nixos>", "-A", buildType.BuildAttr()}
+	argv := []string{nixCommand, "<nixpkgs/nixos>", "-A"}
+	switch buildType.(type) {
+	case *ImageBuild:
+		// The build attribute for image builds is not in the
+		// usual toplevel of the <nixpkgs/nixos> attribute.
+		// Handle this case specially.
+		argv = append(argv, fmt.Sprintf("config.system.build.%s", buildType.BuildAttr()))
+	default:
+		argv = append(argv, buildType.BuildAttr())
+	}
 
 	// Mimic `nixos-rebuild` behavior of using -k option
 	// for all commands except for `switch` and `boot`
@@ -175,7 +184,16 @@ func (l *LegacyConfiguration) buildRemoteSystem(s *system.SSHSystem, buildType B
 
 	// 1. Determine the drv path.
 	// Equivalent of `nix-instantiate -A "${attr}" ${extraBuildFlags[@]}`
-	instantiateArgv := []string{"nix-instantiate", "<nixpkgs/nixos>", "-A", buildType.BuildAttr()}
+	instantiateArgv := []string{"nix-instantiate", "<nixpkgs/nixos>", "-A"}
+	switch buildType.(type) {
+	case *ImageBuild:
+		// The build attribute for image builds is not in the
+		// usual toplevel of the <nixpkgs/nixos> attribute.
+		// Handle this case specially.
+		instantiateArgv = append(instantiateArgv, fmt.Sprintf("config.system.build.%s", buildType.BuildAttr()))
+	default:
+		instantiateArgv = append(instantiateArgv, buildType.BuildAttr())
+	}
 	instantiateArgv = append(instantiateArgv, extraBuildFlags...)
 
 	var drvPathBuf bytes.Buffer
