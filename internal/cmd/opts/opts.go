@@ -42,35 +42,37 @@ type ApplyOpts struct {
 	UseNom                bool
 	Verbose               bool
 
-	NixOptions struct {
-		Quiet                   bool              `nixCategory:"build"`
-		PrintBuildLogs          bool              `nixCategory:"build"`
-		NoBuildOutput           bool              `nixCategory:"build"`
-		ShowTrace               bool              `nixCategory:"build"`
-		KeepGoing               bool              `nixCategory:"build,copy"`
-		KeepFailed              bool              `nixCategory:"build,copy"`
-		Fallback                bool              `nixCategory:"build,copy"`
-		Refresh                 bool              `nixCategory:"build,copy"`
-		Repair                  bool              `nixCategory:"build,copy"`
-		Impure                  bool              `nixCategory:"build"`
-		Offline                 bool              `nixCategory:"build"`
-		NoNet                   bool              `nixCategory:"build"`
-		SubstituteOnDestination bool              `nixCategory:"build,copy"`
-		MaxJobs                 int               `nixCategory:"build,copy"`
-		Cores                   int               `nixCategory:"build,copy"`
-		Builders                []string          `nixCategory:"build"`
-		LogFormat               string            `nixCategory:"build,copy"`
-		Includes                []string          `nixCategory:"build"`
-		Options                 map[string]string `nixCategory:"build,copy"`
+	NixOptions ApplyNixOpts
+}
 
-		RecreateLockFile bool              `nixCategory:"lock"`
-		NoUpdateLockFile bool              `nixCategory:"lock"`
-		NoWriteLockFile  bool              `nixCategory:"lock"`
-		NoUseRegistries  bool              `nixCategory:"lock"`
-		CommitLockFile   bool              `nixCategory:"lock"`
-		UpdateInputs     []string          `nixCategory:"lock"`
-		OverrideInputs   map[string]string `nixCategory:"lock"`
-	}
+type ApplyNixOpts struct {
+	Quiet                   bool              `nixCategory:"build"`
+	PrintBuildLogs          bool              `nixCategory:"build"`
+	NoBuildOutput           bool              `nixCategory:"build"`
+	ShowTrace               bool              `nixCategory:"build"`
+	KeepGoing               bool              `nixCategory:"build,copy"`
+	KeepFailed              bool              `nixCategory:"build,copy"`
+	Fallback                bool              `nixCategory:"build,copy"`
+	Refresh                 bool              `nixCategory:"build,copy"`
+	Repair                  bool              `nixCategory:"build,copy"`
+	Impure                  bool              `nixCategory:"build"`
+	Offline                 bool              `nixCategory:"build"`
+	NoNet                   bool              `nixCategory:"build"`
+	SubstituteOnDestination bool              `nixCategory:"build,copy"`
+	MaxJobs                 int               `nixCategory:"build,copy"`
+	Cores                   int               `nixCategory:"build,copy"`
+	Builders                []string          `nixCategory:"build"`
+	LogFormat               string            `nixCategory:"build,copy"`
+	Includes                []string          `nixCategory:"build"`
+	Options                 map[string]string `nixCategory:"build,copy"`
+
+	RecreateLockFile bool              `nixCategory:"lock"`
+	NoUpdateLockFile bool              `nixCategory:"lock"`
+	NoWriteLockFile  bool              `nixCategory:"lock"`
+	NoUseRegistries  bool              `nixCategory:"lock"`
+	CommitLockFile   bool              `nixCategory:"lock"`
+	UpdateInputs     []string          `nixCategory:"lock"`
+	OverrideInputs   map[string]string `nixCategory:"lock"`
 }
 
 type EnterOpts struct {
@@ -156,33 +158,35 @@ type InstallOpts struct {
 	Verbose        bool
 	FlakeRef       *configuration.FlakeRef
 
-	NixOptions struct {
-		Quiet          bool
-		PrintBuildLogs bool
-		NoBuildOutput  bool
-		ShowTrace      bool
-		KeepGoing      bool
-		KeepFailed     bool
-		Fallback       bool
-		Refresh        bool
-		Repair         bool
-		Impure         bool
-		Offline        bool
-		NoNet          bool
-		MaxJobs        int
-		Cores          int
-		LogFormat      string
-		Includes       []string
-		Options        map[string]string
+	NixOptions InstallNixOpts
+}
 
-		RecreateLockFile bool
-		NoUpdateLockFile bool
-		NoWriteLockFile  bool
-		NoUseRegistries  bool
-		CommitLockFile   bool
-		UpdateInputs     []string
-		OverrideInputs   map[string]string
-	}
+type InstallNixOpts struct {
+	Quiet          bool
+	PrintBuildLogs bool
+	NoBuildOutput  bool
+	ShowTrace      bool
+	KeepGoing      bool
+	KeepFailed     bool
+	Fallback       bool
+	Refresh        bool
+	Repair         bool
+	Impure         bool
+	Offline        bool
+	NoNet          bool
+	MaxJobs        int
+	Cores          int
+	LogFormat      string
+	Includes       []string
+	Options        map[string]string
+
+	RecreateLockFile bool
+	NoUpdateLockFile bool
+	NoWriteLockFile  bool
+	NoUseRegistries  bool
+	CommitLockFile   bool
+	UpdateInputs     []string
+	OverrideInputs   map[string]string
 }
 
 type OptionOpts struct {
