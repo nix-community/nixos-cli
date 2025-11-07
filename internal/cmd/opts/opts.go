@@ -21,15 +21,17 @@ type AliasesOpts struct {
 }
 
 type ApplyOpts struct {
+	File                  string
+	Attr                  string
 	AlwaysConfirm         bool
 	BuildHost             string
+	BuildImage            string
 	BuildVM               bool
 	BuildVMWithBootloader bool
 	Dry                   bool
 	FlakeRef              string
 	GenerationTag         string
 	InstallBootloader     bool
-	BuildImage            string
 	NoActivate            bool
 	NoBoot                bool
 	OutputPath            string

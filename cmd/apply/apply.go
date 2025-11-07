@@ -28,9 +28,11 @@ import (
 func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 	opts := cmdOpts.ApplyOpts{}
 
-	usage := "apply"
+	var usage string
 	if build.Flake() {
-		usage += " [FLAKE-REF]"
+		usage = "apply [FLAKE-REF]"
+	} else {
+		usage = "apply [FILE] [ATTR]"
 	}
 
 	cmd := cobra.Command{
@@ -46,8 +48,16 @@ func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 					opts.FlakeRef = args[0]
 				}
 			} else {
-				if err := cobra.NoArgs(cmd, args); err != nil {
+				if err := cobra.MaximumNArgs(2)(cmd, args); err != nil {
 					return err
+				}
+
+				if len(args) > 0 {
+					opts.File = args[0]
+				}
+
+				if len(args) > 1 {
+					opts.Attr = args[1]
 				}
 			}
 
@@ -164,6 +174,16 @@ func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 Arguments:
   [FLAKE-REF]  Flake ref to build configuration from (default: $NIXOS_CONFIG)
 `
+	} else {
+		helpTemplate += `
+Arguments:
+  [FILE]  File to build configuration from
+  [ATTR]  Attribute inside of [FILE] pointing to configuration
+
+  Both arguments are optional. If [FILE] is not specified, then $NIXOS_CONFIG or the 'nixos-config'
+  entry in $NIX_PATH is used. If [ATTR] is not specified, then the top-level attribute of [FILE]
+  is used.
+`
 	}
 	helpTemplate += `
 This command also forwards Nix options passed here to all relevant Nix invocations.
@@ -258,6 +278,18 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 		if err := nixConfig.(*configuration.FlakeRef).InferSystemFromHostnameIfNeeded(); err != nil {
 			log.Errorf("failed to infer hostname: %v", err)
 			return err
+		}
+	} else if opts.File != "" {
+		configPath, err := utils.ResolveNixFilename(opts.File)
+		if err != nil {
+			log.Error(err)
+			return err
+		}
+		nixConfig = &configuration.LegacyConfiguration{
+			Includes:        opts.NixOptions.Includes,
+			ConfigPath:      configPath,
+			Attribute:       opts.Attr,
+			UseExplicitPath: true,
 		}
 	} else {
 		c, err := configuration.FindConfiguration(log, cfg, opts.NixOptions.Includes)

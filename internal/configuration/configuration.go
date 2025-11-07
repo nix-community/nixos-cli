@@ -77,11 +77,7 @@ type SystemBuild struct {
 }
 
 func (s *SystemBuild) BuildAttr() string {
-	if build.Flake() {
-		return "toplevel"
-	} else {
-		return "system"
-	}
+	return "toplevel"
 }
 
 type VMBuild struct {
