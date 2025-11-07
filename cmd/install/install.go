@@ -16,6 +16,7 @@ import (
 	"github.com/nix-community/nixos-cli/internal/constants"
 	"github.com/nix-community/nixos-cli/internal/logger"
 	"github.com/nix-community/nixos-cli/internal/system"
+	"github.com/nix-community/nixos-cli/internal/utils"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
@@ -383,7 +384,6 @@ func installMain(cmd *cobra.Command, opts *cmdOpts.InstallOpts) error {
 	// since the configuration must be specified explicitly. We must avoid
 	// the assumptions about `NIX_PATH` containing `nixos-config`, since it
 	// refers to the installer's configuration, not the target one to install.
-
 	log.Step("Finding configuration...")
 
 	var nixConfig configuration.Configuration
@@ -399,14 +399,14 @@ func installMain(cmd *cobra.Command, opts *cmdOpts.InstallOpts) error {
 			configLocation = filepath.Join(mountpoint, "etc", "nixos", "configuration.nix")
 		}
 
-		if _, err := os.Stat(configLocation); err != nil {
-			log.Errorf("failed to stat %s: %v", configLocation, err)
+		resolvedLocation, err := utils.ResolveNixFilename(configLocation)
+		if err != nil {
 			return err
 		}
 
 		nixConfig = &configuration.LegacyConfiguration{
-			Includes:      opts.NixOptions.Includes,
-			ConfigDirname: configLocation,
+			Includes:   opts.NixOptions.Includes,
+			ConfigPath: resolvedLocation,
 		}
 	}
 	nixConfig.SetBuilder(s)
@@ -427,7 +427,7 @@ func installMain(cmd *cobra.Command, opts *cmdOpts.InstallOpts) error {
 		// This value gets appended to the list of includes,
 		// and does not replace existing values already provided
 		// for -I on the command line.
-		if err := cmd.Flags().Set("include", fmt.Sprintf("nixos-config=%s", c.ConfigDirname)); err != nil {
+		if err := cmd.Flags().Set("include", fmt.Sprintf("nixos-config=%s", c.ConfigPath)); err != nil {
 			panic("failed to set --include flag for nixos install command for legacy systems")
 		}
 	}

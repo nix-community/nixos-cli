@@ -102,11 +102,12 @@ func optionMain(cmd *cobra.Command, opts *cmdOpts.OptionOpts) error {
 
 	var nixosConfig configuration.Configuration
 	if opts.FlakeRef != "" {
-		nixosConfig = configuration.FlakeRefFromString(opts.FlakeRef)
-		if err := nixosConfig.(*configuration.FlakeRef).InferSystemFromHostnameIfNeeded(); err != nil {
+		ref := configuration.FlakeRefFromString(opts.FlakeRef)
+		if err := ref.InferSystemFromHostnameIfNeeded(); err != nil {
 			log.Errorf("failed to infer hostname: %v", err)
 			return err
 		}
+		nixosConfig = ref
 	} else {
 		c, err := configuration.FindConfiguration(log, cfg, opts.NixPathIncludes)
 		if err != nil {

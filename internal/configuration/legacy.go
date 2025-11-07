@@ -11,11 +11,12 @@ import (
 	"github.com/nix-community/nixos-cli/internal/cmd/nixopts"
 	"github.com/nix-community/nixos-cli/internal/logger"
 	"github.com/nix-community/nixos-cli/internal/system"
+	"github.com/nix-community/nixos-cli/internal/utils"
 )
 
 type LegacyConfiguration struct {
-	Includes      []string
-	ConfigDirname string
+	Includes   []string
+	ConfigPath string
 
 	// Builder is used to build the legacy system. They must have Nix installed.
 	Builder system.CommandRunner
@@ -24,61 +25,52 @@ type LegacyConfiguration struct {
 func FindLegacyConfiguration(log logger.Logger, includes []string) (*LegacyConfiguration, error) {
 	log.Debugf("looking for legacy configuration")
 
-	var configuration string
+	var configPath string
 	if nixosCfg, set := os.LookupEnv("NIXOS_CONFIG"); set {
 		log.Debugf("$NIXOS_CONFIG is set, using automatically")
-		configuration = nixosCfg
+		configPath = nixosCfg
 	}
 
-	if configuration == "" && includes != nil {
+	if configPath == "" && includes != nil {
 		for _, include := range includes {
-			if strings.HasPrefix(include, "nixos-config=") {
-				configuration = strings.TrimPrefix(include, "nixos-config=")
+			if after, ok := strings.CutPrefix(include, "nixos-config="); ok {
+				configPath = after
 				break
 			}
 		}
 	}
 
-	if configuration == "" {
+	if configPath == "" {
 		log.Debugf("$NIXOS_CONFIG not set, using $NIX_PATH to find configuration")
 
-		nixPath := strings.Split(os.Getenv("NIX_PATH"), ":")
-		for _, entry := range nixPath {
-			if strings.HasPrefix(entry, "nixos-config=") {
-				configuration = strings.TrimPrefix(entry, "nixos-config=")
+		nixPath := strings.SplitSeq(os.Getenv("NIX_PATH"), ":")
+		for entry := range nixPath {
+			if after, ok := strings.CutPrefix(entry, "nixos-config="); ok {
+				configPath = after
 				break
 			}
 		}
-
-		if configuration == "" {
-			return nil, fmt.Errorf("expected 'nixos-config' attribute to exist in NIX_PATH")
-		}
 	}
 
-	configFileStat, err := os.Stat(configuration)
+	if configPath == "" {
+		log.Debugf("no 'nixos-config' attribute exists in NIX_PATH")
+		return nil, fmt.Errorf("no configuration found")
+	}
+
+	resolvedPath, err := utils.ResolveNixFilename(configPath)
 	if err != nil {
 		return nil, err
 	}
 
-	if configFileStat.IsDir() {
-		defaultNix := filepath.Join(configuration, "default.nix")
-
-		info, err := os.Stat(defaultNix)
-		if err != nil {
-			return nil, err
-		}
-
-		if info.IsDir() {
-			return nil, fmt.Errorf("%v is a directory, not a file", defaultNix)
-		}
-	} else {
-		configuration = filepath.Dir(configuration)
-	}
-
 	return &LegacyConfiguration{
-		Includes:      includes,
-		ConfigDirname: configuration,
+		Includes:   includes,
+		ConfigPath: resolvedPath,
 	}, nil
+}
+
+// Get the directory that this configuration file is found in
+func (l *LegacyConfiguration) Dirname() string {
+	return filepath.Dir(l.ConfigPath)
 }
 
 func (l *LegacyConfiguration) SetBuilder(builder system.CommandRunner) {

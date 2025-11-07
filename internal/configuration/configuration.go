@@ -62,7 +62,7 @@ func FindConfiguration(log logger.Logger, cfg *settings.Settings, includes []str
 			return nil, err
 		}
 
-		log.Debugf("found legacy configuration at %s", c.ConfigDirname)
+		log.Debugf("found legacy configuration at %s", c.ConfigPath)
 
 		return c, nil
 	}
