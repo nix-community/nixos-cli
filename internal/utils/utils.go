@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"syscall"
@@ -57,4 +58,37 @@ func Quote(s string) string {
 	}
 
 	return s
+}
+
+// Resolve a Nix filename to a real file.
+//
+// If `filename` is a file, then make sure it exists.
+//
+// If it is a directory, then append "default.nix" to
+// it and then make sure that file exists.
+//
+// A stat error will be returned for the file that is supposed
+// to exist if it does not.
+func ResolveNixFilename(input string) (string, error) {
+	fileInfo, err := os.Stat(input)
+	if err != nil {
+		return "", err
+	}
+
+	if !fileInfo.IsDir() {
+		return input, nil
+	}
+
+	defaultNix := filepath.Join(input, "default.nix")
+
+	defaultNixInfo, err := os.Stat(defaultNix)
+	if err != nil {
+		return "", err
+	}
+
+	if defaultNixInfo.IsDir() {
+		return "", fmt.Errorf("%v is a directory, not a file", defaultNix)
+	}
+
+	return defaultNix, nil
 }

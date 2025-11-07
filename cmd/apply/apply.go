@@ -275,7 +275,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 	case *configuration.FlakeRef:
 		configDirname = c.URI
 	case *configuration.LegacyConfiguration:
-		configDirname = c.ConfigDirname
+		configDirname = c.Dirname()
 	}
 
 	configIsDirectory := true

@@ -130,19 +130,24 @@ func replMain(cmd *cobra.Command, opts *cmdOpts.ReplOpts) error {
 	log := logger.FromContext(cmd.Context())
 	cfg := settings.FromContext(cmd.Context())
 
-	var nixConfig configuration.Configuration
+	var nixosConfig configuration.Configuration
 	if opts.FlakeRef != "" {
-		nixConfig = configuration.FlakeRefFromString(opts.FlakeRef)
+		ref := configuration.FlakeRefFromString(opts.FlakeRef)
+		if err := ref.InferSystemFromHostnameIfNeeded(); err != nil {
+			log.Errorf("failed to infer hostname: %v", err)
+			return err
+		}
+		nixosConfig = ref
 	} else {
 		c, err := configuration.FindConfiguration(log, cfg, opts.NixPathIncludes)
 		if err != nil {
 			log.Errorf("failed to find configuration: %v", err)
 			return err
 		}
-		nixConfig = c
+		nixosConfig = c
 	}
 
-	switch c := nixConfig.(type) {
+	switch c := nixosConfig.(type) {
 	case *configuration.FlakeRef:
 		err := execFlakeRepl(c)
 		if err != nil {
@@ -150,7 +155,7 @@ func replMain(cmd *cobra.Command, opts *cmdOpts.ReplOpts) error {
 			return err
 		}
 	case *configuration.LegacyConfiguration:
-		err := execLegacyRepl(c.Includes, os.Getenv("NIXOS_CONFIG") != "")
+		err := execLegacyRepl(c, os.Getenv("NIXOS_CONFIG") != "")
 		if err != nil {
 			log.Errorf("failed to exec nix repl: %v", err)
 			return err
@@ -160,14 +165,17 @@ func replMain(cmd *cobra.Command, opts *cmdOpts.ReplOpts) error {
 	return nil
 }
 
-func execLegacyRepl(includes []string, impure bool) error {
+func execLegacyRepl(c *configuration.LegacyConfiguration, impure bool) error {
 	motd := formatLegacyMotd()
 	expr := fmt.Sprintf(legacyReplExpr, motd)
 
 	argv := []string{"nix", "repl", "--expr", expr}
-	for _, v := range includes {
+	for _, v := range c.Includes {
 		argv = append(argv, "-I", v)
 	}
+
+	argv = append(argv, "-I", fmt.Sprintf("nixos-config=%s", c.ConfigPath))
+
 	if impure {
 		argv = append(argv, "--impure")
 	}
