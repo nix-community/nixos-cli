@@ -285,11 +285,17 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 			log.Error(err)
 			return err
 		}
+
 		nixConfig = &configuration.LegacyConfiguration{
 			Includes:        opts.NixOptions.Includes,
 			ConfigPath:      configPath,
 			Attribute:       opts.Attr,
 			UseExplicitPath: true,
+		}
+
+		log.Debugf("found configuration at %s", configPath)
+		if opts.Attr != "" {
+			log.Debugf("using attribute '%s'", opts.Attr)
 		}
 	} else {
 		c, err := configuration.FindConfiguration(log, cfg, opts.NixOptions.Includes)

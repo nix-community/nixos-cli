@@ -75,20 +75,37 @@ func ResolveNixFilename(input string) (string, error) {
 		return "", err
 	}
 
+	var resolved string
+
 	if !fileInfo.IsDir() {
-		return input, nil
+		resolved = input
+	} else {
+		defaultNix := filepath.Join(input, "default.nix")
+
+		defaultNixInfo, err := os.Stat(defaultNix)
+		if err != nil {
+			return "", err
+		}
+
+		if defaultNixInfo.IsDir() {
+			return "", fmt.Errorf("%v is a directory, not a file", defaultNix)
+		}
+
+		resolved = defaultNix
 	}
 
-	defaultNix := filepath.Join(input, "default.nix")
-
-	defaultNixInfo, err := os.Stat(defaultNix)
+	// Nix does not work well with relative addressing, so
+	// make sure to resolve it to an absolute, canonical
+	// path preemptively.
+	realPath, err := filepath.EvalSymlinks(resolved)
 	if err != nil {
 		return "", err
 	}
 
-	if defaultNixInfo.IsDir() {
-		return "", fmt.Errorf("%v is a directory, not a file", defaultNix)
+	absolutePath, err := filepath.Abs(realPath)
+	if err != nil {
+		return "", err
 	}
 
-	return defaultNix, nil
+	return absolutePath, nil
 }
