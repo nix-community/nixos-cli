@@ -15,8 +15,17 @@ import (
 )
 
 type LegacyConfiguration struct {
-	Includes   []string
+	// Detected path to configuration. Only supports files
+	// for now, not all kinds of Nix resources.
 	ConfigPath string
+	// Attribute to select from a Nix file when building.
+	// Only relevant when UseExplicitPath is enabled.
+	Attribute string
+	// Do not use the implicit <nixpkgs/nixos> variable to
+	// build. Pass the ConfigPath directly.
+	UseExplicitPath bool
+	// Extra entries to add to the NIX_PATH when invoking Nix.
+	Includes []string
 
 	// Builder is used to build the legacy system. They must have Nix installed.
 	Builder system.CommandRunner
@@ -111,7 +120,12 @@ func (l *LegacyConfiguration) buildLocalSystem(s *system.LocalSystem, buildType 
 		nixCommand = "nom-build"
 	}
 
-	argv := []string{nixCommand, "<nixpkgs/nixos>", "-A", fmt.Sprintf("config.system.build.%s", buildType.BuildAttr())}
+	var argv []string
+	if l.UseExplicitPath {
+		argv = []string{nixCommand, l.ConfigPath, "-A", makeBuildAttrPath(l.Attribute, buildType)}
+	} else {
+		argv = []string{nixCommand, "<nixpkgs/nixos>", "-A", fmt.Sprintf("config.system.build.%s", buildType.BuildAttr())}
+	}
 
 	// Mimic `nixos-rebuild` behavior of using -k option
 	// for all commands except for `switch` and `boot`
@@ -139,7 +153,7 @@ func (l *LegacyConfiguration) buildLocalSystem(s *system.LocalSystem, buildType 
 		argv = append(argv, "-v")
 	}
 
-	s.Logger().CmdArray(argv)
+	log.CmdArray(argv)
 
 	var stdout bytes.Buffer
 	cmd := system.NewCommand(nixCommand, argv[1:]...)
@@ -167,7 +181,12 @@ func (l *LegacyConfiguration) buildRemoteSystem(s *system.SSHSystem, buildType B
 
 	// 1. Determine the drv path.
 	// Equivalent of `nix-instantiate -A "${attr}" ${extraBuildFlags[@]}`
-	instantiateArgv := []string{"nix-instantiate", "<nixpkgs/nixos>", "-A", fmt.Sprintf("config.system.build.%s", buildType.BuildAttr())}
+	var instantiateArgv []string
+	if l.UseExplicitPath {
+		instantiateArgv = []string{"nix-instantiate", l.ConfigPath, "-A", makeBuildAttrPath(l.Attribute, buildType)}
+	} else {
+		instantiateArgv = []string{"nix-instantiate", "<nixpkgs/nixos>", "-A", fmt.Sprintf("config.system.build.%s", buildType.BuildAttr())}
+	}
 	instantiateArgv = append(instantiateArgv, extraBuildFlags...)
 
 	var drvPathBuf bytes.Buffer
@@ -213,6 +232,19 @@ func (l *LegacyConfiguration) buildRemoteSystem(s *system.SSHSystem, buildType B
 
 	_, err := s.Run(realiseDrvCmd)
 	return strings.TrimSpace(realisedPathBuf.String()), err
+}
+
+func makeBuildAttrPath(toplevelAttr string, buildType BuildType) string {
+	var s strings.Builder
+	if toplevelAttr != "" {
+		s.WriteString(toplevelAttr)
+		s.WriteString(".")
+	}
+
+	s.WriteString("config.system.build.")
+	s.WriteString(buildType.BuildAttr())
+
+	return s.String()
 }
 
 func (l *LegacyConfiguration) BuildSystem(buildType BuildType, opts *SystemBuildOptions) (string, error) {

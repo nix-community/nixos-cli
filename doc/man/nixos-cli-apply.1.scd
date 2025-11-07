@@ -6,7 +6,13 @@ nixos apply - build and/or activate a NixOS configuration
 
 # SYNOPSIS
 
+Flake-enabled CLIs:
+
 *nixos apply* [FLAKE-REF] [options]
+
+Legacy CLIs:
+
+*nixos apply* [FILE] [ATTR] [options]
 
 # DESCRIPTION
 
@@ -37,6 +43,16 @@ _`nixos-rebuild switch`_, without interactive confirmation
 _nixos-rebuild switch_, on an arbitrary flake ref (for flake-enabled CLIs only)
 
 	*nixos apply "github:water-sucks/nixed#CharlesWoodson"*
+
+_nixos-rebuild switch_, on an arbitrary Nix file containing a configuration (for
+legacy CLIs only):
+
+	*nixos apply /home/user/.nixconfig/config.nix*
+
+_nixos-rebuild switch_, on an arbitrary Nix file containing multiple
+configurations in an attribute set (for legacy CLIs only):
+
+	*nixos apply /home/user/.nixconfig/machines.nix SebastianJanikowski*
 
 _nixos-rebuild test_
 
@@ -81,6 +97,22 @@ global *--config* flag as such:
 	See *nixos-config-env(5)* for the proper flake ref format.
 
 	Default: *$NIXOS_CONFIG*
+
+*FILE*
+	Specify an explicit path to a Nix file containing a NixOS configuration.
+
+	This argument is useful for building a NixOS system from a Nix file that is
+	not a flake or a NixOS configuration module.
+
+	If not specified, then the value in the environment variable _$NIXOS_CONFIG_
+	or the value of the _nixos-config_ entry in _$NIX_PATH_ will be used.
+
+*ATTR*
+	Use the specified attribute path inside of *FILE* as the NixOS system to
+	build.
+
+	If *ATTR* is not specified, then the top-level attribute of *FILE* will be
+	used.
 
 # OPTIONS
 
