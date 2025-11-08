@@ -195,6 +195,12 @@ func copyChannel(cobraCmd *cobra.Command, s system.CommandRunner, mountpoint str
 	log := s.Logger()
 
 	mountpointChannelDir := filepath.Join(mountpoint, constants.NixChannelDirectory)
+	rootProfileDir := filepath.Dir(mountpointChannelDir)
+
+	err := os.MkdirAll(rootProfileDir, 0o755)
+	if err != nil {
+		return fmt.Errorf("failed to create %s: %s", rootProfileDir, err)
+	}
 
 	channelPath := channelDirectory
 	if channelPath == "" {
@@ -222,7 +228,7 @@ func copyChannel(cobraCmd *cobra.Command, s system.CommandRunner, mountpoint str
 	cmd := system.NewCommand(argv[0], argv[1:]...)
 	log.CmdArray(argv)
 
-	_, err := s.Run(cmd)
+	_, err = s.Run(cmd)
 	if err != nil {
 		log.Errorf("failed to copy channel: %v", err)
 		return err
