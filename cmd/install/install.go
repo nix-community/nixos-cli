@@ -49,12 +49,22 @@ func InstallCommand() *cobra.Command {
 				}
 			}
 
-			if len(opts.Root) > 0 && !filepath.IsAbs(opts.Root) {
+			if opts.Root != "" && !filepath.IsAbs(opts.Root) {
 				return fmt.Errorf("--root must be an absolute path")
 			}
 
-			if len(opts.SystemClosure) > 0 && !filepath.IsAbs(opts.SystemClosure) {
-				return fmt.Errorf("--system must be an absolute path")
+			if opts.SystemClosure != "" {
+				if !filepath.IsAbs(opts.SystemClosure) {
+					return fmt.Errorf("--system must be an absolute path")
+				}
+
+				if opts.FlakeRef != nil {
+					return fmt.Errorf("--system was specified, but [FLAKE-REF] was also provided; use one or the other")
+				}
+
+				if _, err := os.Stat(opts.SystemClosure); err != nil {
+					return err
+				}
 			}
 
 			return nil
@@ -416,19 +426,25 @@ func installMain(cmd *cobra.Command, opts *cmdOpts.InstallOpts) error {
 		}
 	}
 
-	systemBuildOptions := configuration.SystemBuildOptions{
-		CmdFlags:  cmd.Flags(),
-		NixOpts:   opts.NixOptions,
-		Env:       envMap,
-		ExtraArgs: []string{"--extra-substituters", defaultExtraSubstituters},
-	}
+	var resultLocation string
 
-	log.Step("Building system...")
+	if opts.SystemClosure == "" {
+		systemBuildOptions := configuration.SystemBuildOptions{
+			CmdFlags:  cmd.Flags(),
+			NixOpts:   opts.NixOptions,
+			Env:       envMap,
+			ExtraArgs: []string{"--extra-substituters", defaultExtraSubstituters},
+		}
 
-	resultLocation, err := nixConfig.BuildSystem(&configuration.SystemBuild{}, &systemBuildOptions)
-	if err != nil {
-		log.Errorf("failed to build system: %v", err)
-		return err
+		log.Step("Building system...")
+
+		resultLocation, err = nixConfig.BuildSystem(&configuration.SystemBuild{}, &systemBuildOptions)
+		if err != nil {
+			log.Errorf("failed to build system: %v", err)
+			return err
+		}
+	} else {
+		resultLocation = opts.SystemClosure
 	}
 
 	log.Step("Creating initial generation...")
@@ -465,7 +481,7 @@ func installMain(cmd *cobra.Command, opts *cmdOpts.InstallOpts) error {
 	log.Step("Setting root password...")
 
 	if !opts.NoRootPassword {
-		manualHint := "you can set the root password manually by executing `nixos enter --root {s}` and then running `passwd` in the shell of them new system"
+		manualHint := fmt.Sprintf("you can set the root password manually by executing `nixos enter --root %s` and then running `passwd` in the shell of the new system", mountpoint)
 
 		if !term.IsTerminal(int(os.Stdin.Fd())) {
 			log.Warn("stdin is not a terminal; skipping setting root password")
