@@ -77,6 +77,10 @@ func (f *FlakeRef) InferSystemFromHostnameIfNeeded() error {
 	return nil
 }
 
+func (f *FlakeRef) String() string {
+	return fmt.Sprintf("%s#%s", f.URI, f.System)
+}
+
 func (f *FlakeRef) SetBuilder(builder system.CommandRunner) {
 	f.Builder = builder
 }

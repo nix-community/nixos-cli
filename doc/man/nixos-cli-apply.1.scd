@@ -101,6 +101,8 @@ global *--config* flag as such:
 *FILE*
 	Specify an explicit path to a Nix file containing a NixOS configuration.
 
+	Only available on legacy CLIs.
+
 	This argument is useful for building a NixOS system from a Nix file that is
 	not a flake or a NixOS configuration module.
 
@@ -110,6 +112,8 @@ global *--config* flag as such:
 *ATTR*
 	Use the specified attribute path inside of *FILE* as the NixOS system to
 	build.
+
+	Only available on legacy CLIs.
 
 	If *ATTR* is not specified, then the top-level attribute of *FILE* will be
 	used.
