@@ -24,9 +24,11 @@ import (
 func InstallCommand() *cobra.Command {
 	opts := cmdOpts.InstallOpts{}
 
-	usage := "install"
+	var usage string
 	if build.Flake() {
-		usage += " {FLAKE-URI}#{SYSTEM-NAME}"
+		usage = "install {FLAKE-URI}#{SYSTEM-NAME}"
+	} else {
+		usage = "install [FILE] [ATTR]"
 	}
 
 	cmd := cobra.Command{
@@ -45,8 +47,16 @@ func InstallCommand() *cobra.Command {
 				}
 				opts.FlakeRef = ref
 			} else {
-				if err := cobra.NoArgs(cmd, args); err != nil {
+				if err := cobra.MaximumNArgs(2)(cmd, args); err != nil {
 					return err
+				}
+
+				if len(args) > 0 {
+					opts.File = args[0]
+				}
+
+				if len(args) > 1 {
+					opts.Attr = args[1]
 				}
 			}
 
@@ -130,6 +140,16 @@ func InstallCommand() *cobra.Command {
 Arguments:
   [FLAKE-URI]    Flake URI that contains NixOS system to build
   [SYSTEM-NAME]  Name of NixOS system attribute to build
+`
+	} else {
+		helpTemplate += `
+Arguments:
+  [FILE]  File to build configuration from
+  [ATTR]  Attribute inside of [FILE] pointing to configuration
+
+  Both arguments are optional. If [FILE] is not specified, then
+  $root/etc/nixos/configuration.nix is used. If [ATTR] is not
+  specified, then the top-level attribute of [FILE] is used.
 `
 	}
 	helpTemplate += `
@@ -389,6 +409,25 @@ func installMain(cmd *cobra.Command, opts *cmdOpts.InstallOpts) error {
 	var nixConfig configuration.Configuration
 	if build.Flake() {
 		nixConfig = opts.FlakeRef
+		log.Debugf("using flake ref %s", opts.FlakeRef)
+	} else if opts.File != "" {
+		configPath, err := utils.ResolveNixFilename(opts.File)
+		if err != nil {
+			log.Error(err)
+			return err
+		}
+
+		nixConfig = &configuration.LegacyConfiguration{
+			Includes:        opts.NixOptions.Includes,
+			ConfigPath:      configPath,
+			Attribute:       opts.Attr,
+			UseExplicitPath: true,
+		}
+
+		log.Debugf("found configuration at %s", configPath)
+		if opts.Attr != "" {
+			log.Debugf("using attribute %s", opts.Attr)
+		}
 	} else {
 		var configLocation string
 
@@ -403,6 +442,8 @@ func installMain(cmd *cobra.Command, opts *cmdOpts.InstallOpts) error {
 		if err != nil {
 			return err
 		}
+
+		log.Debugf("using configuration at %s", configLocation)
 
 		nixConfig = &configuration.LegacyConfiguration{
 			Includes:   opts.NixOptions.Includes,

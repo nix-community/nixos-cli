@@ -159,6 +159,8 @@ type InstallOpts struct {
 	SystemClosure  string
 	Verbose        bool
 	FlakeRef       *configuration.FlakeRef
+	File           string
+	Attr           string
 
 	NixOptions InstallNixOpts
 }

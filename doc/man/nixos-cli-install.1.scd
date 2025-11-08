@@ -6,7 +6,13 @@ nixos install - install a NixOS system from a provided configuration
 
 # SYNOPSIS
 
+Flake-enabled CLIs:
+
 *nixos install* [FLAKE-REF] [options]
+
+Legacy CLIs:
+
+*nixos install* [FILE] [ATTR] [options]
 
 # DESCRIPTION
 
@@ -20,12 +26,13 @@ nixos install - install a NixOS system from a provided configuration
 The installed configuration will depend on if the CLI is flake-enabled or not.
 
 If the CLI is flake-enabled:
-	- The *[FLAKE-REF]* argument is _required_, and must point to a valid
+	- The *FLAKE-REF* argument is _required_, and must point to a valid
 	  flake reference with a NixOS configuration.
 Otherwise:
 	- The *$NIXOS_CONFIG* variable must point to a valid NixOS configuration
 	  module or a directory containing a _default.nix_ with the same.
 	- OR the target root must have a file at _/etc/nixos/configuration.nix_
+	- OR *FILE* + *ATTR* should be passed.
 
 The installation will take place relative to a specified root directory
 (defaults to `/mnt`). Mountpoints and all other filesystems must be mounted
@@ -100,6 +107,26 @@ is also possible, assuming a successful installation.
 
 	There is no fallback, so if this argument is not provided on a flake-enabled
 	CLI, the program will fail.
+
+*FILE*
+	Specify an explicit path to a Nix file containing a NixOS configuration.
+
+	Only available on legacy CLIs.
+
+	This argument is useful for building a NixOS system from a Nix file that is
+	not a flake or a NixOS configuration module.
+
+	If not specified, then the value in the environment variable _$NIXOS_CONFIG_
+	or the value of the _nixos-config_ entry in _$NIX_PATH_ will be used.
+
+*ATTR*
+	Use the specified attribute path inside of *FILE* as the NixOS system to
+	build.
+
+	Only available on legacy CLIs.
+
+	If *ATTR* is not specified, then the top-level attribute of *FILE* will be
+	used.
 
 # OPTIONS
 
