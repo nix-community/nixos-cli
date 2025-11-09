@@ -202,6 +202,8 @@ type OptionOpts struct {
 	MinScore         int64
 	OptionInput      string
 	FlakeRef         string
+	File             string
+	Attr             string
 }
 
 type ReplOpts struct {

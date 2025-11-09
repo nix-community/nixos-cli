@@ -37,7 +37,7 @@ type AttributeEvaluationError struct {
 }
 
 func (e *AttributeEvaluationError) Error() string {
-	return fmt.Sprintf("failed to evaluate attribute %s", e.Attribute)
+	return fmt.Sprintf("failed to evaluate attribute %s, trace:\n%s", e.Attribute, e.EvaluationOutput)
 }
 
 func FindConfiguration(log logger.Logger, cfg *settings.Settings, includes []string) (Configuration, error) {

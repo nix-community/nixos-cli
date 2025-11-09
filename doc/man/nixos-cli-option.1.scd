@@ -45,8 +45,26 @@ Find an option in a different flake ref (assume a flake-enabled CLI):
 
 # OPTIONS
 
-*-h*, *--help*
-	Show the help message for this command.
+*--attr* <PATH>
+	Use the specified attribute path inside of *--file* as the NixOS system to
+	evaluate options from.
+
+	Only available on legacy CLIs.
+
+	If *--attr* is not specified, then the top-level attribute of what is passed
+	to *--file* will be used.
+
+*--file* <PATH>
+	Specify an explicit *PATH* to a Nix file containing a NixOS configuration
+	to evaluate options from.
+
+	Only available on legacy CLIs.
+
+	This argument is useful for getting options for a NixOS system from a Nix
+	file that is not a flake or a NixOS configuration module.
+
+	If not specified, then the value in the environment variable _$NIXOS_CONFIG_
+	or the value of the _nixos-config_ entry in _$NIX_PATH_ will be used.
 
 *-f*, *--flake* <REF>
 	Specify an explicit flake *REF* to evaluate options from. Only available
@@ -68,13 +86,6 @@ Find an option in a different flake ref (assume a flake-enabled CLI):
 	Errors will have an "error" key along with "similar_options" with the
 	list of at max 10 items that have been matched.
 
-*-s*, *--min-score* <SCORE>
-	Minimum fuzzy match *SCORE* for filtering results. The bigger the number,
-	the less search results will appear. However, the results will be more
-	relevant as they appear if the score is higher.
-
-	Default: *1*
-
 *--no-cache*
 	Disable usage of the prebuilt options cache.
 
@@ -86,10 +97,20 @@ Find an option in a different flake ref (assume a flake-enabled CLI):
 	Do not start the interactive search environment. This option is implied
 	when *--json* or *--value-only* modes are in use.
 
+*-s*, *--min-score* <SCORE>
+	Minimum fuzzy match *SCORE* for filtering results. The bigger the number,
+	the less search results will appear. However, the results will be more
+	relevant as they appear if the score is higher.
+
+	Default: *1*
+
 *-v*, *--value-only*
 	Print only the current value of the selected option.
 
 	Useful for scripts where the option name is needed.
+
+*-h*, *--help*
+	Show the help message for this command.
 
 # ARGUMENTS
 
