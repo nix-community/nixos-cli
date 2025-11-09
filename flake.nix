@@ -25,12 +25,12 @@
       pkgs = pkgsFor system;
       inherit (pkgs) callPackage;
     in {
-      default = self.packages.${pkgs.system}.nixos;
+      default = self.packages.${system}.nixos;
 
       nixos = callPackage ./package.nix {
         revision = self.rev or self.dirtyRev or "unknown";
       };
-      nixosLegacy = self.packages.${pkgs.system}.nixos.override {flake = false;};
+      nixosLegacy = self.packages.${system}.nixos.override {flake = false;};
     });
 
     devShells = eachSystem (system: let
