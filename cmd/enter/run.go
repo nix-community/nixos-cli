@@ -60,6 +60,13 @@ func enterMain(cmd *cobra.Command, opts *cmdOpts.EnterOpts) error {
 		return err
 	}
 
+	log.Infof("bind-mounting /sys to %v", opts.RootLocation)
+	err = bindMountDirectory(opts.RootLocation, "/sys")
+	if err != nil {
+		log.Errorf("failed to bind-mount /sys: %v", err)
+		return err
+	}
+
 	log.Infof("bind-mounting /proc to %v", opts.RootLocation)
 	err = bindMountDirectory(opts.RootLocation, "/proc")
 	if err != nil {
