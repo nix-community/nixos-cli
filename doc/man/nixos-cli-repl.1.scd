@@ -22,7 +22,8 @@ contain a valid flake ref.
 
 If not, the environment variable *$NIXOS_CONFIG* will be
 used, or the configuration can be passed through setting the *$NIX_PATH*'s
-_nixos-config_ attribute properly through *-I* or elsewhere.
+_nixos-config_ attribute properly through *-I* or elsewhere, or passed using
+*FILE* and *ATTR* directly if already instantiated there.
 
 # OPTIONS
 
@@ -39,10 +40,28 @@ _nixos-config_ attribute properly through *-I* or elsewhere.
 # ARGUMENTS
 
 *FLAKE-REF*  
-	Optional flake reference to load attributes from. If the CLI is not
-	flake-enabled, this argument is ignored.
+	Optional flake reference to load attributes from. Only available on
+	flake-enabled CLIs.
 
 	Default: *$NIXOS_CONFIG*
+
+*FILE*
+	Specify an explicit path to a Nix file containing a NixOS configuration to
+	load into the REPL.
+
+	Only available on legacy CLIs.
+
+	If not specified, then the value in the environment variable _$NIXOS_CONFIG_
+	or the value of the _nixos-config_ entry in _$NIX_PATH_ will be used.
+
+*ATTR*
+	Use the specified attribute path inside of *FILE* as the NixOS system to
+	use for the REPL.
+
+	Only available on legacy CLIs.
+
+	If *ATTR* is not specified, then the top-level attribute of *FILE* will be
+	used.
 
 # SEE ALSO
 

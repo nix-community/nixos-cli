@@ -13,6 +13,7 @@ import (
 	"github.com/nix-community/nixos-cli/internal/configuration"
 	"github.com/nix-community/nixos-cli/internal/logger"
 	"github.com/nix-community/nixos-cli/internal/settings"
+	"github.com/nix-community/nixos-cli/internal/utils"
 	"github.com/spf13/cobra"
 
 	"github.com/nix-community/nixos-cli/internal/build"
@@ -21,9 +22,11 @@ import (
 func ReplCommand() *cobra.Command {
 	opts := cmdOpts.ReplOpts{}
 
-	usage := "repl [flags]"
+	var usage string
 	if build.Flake() {
-		usage += " [FLAKE-REF]"
+		usage = "repl [FLAKE-REF]"
+	} else {
+		usage = "repl [FILE] [ATTR]"
 	}
 
 	cmd := cobra.Command{
@@ -40,7 +43,20 @@ func ReplCommand() *cobra.Command {
 				}
 				return nil
 			}
-			return cobra.NoArgs(cmd, args)
+
+			if err := cobra.MaximumNArgs(2)(cmd, args); err != nil {
+				return err
+			}
+
+			if len(args) > 0 {
+				opts.File = args[0]
+			}
+
+			if len(args) > 1 {
+				opts.Attr = args[1]
+			}
+
+			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return cmdUtils.CommandErrorHandler(replMain(cmd, &opts))
@@ -55,6 +71,17 @@ func ReplCommand() *cobra.Command {
 		cmd.SetHelpTemplate(cmd.HelpTemplate() + `
 Arguments:
     [FLAKE-REF]  Flake ref to load attributes from (default: $NIXOS_CONFIG)
+`)
+	} else {
+		cmd.SetHelpTemplate(cmd.HelpTemplate() + `
+Arguments:
+  [FILE]  File that contains configuration
+  [ATTR]  Attribute inside of [FILE] pointing to configuration
+
+  Both arguments are optional. If [FILE] is not specified, then 
+  $NIXOS_CONFIG or the 'nixos-config' entry in $NIX_PATH is used. 
+  If [ATTR] is not specified, then the top-level attribute of 
+  [FILE] is used.
 `)
 	}
 
@@ -81,7 +108,7 @@ in
 `
 
 	legacyReplExpr = `let
-  system = import <nixpkgs/nixos> {};
+%s
   motd = ''
 %s'';
 in
@@ -138,6 +165,19 @@ func replMain(cmd *cobra.Command, opts *cmdOpts.ReplOpts) error {
 			return err
 		}
 		nixosConfig = ref
+	} else if opts.File != "" {
+		configPath, err := utils.ResolveNixFilename(opts.File)
+		if err != nil {
+			log.Error(err)
+			return err
+		}
+
+		nixosConfig = &configuration.LegacyConfiguration{
+			Includes:        opts.NixPathIncludes,
+			ConfigPath:      configPath,
+			Attribute:       opts.Attr,
+			UseExplicitPath: true,
+		}
 	} else {
 		c, err := configuration.FindConfiguration(log, cfg, opts.NixPathIncludes)
 		if err != nil {
@@ -167,14 +207,28 @@ func replMain(cmd *cobra.Command, opts *cmdOpts.ReplOpts) error {
 
 func execLegacyRepl(c *configuration.LegacyConfiguration, impure bool) error {
 	motd := formatLegacyMotd()
-	expr := fmt.Sprintf(legacyReplExpr, motd)
+
+	var systemExpr string
+	if c.UseExplicitPath {
+		if c.Attribute != "" {
+			systemExpr = fmt.Sprintf(`systemFile = import "%s";
+  system = systemFile.%s;
+`, c.ConfigPath, c.Attribute)
+		} else {
+			systemExpr = fmt.Sprintf(`system = import "%s";
+`, c.ConfigPath)
+		}
+	} else {
+		systemExpr = `system = import <nixpkgs/nixos> {};
+`
+	}
+
+	expr := fmt.Sprintf(legacyReplExpr, systemExpr, motd)
 
 	argv := []string{"nix", "repl", "--expr", expr}
 	for _, v := range c.Includes {
 		argv = append(argv, "-I", v)
 	}
-
-	argv = append(argv, "-I", fmt.Sprintf("nixos-config=%s", c.ConfigPath))
 
 	if impure {
 		argv = append(argv, "--impure")
