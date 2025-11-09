@@ -1,7 +1,8 @@
 {pkgs ? import <nixpkgs> {}}: let
   flakeSelf = import ./flake-compat.nix;
+  inherit (pkgs.stdenv.hostPlatform) system;
 in {
-  inherit (flakeSelf.packages.${pkgs.system}) nixos nixosLegacy;
+  inherit (flakeSelf.packages.${system}) nixos nixosLegacy;
 
   # Do not use lib.importApply here for better error tracking, since
   # it causes an infinite recursion for a currently unknown reason.

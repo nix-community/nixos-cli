@@ -11,6 +11,8 @@
   cfg = config.services.nixos-cli;
   nixosCfg = config.system.nixos;
 
+  inherit (pkgs.stdenv.hostPlatform) system;
+
   inherit (lib) types;
 
   tomlFormat = pkgs.formats.toml {};
@@ -22,8 +24,8 @@ in {
       type = types.package;
       default =
         if useFlakePkg
-        then self.packages.${pkgs.system}.nixos
-        else self.packages.${pkgs.system}.nixosLegacy;
+        then self.packages.${system}.nixos
+        else self.packages.${system}.nixosLegacy;
       description = "Package to use for nixos-cli";
     };
 
