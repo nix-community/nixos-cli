@@ -207,4 +207,6 @@ type OptionOpts struct {
 type ReplOpts struct {
 	NixPathIncludes []string
 	FlakeRef        string
+	File            string
+	Attr            string
 }
