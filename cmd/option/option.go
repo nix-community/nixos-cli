@@ -9,12 +9,13 @@ import (
 
 	"github.com/nix-community/nixos-cli/internal/build"
 	"github.com/nix-community/nixos-cli/internal/cmd/nixopts"
-	"github.com/nix-community/nixos-cli/internal/cmd/opts"
-	"github.com/nix-community/nixos-cli/internal/cmd/utils"
+	cmdOpts "github.com/nix-community/nixos-cli/internal/cmd/opts"
+	cmdUtils "github.com/nix-community/nixos-cli/internal/cmd/utils"
 	"github.com/nix-community/nixos-cli/internal/configuration"
 	"github.com/nix-community/nixos-cli/internal/logger"
 	"github.com/nix-community/nixos-cli/internal/settings"
 	"github.com/nix-community/nixos-cli/internal/system"
+	"github.com/nix-community/nixos-cli/internal/utils"
 	"github.com/sahilm/fuzzy"
 	"github.com/spf13/cobra"
 	"github.com/water-sucks/optnix/option"
@@ -71,6 +72,9 @@ func OptionCommand() *cobra.Command {
 
 	if build.Flake() {
 		cmd.Flags().StringVarP(&opts.FlakeRef, "flake", "f", "", "Flake `ref` to explicitly load options from")
+	} else {
+		cmd.Flags().StringVar(&opts.File, "file", "", "File `path` to load NixOS configuration from")
+		cmd.Flags().StringVar(&opts.Attr, "attr", "", "Attribute `path` inside of file pointing to configuration")
 	}
 
 	nixopts.AddIncludesNixOption(&cmd, &opts.NixPathIncludes)
@@ -108,6 +112,19 @@ func optionMain(cmd *cobra.Command, opts *cmdOpts.OptionOpts) error {
 			return err
 		}
 		nixosConfig = ref
+	} else if opts.File != "" {
+		configPath, err := utils.ResolveNixFilename(opts.File)
+		if err != nil {
+			log.Error(err)
+			return err
+		}
+
+		nixosConfig = &configuration.LegacyConfiguration{
+			Includes:        opts.NixPathIncludes,
+			ConfigPath:      configPath,
+			Attribute:       opts.Attr,
+			UseExplicitPath: true,
+		}
 	} else {
 		c, err := configuration.FindConfiguration(log, cfg, opts.NixPathIncludes)
 		if err != nil {

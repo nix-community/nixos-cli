@@ -87,8 +87,20 @@ func (l *LegacyConfiguration) SetBuilder(builder system.CommandRunner) {
 }
 
 func (l *LegacyConfiguration) EvalAttribute(attr string) (*string, error) {
-	configAttr := fmt.Sprintf("config.%s", attr)
-	argv := []string{"nix-instantiate", "--eval", "<nixpkgs/nixos>", "-A", configAttr}
+	var argv []string
+	if l.UseExplicitPath {
+		var fullAttrPath strings.Builder
+		if l.Attribute != "" {
+			fullAttrPath.WriteString(l.Attribute)
+			fullAttrPath.WriteString(".")
+		}
+		fullAttrPath.WriteString("config.")
+		fullAttrPath.WriteString(attr)
+
+		argv = []string{"nix-instantiate", "--eval", l.ConfigPath, "-A", fullAttrPath.String()}
+	} else {
+		argv = []string{"nix-instantiate", "--eval", "<nixpkgs/nixos>", "-A", fmt.Sprintf("config.%s", attr)}
+	}
 
 	for _, v := range l.Includes {
 		argv = append(argv, "-I", v)
