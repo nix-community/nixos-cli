@@ -90,7 +90,8 @@ user must be used through SSH.
 
 If using a non-root user, the `--remote-root` flag must be used. This
 automatically escalates to `root` using the command defined in the
-`root_command` setting.
+`root_command` setting. If you wish not to enter a password, then deploy using a
+user that has the `NOPASSWD` `sudo` rule.
 
 In order to access remote machines, prefer using an SSH agent and keys. Password
 access is supported, but not recommended, and can be buggy. If you find any
@@ -160,6 +161,8 @@ The following environment variables influence `nixos-cli` behavior:
   flake-enabled, then `$NIXOS_CONFIG` _must_ point to a valid flake ref.
   Otherwise, it can point to a local Nix configuration file (i.e.
   `configuration.nix`) or directory containing a `default.nix`.
+
+Check `nixos-cli-env(5)` for a full list of available variables.
 
 ## Aliases
 
