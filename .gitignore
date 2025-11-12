@@ -2,8 +2,9 @@
 /result*
 /.direnv/
 
-# Binary destination from `make`
+# Binary destinations from `make`
 /nixos
+/activation-supervisor
 
 # For bubbletea log files
 *.log

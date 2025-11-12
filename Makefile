@@ -1,4 +1,5 @@
 APP_NAME := nixos
+SUPERVISOR_NAME := activation-supervisor
 BUILD_VAR_PKG := github.com/nix-community/nixos-cli/internal/build/vars
 
 VERSION ?= $(shell git describe --tags --always)
@@ -19,15 +20,23 @@ CGO_ENABLED ?= 0
 all: build
 
 .PHONY: build
-build:
+build: main supervisor
+
+.PHONY: main
+main:
 	@echo "building $(APP_NAME)..."
 	CGO_ENABLED=$(CGO_ENABLED) go build -o ./$(APP_NAME) -ldflags="$(LDFLAGS)" .
+
+.PHONY: supervisor
+supervisor:
+	@echo "building $(SUPERVISOR_NAME)..."
+	CGO_ENABLED=$(CGO_ENABLED) go build -o ./$(SUPERVISOR_NAME) -ldflags="$(LDFLAGS)" ./supervisor/
 
 .PHONY: clean
 clean:
 	@echo "cleaning up..."
 	go clean
-	rm -rf site/ man/
+	rm -rf ./$(APP_NAME) ./$(SUPERVISOR_NAME) site/ man/
 
 .PHONY: check
 check:
