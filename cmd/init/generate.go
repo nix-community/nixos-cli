@@ -315,7 +315,7 @@ func nixStringList(s []string) string {
 const (
 	fileSystemEntryKeyTemplate = `  fileSystems."%s" = {` + "\n"
 	fileSystemDeviceTemplate   = `    device = "%s";` + "\n"
-	fileSystemTypeTemplate     = `    type = "%s";` + "\n"
+	fileSystemTypeTemplate     = `    fsType = "%s";` + "\n"
 	fileSystemOptionTemplate   = `    options = [%s];` + "\n"
 
 	fileSystemLuksTemplate = `  boot.initrd.luks.devices."%s".device = "%s";` + "\n\n"
