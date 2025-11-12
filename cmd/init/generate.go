@@ -333,7 +333,7 @@ func generateFilesystemAttrset(filesystem *Filesystem) string {
 		_, _ = fsStr.WriteString(optionStr)
 	}
 
-	fsStr.WriteString("  }\n")
+	fsStr.WriteString("  };\n")
 
 	luks := filesystem.LUKSInformation
 	if luks != nil {
