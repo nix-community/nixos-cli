@@ -7,18 +7,70 @@ import (
 	"os"
 
 	"github.com/nix-community/nixos-cli/internal/activation"
-	"github.com/nix-community/nixos-cli/internal/generation"
 	"github.com/nix-community/nixos-cli/internal/logger"
 	"github.com/nix-community/nixos-cli/internal/system"
+	"github.com/spf13/cobra"
 	"golang.org/x/sys/unix"
 )
 
 const (
-	ACTIVATION_SUPERVISOR_LOCK  = "/run/nixos/activation-supervisor.lock"
-	ACTIVATION_DONE_SIGNAL_FILE = "/run/nixos/activation-done"
+	ACTIVATION_SUPERVISOR_LOCK = "/run/nixos/activation-supervisor.lock"
 )
 
-func run(opts *Args) error {
+type RunArgs struct {
+	Action             activation.SwitchToConfigurationAction
+	Specialisation     string
+	Verbose            bool
+	ProfileName        string
+	PreviousGeneration string
+}
+
+func RunCommand() *cobra.Command {
+	opts := RunArgs{}
+
+	cmd := &cobra.Command{
+		Use:   "run {switch|boot|test}",
+		Short: "Run switch-to-configuration script and start rollback watchdog",
+		Long:  "Run switch-to-configuration script and start rollback watchdog.",
+		Args: func(cmd *cobra.Command, args []string) error {
+			if err := cobra.ExactArgs(1)(cmd, args); err != nil {
+				return err
+			}
+
+			switch args[0] {
+			case "switch":
+				opts.Action = activation.SwitchToConfigurationActionSwitch
+			case "boot":
+				opts.Action = activation.SwitchToConfigurationActionBoot
+			case "test":
+				opts.Action = activation.SwitchToConfigurationActionTest
+			default:
+				return fmt.Errorf("expected one of switch|boot|test, got %s", args[0])
+			}
+
+			return nil
+		},
+		ValidArgs: []string{"switch", "boot", "test"},
+		Run: func(cmd *cobra.Command, args []string) {
+			err := runMain(&opts)
+			if err != nil {
+				os.Exit(1)
+			}
+		},
+	}
+
+	cmd.Flags().StringVar(&opts.PreviousGeneration, "previous-gen", "", "Previous generation `path` to roll back to")
+
+	cmd.Flags().StringVarP(&opts.ProfileName, "profile", "p", "system", "System profile `name` to use")
+	cmd.Flags().StringVarP(&opts.Specialisation, "specialisation", "s", "", "Activate specialisation `name`")
+	cmd.Flags().BoolVarP(&opts.Verbose, "verbose", "v", false, "Show verbose logging")
+
+	_ = cmd.MarkFlagRequired("previous-gen")
+
+	return cmd
+}
+
+func runMain(opts *RunArgs) error {
 	var log logger.Logger = logger.NewConsoleLogger()
 	if syslogLogger, err := logger.NewSyslogLogger("nixos-cli-activation-supervisor"); err == nil {
 		log = logger.NewMultiLogger(log, syslogLogger)
@@ -94,15 +146,6 @@ func run(opts *Args) error {
 		specialisation = ""
 	}
 
-	// In case the file itself is not removed by the invoking
-	// system, make sure it is removed at the end, and also
-	// remove it now to prevent the sender from thinking
-	// activation is finished prematurely.
-	_ = os.RemoveAll(ACTIVATION_DONE_SIGNAL_FILE)
-	defer func() {
-		_ = os.RemoveAll(ACTIVATION_DONE_SIGNAL_FILE)
-	}()
-
 	if err := activation.SwitchToConfiguration(s, toplevel, opts.Action, &activation.SwitchToConfigurationOptions{
 		InstallBootloader: false,
 		Specialisation:    specialisation,
@@ -116,49 +159,7 @@ func run(opts *Args) error {
 		return err
 	}
 
-	return nil
-}
-
-func rollback(s system.System, action activation.SwitchToConfigurationAction, profileName string, generationLink string) error {
-	log := s.Logger()
-
-	profileDirectory := generation.GetProfileDirectoryFromName(profileName)
-
-	// Rollback of the system profile should only happen for when an actual
-	// generation was created.
-	//
-	// Otherwise, do not rollback the actual system profile. Just run the previous
-	// switch.
-	if action == activation.SwitchToConfigurationActionBoot || action == activation.SwitchToConfigurationActionSwitch {
-		rollbackArgv := []string{"nix-env", "-p", profileDirectory, "--rollback"}
-		rollbackCmd := system.NewCommand(rollbackArgv[0], rollbackArgv[1:]...)
-
-		_, err := s.Run(rollbackCmd)
-		if err != nil {
-			log.Errorf("failed to run rollback: %v", err)
-			return err
-		}
-	}
-
-	specialisation := ""
-	if defaultSpecialisation, err := activation.FindDefaultSpecialisationFromConfig(s, generationLink); err != nil {
-		log.Warnf("unable to find default specialisation from config: %v", err)
-	} else {
-		specialisation = defaultSpecialisation
-	}
-
-	if !activation.VerifySpecialisationExists(s, generationLink, specialisation) {
-		log.Warnf("specialisation '%v' does not exist", specialisation)
-		log.Warn("using base configuration without specialisations")
-		specialisation = ""
-	}
-
-	if err := activation.SwitchToConfiguration(s, generationLink, action, &activation.SwitchToConfigurationOptions{
-		Specialisation: specialisation,
-	}); err != nil {
-		log.Errorf("failed to run switch-to-configuration: %v", err)
-		return err
-	}
+	// TODO: exec watchdog cmd
 
 	return nil
 }

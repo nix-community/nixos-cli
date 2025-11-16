@@ -1,12 +1,15 @@
 package activation
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/nix-community/nixos-cli/internal/constants"
 	"github.com/nix-community/nixos-cli/internal/generation"
@@ -260,4 +263,25 @@ func SwitchToConfiguration(s system.CommandRunner, generationLocation string, ac
 	cmd.SetEnv("NIXOS_CLI_ATTEMPTING_ACTIVATION", "1")
 	_, err := s.Run(cmd)
 	return err
+}
+
+// Create an activation trigger path name from a NixOS system
+// closure's location.
+//
+// Used for remote activation.
+func MakeActivationTriggerPath(systemLocation string) string {
+	// Obtain the cryptographic hash + nixos system closure name
+	basename := filepath.Base(systemLocation)
+
+	hash, found := strings.CutSuffix(basename, "-")
+	if !found {
+		// Use the SHA256 hash of the whole path if the hash
+		// part in the filename is not found. This should be
+		// rare, if it happens at all, so this ensures collisions
+		// do not happen most of the time.
+		hashedBasename := sha256.Sum256([]byte(systemLocation))
+		hash = hex.EncodeToString(hashedBasename[:])
+	}
+
+	return filepath.Join(constants.NixOSActivationDirectory, fmt.Sprintf("nixos-cli-trigger-%s", hash))
 }
