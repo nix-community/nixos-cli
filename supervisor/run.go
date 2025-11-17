@@ -10,7 +10,6 @@ import (
 	"github.com/nix-community/nixos-cli/internal/logger"
 	"github.com/nix-community/nixos-cli/internal/system"
 	"github.com/spf13/cobra"
-	"golang.org/x/sys/unix"
 )
 
 const (
@@ -52,7 +51,7 @@ func RunCommand() *cobra.Command {
 		},
 		ValidArgs: []string{"switch", "boot", "test"},
 		Run: func(cmd *cobra.Command, args []string) {
-			err := runMain(&opts)
+			err := runMain(cmd, &opts)
 			if err != nil {
 				os.Exit(1)
 			}
@@ -70,8 +69,55 @@ func RunCommand() *cobra.Command {
 	return cmd
 }
 
-func runMain(opts *RunArgs) error {
-	var log logger.Logger = logger.NewConsoleLogger()
+// Execute the watchdog command using systemd-run.
+//
+// This ensures that even if the activation process itself is killed,
+// that the watchdog continues to run.
+//
+// Once the process starts up, this returns.
+func execWatchdog(s system.System, opts *RunArgs) error {
+	log := s.Logger()
+
+	exePath, err := os.Executable()
+	if err != nil {
+		return err
+	}
+
+	argv := []string{
+		"systemd-run",
+		"-E", RUNNING_ACTIVATION_SUPERVISOR,
+		"-E", "LOCALE_ARCHIVE",
+		"-E", "NIXOS_INSTALL_BOOTLOADER",
+		"-E", "TOPLEVEL",
+		"--collect",
+		"--no-ask-password",
+		"--no-block",
+		"--quiet",
+		"--service-type=exec",
+		"--unit=nixos-cli-activation-supervisor-watchdog",
+		exePath, "watchdog", opts.Action.String(),
+		"--previous-gen", opts.PreviousGeneration,
+	}
+	if opts.ProfileName != "system" {
+		argv = append(argv, "-p", opts.ProfileName)
+	}
+	if opts.Specialisation != "" {
+		argv = append(argv, "-s", opts.Specialisation)
+	}
+	if opts.Verbose {
+		argv = append(argv, "-v")
+	}
+
+	log.CmdArray(argv)
+
+	cmd := system.NewCommand(argv[0], argv[1:]...)
+	_, err = s.Run(cmd)
+	return err
+}
+
+func runMain(cmd *cobra.Command, opts *RunArgs) error {
+	log := logger.FromContext(cmd.Context())
+
 	if syslogLogger, err := logger.NewSyslogLogger("nixos-cli-activation-supervisor"); err == nil {
 		log = logger.NewMultiLogger(log, syslogLogger)
 	} else {
@@ -83,46 +129,11 @@ func runMain(opts *RunArgs) error {
 
 	s := system.NewLocalSystem(log)
 
-	if !s.IsNixOS() {
-		err := fmt.Errorf("the activation supervisor is not supported on non-NixOS systems")
-		log.Error(err)
-		return err
-	}
-
-	if os.Geteuid() != 0 {
-		err := fmt.Errorf("this command must be ran as root")
-		log.Errorf("%s", err)
-		return err
-	}
-
-	if os.Getenv("NIXOS_CLI_RUNNING_ACTIVATION_SUPERVISOR") != "1" {
-		err := fmt.Errorf("the activation supervisor is not meant to be ran directly by users")
-		log.Error(err)
-		return err
-	}
-
-	err := os.MkdirAll("/run/nixos", 0o755)
+	unlockProcess, err := acquireProcessLock(log, ACTIVATION_SUPERVISOR_LOCK)
 	if err != nil {
-		log.Errorf("failed to create /run/nixos: %s", err)
 		return err
 	}
-
-	lockfile, err := os.OpenFile(ACTIVATION_SUPERVISOR_LOCK, os.O_CREATE|os.O_RDONLY, 0o600)
-	if err != nil {
-		log.Errorf("failed to create activation lockfile %s: %s", ACTIVATION_SUPERVISOR_LOCK, err)
-		return err
-	}
-	defer func() {
-		_ = lockfile.Close()
-		_ = os.Remove(ACTIVATION_SUPERVISOR_LOCK)
-	}()
-
-	if err := unix.Flock(int(lockfile.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
-		log.Errorf("failed to lock %s", ACTIVATION_SUPERVISOR_LOCK)
-		log.Info("is another activation supervisor process running?")
-		return err
-	}
-	defer func() { _ = unix.Flock(int(lockfile.Fd()), unix.LOCK_UN) }()
+	defer unlockProcess()
 
 	toplevel := os.Getenv("TOPLEVEL")
 	if toplevel == "" {
@@ -159,7 +170,11 @@ func runMain(opts *RunArgs) error {
 		return err
 	}
 
-	// TODO: exec watchdog cmd
+	err = execWatchdog(s, opts)
+	if err != nil {
+		log.Errorf("failed to run watchdog: %v", err)
+		return err
+	}
 
 	return nil
 }

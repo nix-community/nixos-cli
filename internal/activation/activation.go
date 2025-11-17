@@ -273,7 +273,7 @@ func MakeActivationTriggerPath(systemLocation string) string {
 	// Obtain the cryptographic hash + nixos system closure name
 	basename := filepath.Base(systemLocation)
 
-	hash, found := strings.CutSuffix(basename, "-")
+	hash, _, found := strings.Cut(basename, "-")
 	if !found {
 		// Use the SHA256 hash of the whole path if the hash
 		// part in the filename is not found. This should be
@@ -283,5 +283,26 @@ func MakeActivationTriggerPath(systemLocation string) string {
 		hash = hex.EncodeToString(hashedBasename[:])
 	}
 
-	return filepath.Join(constants.NixOSActivationDirectory, fmt.Sprintf("nixos-cli-trigger-%s", hash))
+	return filepath.Join(constants.NixOSActivationDirectory, "trigger", hash)
+}
+
+// Create the activation runtime directories with the required
+// structure.
+//
+// This creates the trigger directory as sticky, in case non-root users
+// need to activate things.
+func EnsureActivationDirectoryExists() error {
+	err := os.MkdirAll(constants.NixOSActivationDirectory, 0o755)
+	if err != nil {
+		return fmt.Errorf("failed to create %s: %s", constants.NixOSActivationDirectory, err)
+	}
+
+	triggerDirectory := filepath.Join(constants.NixOSActivationDirectory, "trigger")
+
+	err = os.MkdirAll(triggerDirectory, 0o1755)
+	if err != nil {
+		return fmt.Errorf("failed to create %s: %s", triggerDirectory, err)
+	}
+
+	return nil
 }
