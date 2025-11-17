@@ -5,8 +5,14 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/signal"
+	"path/filepath"
+	"syscall"
+	"time"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/nix-community/nixos-cli/internal/activation"
+	"github.com/nix-community/nixos-cli/internal/constants"
 	"github.com/nix-community/nixos-cli/internal/logger"
 	"github.com/nix-community/nixos-cli/internal/system"
 	"github.com/spf13/cobra"
@@ -69,14 +75,10 @@ created to signal success within a period of time.`,
 	return cmd
 }
 
-func watchdogMain(cmd *cobra.Command, opts *WatchdogArgs) error {
+func watchdogMain(cmd *cobra.Command, opts *WatchdogArgs) (err error) {
+	// No need to use the syslogger here, since it is ran in a transient
+	// systemd service.
 	log := logger.FromContext(cmd.Context())
-
-	if syslogLogger, err := logger.NewSyslogLogger("nixos-cli-activation-watchdog"); err == nil {
-		log = logger.NewMultiLogger(log, syslogLogger)
-	} else {
-		log.Warnf("failed to initialize syslog logger: %v", err)
-	}
 	if opts.Verbose {
 		log.SetLogLevel(logger.LogLevelDebug)
 	}
@@ -85,16 +87,83 @@ func watchdogMain(cmd *cobra.Command, opts *WatchdogArgs) error {
 
 	unlockProcess, err := acquireProcessLock(log, WATCHDOG_LOCK)
 	if err != nil {
-		return err
+		return
 	}
 	defer unlockProcess()
 
 	toplevel := os.Getenv("TOPLEVEL")
 	if toplevel == "" {
-		err := fmt.Errorf("$TOPLEVEL is not set")
+		err = fmt.Errorf("$TOPLEVEL is not set")
 		log.Error(err)
-		return err
+		return
 	}
 
-	return nil
+	triggerDirectory := filepath.Join(constants.NixOSActivationDirectory, "trigger")
+	triggerPath := activation.MakeActivationTriggerPath(toplevel)
+
+	defer func() {
+		if err != nil {
+			log.Info("rolling back configuration to %s", opts.PreviousGeneration)
+			err = rollback(s, opts.Action, opts.ProfileName, opts.PreviousGeneration)
+			if err != nil {
+				log.Errorf("failed to rollback configuration: %v", err)
+				log.Info("you are on your own!")
+			}
+		}
+	}()
+
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		log.Errorf("failed to create file watcher: %v", err)
+		return
+	}
+	defer func() { _ = watcher.Close() }()
+
+	if err = watcher.Add(triggerDirectory); err != nil {
+		log.Errorf("failed to add trigger path to file watcher: %s", err)
+		return
+	}
+
+	// Always remove the file before and afterwards, to prevent
+	// false positives.
+	_ = os.RemoveAll(triggerPath)
+	defer func() {
+		_ = os.RemoveAll(triggerPath)
+	}()
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
+	defer func() {
+		signal.Stop(sigCh)
+		close(sigCh)
+	}()
+
+	rollbackTimer := time.After(30 * time.Second)
+
+	log.Debugf("waiting for file %s to get created", triggerPath)
+
+waitloop:
+	for {
+		select {
+		case c := <-sigCh:
+			err = fmt.Errorf("caught signal %s", c.String())
+			log.Error(err)
+			break waitloop
+		case <-rollbackTimer:
+			err = fmt.Errorf("timeout expired and no acknowledgement was received")
+			log.Error(err)
+			break waitloop
+		case event, ok := <-watcher.Events:
+			if !ok {
+				return err
+			}
+
+			if event.Name == triggerPath && event.Has(fsnotify.Create) {
+				log.Debug("acknowledgement received, rollback is not necessary")
+				break waitloop
+			}
+		}
+	}
+
+	return err
 }

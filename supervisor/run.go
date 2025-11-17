@@ -74,7 +74,9 @@ func RunCommand() *cobra.Command {
 // This ensures that even if the activation process itself is killed,
 // that the watchdog continues to run.
 //
-// Once the process starts up, this returns.
+// Once the process starts up, this returns immediately in order
+// to let the activation run process exit and signal success
+// to the invoker.
 func execWatchdog(s system.System, opts *RunArgs) error {
 	log := s.Logger()
 
@@ -89,6 +91,7 @@ func execWatchdog(s system.System, opts *RunArgs) error {
 		"-E", "LOCALE_ARCHIVE",
 		"-E", "NIXOS_INSTALL_BOOTLOADER",
 		"-E", "TOPLEVEL",
+		"-E", "PATH",
 		"--collect",
 		"--no-ask-password",
 		"--no-block",
