@@ -26,6 +26,7 @@ func GetProfileDirectoryFromName(profile string) string {
 }
 
 type Generation struct {
+	Path            string    `json:"path"`
 	Number          uint64    `json:"number"`
 	CreationDate    time.Time `json:"creation_date"`
 	IsCurrent       bool      `json:"is_current"`
@@ -56,7 +57,13 @@ func (e *GenerationReadError) Error() string {
 }
 
 func GenerationFromDirectory(s system.System, generationDirname string, number uint64) (*Generation, error) {
+	generationPath, err := s.FS().RealPath(generationDirname)
+	if err != nil {
+		generationPath = generationDirname
+	}
+
 	info := &Generation{
+		Path:            generationPath,
 		Number:          number,
 		CreationDate:    time.Time{},
 		IsCurrent:       false,

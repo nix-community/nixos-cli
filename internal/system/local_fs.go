@@ -52,6 +52,10 @@ func (LocalFilesystem) ReadDir(path string) ([]os.FileInfo, error) {
 	return entries, nil
 }
 
+func (LocalFilesystem) RealPath(path string) (string, error) {
+	return filepath.EvalSymlinks(path)
+}
+
 func (LocalFilesystem) Glob(pattern string) ([]string, error) {
 	return filepath.Glob(pattern)
 }

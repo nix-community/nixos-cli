@@ -9,5 +9,6 @@ type Filesystem interface {
 	ReadFile(path string) ([]byte, error)
 	CreateFile(path string) error
 	ReadDir(path string) ([]os.FileInfo, error)
+	RealPath(path string) (string, error)
 	Glob(pattern string) ([]string, error)
 }

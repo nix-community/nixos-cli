@@ -1,18 +1,28 @@
 package activation
 
 import (
+	"crypto/sha256"
+	_ "embed"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/nix-community/nixos-cli/internal/constants"
 	"github.com/nix-community/nixos-cli/internal/generation"
 	"github.com/nix-community/nixos-cli/internal/logger"
 	"github.com/nix-community/nixos-cli/internal/settings"
 	"github.com/nix-community/nixos-cli/internal/system"
+)
+
+const (
+	ACTIVATION_LOCKFILE = "/run/nixos/switch-to-configuration.lock"
+	SWITCH_SUCCESS_PATH = "/run/nixos/switch-success"
 )
 
 // Parse the generation's `nixos-cli` configuration to find the default specialisation
@@ -264,4 +274,203 @@ func SwitchToConfiguration(s system.CommandRunner, generationLocation string, ac
 
 	_, err := s.Run(cmd)
 	return err
+}
+
+// Create an activation trigger path name from a NixOS system
+// closure's location.
+//
+// Used for remote activation.
+func MakeActivationTriggerPath(systemLocation string) string {
+	// Obtain the cryptographic hash + nixos system closure name
+	basename := filepath.Base(systemLocation)
+
+	hash, _, found := strings.Cut(basename, "-")
+	if !found {
+		// Use the SHA256 hash of the whole path if the hash
+		// part in the filename is not found. This should be
+		// rare, if it happens at all, so this ensures collisions
+		// do not happen most of the time.
+		hashedBasename := sha256.Sum256([]byte(systemLocation))
+		hash = hex.EncodeToString(hashedBasename[:])
+	}
+
+	return filepath.Join(constants.NixOSActivationDirectory, "trigger", hash)
+}
+
+// Create the activation runtime directories with the required
+// structure.
+//
+// This creates the trigger directory as sticky, in case non-root users
+// need to activate things.
+//
+// NOTE: this trigger directory is world-writable to enable non-root users
+// to create files in it. This will need to be revisited if the ACK
+// trigger needs to be secure in the future.
+func EnsureActivationDirectoryExists() error {
+	err := os.MkdirAll(constants.NixOSActivationDirectory, 0o755)
+	if err != nil {
+		return fmt.Errorf("failed to create %s: %s", constants.NixOSActivationDirectory, err)
+	}
+
+	triggerDirectory := filepath.Join(constants.NixOSActivationDirectory, "trigger")
+
+	err = os.MkdirAll(triggerDirectory, 0o777|os.ModeSticky)
+	if err != nil {
+		return fmt.Errorf("failed to create %s: %s", triggerDirectory, err)
+	}
+
+	err = os.Chmod(triggerDirectory, 0o777|os.ModeSticky)
+	if err != nil {
+		return fmt.Errorf("failed to set permissions for %s: %s", triggerDirectory, err)
+	}
+
+	return nil
+}
+
+type RunActivationSupervisorOptions struct {
+	ProfileName       string
+	InstallBootloader bool
+	Specialisation    string
+	UseRootCommand    bool
+	RootCommand       string
+
+	PreviousSpecialisation   string
+	RollbackProfileOnFailure bool
+}
+
+//go:embed supervisor.sh
+var activationSupervisorScript string
+
+func RunActivationSupervisor(
+	s system.System,
+	systemLocation string,
+	action SwitchToConfigurationAction,
+	opts *RunActivationSupervisorOptions,
+) error {
+	log := s.Logger()
+
+	argv := []string{
+		"systemd-run",
+		"--collect",
+		"--no-ask-password",
+		"--pipe",
+		"--quiet",
+		"--service-type=exec",
+		"--unit=nixos-cli-activation-supervisor",
+		"--wait",
+		"-E", "PATH",
+		"-E", fmt.Sprintf("TOPLEVEL=%s", systemLocation),
+		"-E", fmt.Sprintf("ACTION=%s", action.String()),
+	}
+
+	if opts.Specialisation != "" {
+		argv = append(argv, "-E", fmt.Sprintf("SPECIALISATION=%s", opts.Specialisation))
+	}
+
+	if opts.PreviousSpecialisation != "" {
+		argv = append(argv, "-E", fmt.Sprintf("PREVIOUS_SPECIALISATION=%s", opts.PreviousSpecialisation))
+	}
+
+	if opts.ProfileName != "" {
+		profileDirectory := generation.GetProfileDirectoryFromName(opts.ProfileName)
+		argv = append(argv, "-E", fmt.Sprintf("PROFILE=%s", profileDirectory))
+	}
+
+	successTrigger := MakeActivationTriggerPath(systemLocation)
+	argv = append(argv, "-E", fmt.Sprintf("ACK_TRIGGER_PATH=%s", successTrigger))
+
+	if opts.RollbackProfileOnFailure {
+		argv = append(argv, "-E", "ROLLBACK_PROFILE_ON_FAILURE=1")
+	}
+
+	argv = append(argv, "-E", "LOCALE_ARCHIVE")
+
+	if opts.InstallBootloader {
+		argv = append(argv, "-E", "NIXOS_INSTALL_BOOTLOADER=1")
+	}
+
+	if log.GetLogLevel() == logger.LogLevelDebug {
+		argv = append(argv, "-E", "VERBOSE=1")
+	}
+
+	argv = append(argv, "/bin/sh", "-c", activationSupervisorScript)
+
+	if os.Getenv("NIXOS_CLI_DEBUG_MODE") != "" {
+		log.CmdArray(argv)
+	} else {
+		displayArgv := append([]string(nil), argv[0:len(argv)-1]...)
+		displayArgv = append(displayArgv, "<ACTIVATION-SCRIPT>")
+		log.CmdArray(displayArgv)
+	}
+
+	cmd := system.NewCommand(argv[0], argv[1:]...)
+	if opts.UseRootCommand {
+		cmd.RunAsRoot(opts.RootCommand)
+	}
+
+	activationComplete := make(chan error, 1)
+	go func() {
+		_, err := s.Run(cmd)
+		activationComplete <- err
+	}()
+
+	successTriggerCheckTimer := time.NewTicker(500 * time.Millisecond)
+	defer successTriggerCheckTimer.Stop()
+
+	successDetected := false
+	for !successDetected {
+		select {
+		case err := <-activationComplete:
+			// Check one more time if a success trigger has been created, in case
+			// the activation error returned before the ticker.
+			// This should be almost impossible, but just in case it happens, the
+			// final check is here.
+			if _, statErr := s.FS().Stat(SWITCH_SUCCESS_PATH); statErr == nil {
+				successDetected = true
+				break
+			}
+
+			// At this point, the supervisor exited before the success file appeared,
+			// so the switch has either failed, or a transport error has occurred
+			// and we need to re-initiate the SSH connection.
+			// FIXME: we need to still try and create the ACK file
+			// in case the connection was terminated, with a new
+			// SSH client.
+			if err != nil {
+				return fmt.Errorf("activation supervisor exited early: %w", err)
+			}
+			return fmt.Errorf("activation supervisor exited without success signal")
+		case <-successTriggerCheckTimer.C:
+			// Check for the existence of the switch success trigger.
+			// If it exists, then the switch has completed
+			// and we can proceed to signaling the watchdog.
+			_, err := s.FS().Stat(SWITCH_SUCCESS_PATH)
+			if err == nil {
+				successDetected = true
+				break
+			}
+			if errors.Is(err, os.ErrNotExist) {
+				continue
+			}
+			return fmt.Errorf("failed checking success file: %w", err)
+		}
+	}
+
+	// TODO: reconnect system connection first if SSH was restarted
+
+	err := s.FS().CreateFile(successTrigger)
+	if err != nil {
+		log.Errorf("failed to create %v on remote system: %v", successTrigger, err)
+	}
+
+	// Wait for the watchdog to either rollback or finish.
+	// If the SSH connection is broken, then this case
+	// cannot be hit because the connection was
+	// already terminated with a broken pipe.
+	err = <-activationComplete
+	if err != nil {
+		return fmt.Errorf("activation supervisor exited with error: %v", err)
+	}
+
+	return nil
 }
