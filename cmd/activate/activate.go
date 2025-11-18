@@ -7,6 +7,7 @@ import (
 	"github.com/nix-community/nixos-cli/internal/activation"
 	cmdOpts "github.com/nix-community/nixos-cli/internal/cmd/opts"
 	cmdUtils "github.com/nix-community/nixos-cli/internal/cmd/utils"
+	"github.com/nix-community/nixos-cli/internal/logger"
 	"github.com/spf13/cobra"
 )
 
@@ -54,6 +55,17 @@ func ActivateCommand() *cobra.Command {
 			}
 
 			return results, cobra.ShellCompDirectiveNoFileComp
+		},
+		PreRun: func(cmd *cobra.Command, args []string) {
+			ctx := cmd.Context()
+			log := logger.FromContext(ctx)
+
+			if opts.Verbose {
+				log.SetLogLevel(logger.LogLevelDebug)
+			}
+
+			ctx = logger.WithLogger(ctx, log)
+			cmd.SetContext(ctx)
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return cmdUtils.CommandErrorHandler(activateMain(cmd, &opts))
