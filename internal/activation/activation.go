@@ -17,6 +17,10 @@ import (
 	"github.com/nix-community/nixos-cli/internal/system"
 )
 
+const (
+	RUNNING_ACTIVATION_SUPERVISOR = "NIXOS_CLI_RUNNING_ACTIVATION_SUPERVISOR"
+)
+
 // Parse the generation's `nixos-cli` configuration to find the default specialisation
 // for that generation.
 func FindDefaultSpecialisationFromConfig(s system.System, generationDirname string) (string, error) {
@@ -268,6 +272,82 @@ func EnsureActivationDirectoryExists() error {
 	err = os.MkdirAll(triggerDirectory, 0o1755)
 	if err != nil {
 		return fmt.Errorf("failed to create %s: %s", triggerDirectory, err)
+	}
+
+	return nil
+}
+
+type RunActivationSupervisorOptions struct {
+	ProfileName       string
+	InstallBootloader bool
+	Specialisation    string
+	UseRootCommand    bool
+	RootCommand       string
+}
+
+func RunActivationSupervisor(
+	s system.System,
+	generationLocation string,
+	action SwitchToConfigurationAction,
+	opts *RunActivationSupervisorOptions,
+) error {
+	log := s.Logger()
+
+	exePath := filepath.Join(generationLocation, "bin", "activation-supervisor")
+
+	currentGeneration, err := s.FS().ReadLink(constants.CurrentSystem)
+	if err != nil {
+		return err
+	}
+
+	argv := []string{
+		"systemd-run",
+		"--collect",
+		"--no-ask-password",
+		"--pipe",
+		"--quiet",
+		"--service-type=exec",
+		"--unit=nixos-cli-activation-supervisor-run",
+		"--wait",
+		"-E", "LOCALE_ARCHIVE",
+		"-E", fmt.Sprintf("%s=1", RUNNING_ACTIVATION_SUPERVISOR),
+	}
+
+	if opts.InstallBootloader {
+		argv = append(argv, "-E", "NIXOS_INSTALL_BOOTLOADER=1")
+	}
+
+	argv = append(argv, exePath, "run", action.String(), "--previous-gen", currentGeneration)
+
+	if opts.ProfileName != "" && opts.ProfileName != "system" {
+		argv = append(argv, "-p", opts.ProfileName)
+	}
+
+	if opts.Specialisation != "" {
+		argv = append(argv, "-s", opts.Specialisation)
+	}
+
+	if log.GetLogLevel() == logger.LogLevelDebug {
+		argv = append(argv, "-v")
+	}
+
+	log.CmdArray(argv)
+
+	cmd := system.NewCommand(argv[0], argv[1:]...)
+	if opts.UseRootCommand {
+		cmd.RunAsRoot(opts.RootCommand)
+	}
+
+	_, err = s.Run(cmd)
+	if err != nil {
+		return fmt.Errorf("activation supervisor exited abnormally: %v", err)
+	}
+
+	triggerPath := MakeActivationTriggerPath(generationLocation)
+
+	err = s.FS().CreateFile(triggerPath)
+	if err != nil {
+		log.Errorf("failed to create acknowledgement file on remote system: %v", err)
 	}
 
 	return nil
