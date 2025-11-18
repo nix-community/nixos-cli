@@ -29,4 +29,4 @@ jobs:
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
 
       - name: Build Nix packages
-        run: nix build .#{nixos,nixosLegacy}
+        run: nix build .#{nixos,nixosLegacy,activation-supervisor}
