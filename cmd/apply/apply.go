@@ -235,7 +235,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 	} else if opts.BuildImage != "" {
 		buildType = &configuration.ImageBuild{Variant: opts.BuildImage}
 	} else {
-		buildType = &configuration.SystemBuild{Activate: !opts.NoActivate && !opts.NoBoot}
+		buildType = &configuration.SystemBuild{Activate: !opts.NoActivate || !opts.NoBoot}
 	}
 
 	// The local host may need to re-execute as root in order
