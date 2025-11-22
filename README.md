@@ -44,6 +44,27 @@ In order to build both packages at the same time, run
 Legacy-style `nix-build` and `nix-shell` can also be used; this uses
 `flake-compat` under the hood.
 
+### Tests
+
+A collection of NixOS integration tests, created using
+`pkgs.testers.runNixOSTest` is available in [nix/tests](./nix/tests). They are
+also exposed as flake check attributes.
+
+To run a particular test using flakes, run
+`nix build .#checks.<arch>.<test-name>`.
+
+If not using the flake, invoke `nix-build` directly using
+`nix-build -A <test-name>` to run a test.
+
+Large features with a significant feature scope should likely have corresponding
+NixOS tests for them, so create more as needed. When creating a test, use a
+suffix `.test.nix` and place it in `./nix/tests`, and it will be picked up as a
+check automatically based on the filename.
+
+Since these tests are quite expensive to run, passing them is not an automatic
+CI requirement, but care should be taken to not fail the tests in this
+directory, and pull requests will be rejected if they are not fixed.
+
 ### Documentation
 
 Documentation is split into two parts:
