@@ -1,7 +1,6 @@
 {
   lib,
   buildGoModule,
-  nix-gitignore,
   installShellFiles,
   stdenv,
   scdoc,
@@ -11,7 +10,19 @@
 buildGoModule (finalAttrs: {
   pname = "nixos-cli";
   version = "0.15.0-dev";
-  src = nix-gitignore.gitignoreSource [] ../.;
+
+  src = lib.fileset.toSource {
+    root = ../.;
+    fileset = lib.fileset.unions [
+      ../go.mod
+      ../go.sum
+      ../Makefile
+      ../main.go
+      ../cmd
+      ../doc
+      ../internal
+    ];
+  };
 
   vendorHash = "sha256-I04cLEXLTRbxxCBemj4J6JzrtDaUQS0TuZZ8Fa0EZBk=";
 
