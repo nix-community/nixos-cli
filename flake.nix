@@ -22,6 +22,10 @@
     lib = inputs.nixpkgs.lib;
   in
     flake-parts.lib.mkFlake {inherit inputs;} {
+      imports = [
+        ./nix/tests/flake-module.nix
+      ];
+
       systems = lib.systems.flakeExposed;
 
       perSystem = {
