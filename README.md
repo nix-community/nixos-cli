@@ -41,6 +41,9 @@ into this Nix shell on changing to this directory.
 In order to build both packages at the same time, run
 `nix build .#{nixos,nixosLegacy}`.
 
+Legacy-style `nix-build` and `nix-shell` can also be used; this uses
+`flake-compat` under the hood.
+
 ### Documentation
 
 Documentation is split into two parts:
@@ -84,7 +87,7 @@ suffix), and the very next commit will re-introduce the suffix.
 Once a tag is created and pushed, create a GitHub release off this tag.
 
 The version number is managed inside the Nix derivation at
-[package.nix](./package.nix).
+[package.nix](./nix/package.nix).
 
 ### CI
 
