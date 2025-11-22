@@ -191,13 +191,28 @@ func optionMain(cmd *cobra.Command, opts *cmdOpts.OptionOpts) error {
 
 	if !opts.NonInteractive {
 		spinner.Stop()
+
+		// Currently, optnix itself can take multiple "scopes"
+		// that can use different options and evaluators.
+		//
+		// We are only using the current NixOS system's options,
+		// so it makes sense to only define one scope and use
+		// it here.
 		return optionTUI.OptionTUI(optionTUI.OptionTUIArgs{
-			Options:      options,
-			ScopeName:    "nixos",
-			MinScore:     minScore,
-			DebounceTime: cfg.Option.DebounceTime,
-			Evaluator:    evaluator,
-			InitialInput: opts.OptionInput,
+			Scopes: []option.Scope{
+				{
+					Name:        "nixos",
+					Description: "NixOS options for this system",
+					Loader: func() (option.NixosOptionSource, error) {
+						return options, nil
+					},
+					Evaluator: evaluator,
+				},
+			},
+			SelectedScopeName: "nixos",
+			MinScore:          minScore,
+			DebounceTime:      cfg.Option.DebounceTime,
+			InitialInput:      opts.OptionInput,
 		})
 	}
 
