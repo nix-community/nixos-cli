@@ -21,3 +21,13 @@ func (LocalFilesystem) ReadFile(path string) ([]byte, error) {
 func (LocalFilesystem) MkdirAll(path string, perm os.FileMode) error {
 	return os.MkdirAll(path, perm)
 }
+
+func (LocalFilesystem) CreateFile(path string) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+
+	_ = f.Close()
+	return nil
+}

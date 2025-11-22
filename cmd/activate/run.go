@@ -365,9 +365,8 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 		return err
 	}
 
-	err = os.MkdirAll("/run/nixos", 0o755)
-	if err != nil {
-		log.Errorf("failed to create /run/nixos: %s", err)
+	if err := activation.EnsureActivationDirectoryExists(); err != nil {
+		log.Error(err)
 		return err
 	}
 

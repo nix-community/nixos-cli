@@ -615,16 +615,38 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 		panic("unknown switch to configuration action to take, this is a bug")
 	}
 
-	err = activation.SwitchToConfiguration(targetHost, resultLocation, stcAction, &activation.SwitchToConfigurationOptions{
-		InstallBootloader: opts.InstallBootloader,
-		Specialisation:    specialisation,
-		UseRootCommand:    opts.RemoteRoot && targetHost.IsRemote(),
-		RootCommand:       cfg.RootCommand,
-	})
-	if err != nil {
-		rollbackProfile = true
-		log.Errorf("failed to switch to configuration: %v", err)
-		return err
+	useActivationSupervisor := shouldUseActivationSupervisor(cfg, targetHost, stcAction, resultLocation)
+	useRemoteRootForActivation := opts.RemoteRoot && targetHost.IsRemote()
+
+	if useActivationSupervisor {
+		// Let the supervisor handle the rollback if it exists.
+		rollbackProfile = false
+		err = activation.RunActivationSupervisor(targetHost, resultLocation, stcAction, &activation.RunActivationSupervisorOptions{
+			ProfileName:       opts.ProfileName,
+			InstallBootloader: opts.InstallBootloader,
+			Specialisation:    specialisation,
+			UseRootCommand:    useRemoteRootForActivation,
+			RootCommand:       cfg.RootCommand,
+		})
+		if err != nil {
+			log.Error("", err)
+			log.Warn("the target system should roll back soon")
+			return err
+		}
+	} else {
+		// Otherwise, just use the switch-to-configuration script directly
+		// and handle profile rollback ourselves.
+		err = activation.SwitchToConfiguration(targetHost, resultLocation, stcAction, &activation.SwitchToConfigurationOptions{
+			InstallBootloader: opts.InstallBootloader,
+			Specialisation:    specialisation,
+			UseRootCommand:    useRemoteRootForActivation,
+			RootCommand:       cfg.RootCommand,
+		})
+		if err != nil {
+			rollbackProfile = true
+			log.Errorf("failed to switch to configuration: %v", err)
+			return err
+		}
 	}
 
 	return nil
@@ -792,4 +814,20 @@ func getImageName(
 	}
 
 	return strings.TrimSpace(stdout.String()), nil
+}
+
+func shouldUseActivationSupervisor(cfg *settings.Settings, host system.System, action activation.SwitchToConfigurationAction, resultLocation string) bool {
+	if !cfg.AutoRollback || !host.IsRemote() {
+		return false
+	}
+
+	validAction := action == activation.SwitchToConfigurationActionBoot ||
+		action == activation.SwitchToConfigurationActionSwitch ||
+		action == activation.SwitchToConfigurationActionTest
+
+	if !validAction {
+		return false
+	}
+
+	return host.HasCommand(filepath.Join(resultLocation, "bin", "activation-supervisor"))
 }
