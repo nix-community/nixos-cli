@@ -33,7 +33,7 @@
         packages = {
           default = self'.packages.nixos;
 
-          nixos = pkgs.callPackage ./package.nix {
+          nixos = pkgs.callPackage ./nix/package.nix {
             revision = self.rev or self.dirtyRev or "unknown";
           };
 
@@ -62,7 +62,7 @@
       };
 
       flake = {
-        nixosModules.nixos-cli = lib.modules.importApply ./module.nix {inherit self;};
+        nixosModules.nixos-cli = lib.modules.importApply ./nix/module.nix {inherit self;};
       };
     };
 }
