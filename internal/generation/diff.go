@@ -11,30 +11,60 @@ import (
 	_ "modernc.org/sqlite"
 
 	"github.com/nix-community/nixos-cli/internal/constants"
+	"github.com/nix-community/nixos-cli/internal/settings"
 	"github.com/nix-community/nixos-cli/internal/system"
 )
 
 type DiffCommandOptions struct {
-	UseNvd bool
+	DiffTool    settings.DiffTool
+	DiffToolCmd []string
 }
 
-func RunDiffCommand(s system.CommandRunner, before string, after string, opts *DiffCommandOptions) error {
+func RunDiffCommand(s system.System, before string, after string, opts *DiffCommandOptions) error {
 	log := s.Logger()
 
-	useNvd := opts.UseNvd
+	tool := opts.DiffTool
 
-	if opts.UseNvd {
-		nvdPath, _ := exec.LookPath("nvd")
-		nvdFound := nvdPath != ""
-		if !nvdFound {
-			log.Warn("use_nvd is specified in config, but `nvd` is not executable")
-			log.Warn("falling back to `nix store diff-closures`")
-			useNvd = false
+	switch tool {
+	case settings.DifferInternal:
+		if s.IsRemote() {
+			log.Warn("the internal differ does not work with remote systems")
+			tool = settings.DifferNix
+		}
+	case settings.DifferCommand:
+		cmd := opts.DiffToolCmd[0]
+		if cmdPath, _ := exec.LookPath(cmd); cmdPath == "" {
+			log.Warnf("differ.command uses '%s', but `%s` is not executable", cmd, cmd)
+			tool = settings.DifferNix
+		}
+	case settings.DifferNvd:
+		if nvdPath, _ := exec.LookPath("nvd"); nvdPath == "" {
+			log.Warn("differ.tool is set to 'nvd', but `nvd` is not executable")
+			tool = settings.DifferNix
 		}
 	}
 
-	argv := []string{"nix", "store", "diff-closures", before, after}
-	if useNvd {
+	if opts.DiffTool != tool && tool == settings.DifferNix {
+		log.Warn("falling back to `nix store diff-closures`")
+	}
+
+	var argv []string
+
+	switch tool {
+	case settings.DifferCommand:
+		argv = append(opts.DiffToolCmd, before, after)
+	case settings.DifferInternal:
+		diff, err := diffNixStoreDB(before, after)
+		if err != nil {
+			return err
+		}
+		// TODO : implement diff
+		log.Info("internal differ currently not implemented")
+		_ = diff
+		return nil
+	case settings.DifferNix:
+		argv = []string{"nix", "store", "diff-closures", before, after}
+	case settings.DifferNvd:
 		argv = []string{"nvd", "diff", before, after}
 	}
 
@@ -43,6 +73,10 @@ func RunDiffCommand(s system.CommandRunner, before string, after string, opts *D
 	cmd := system.NewCommand(argv[0], argv[1:]...)
 	_, err := s.Run(cmd)
 	return err
+}
+
+func RunNixStoreDBDiff() error {
+	return nil
 }
 
 type ClosureDiff struct {
@@ -61,7 +95,7 @@ type PathInfo struct {
 	Size    int
 }
 
-func DiffNixStoreDB(before string, after string) (*ClosureDiff, error) {
+func diffNixStoreDB(before string, after string) (*ClosureDiff, error) {
 	conn, err := sql.Open("sqlite", constants.NixStoreDatabase)
 	if err != nil {
 		return nil, fmt.Errorf("error opening nix sqlite db: %w", err)
