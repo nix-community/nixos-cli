@@ -63,7 +63,7 @@ nixos-cli - a tool for managing NixOS installations
 	Override configuration settings directly on the command line. Multiple
 	values can be passed.
 
-	Example: *--config use_nvd=true --config option.prettify=false*
+	Example: *--config differ.tool=nix --config option.prettify=false*
 
 	This only works for simple values such as true/false, string, and number
 	values. Settings such as *aliases* or *init.extra_attrs* are not settable
