@@ -18,6 +18,7 @@ type Settings struct {
 	Apply             ApplySettings        `koanf:"apply"`
 	AutoRollback      bool                 `koanf:"auto_rollback"`
 	Confirmation      ConfirmationSettings `koanf:"confirmation"`
+	Differ            DifferSettings       `koanf:"differ"`
 	UseColor          bool                 `koanf:"color"`
 	ConfigLocation    string               `koanf:"config_location"`
 	Enter             EnterSettings        `koanf:"enter"`
@@ -49,6 +50,11 @@ type EnterSettings struct {
 	MountResolvConf bool `koanf:"mount_resolv_conf"`
 }
 
+type DifferSettings struct {
+	Tool    DiffTool `koanf:"tool"`
+	Command []string `koanf:"command" noset:"true"`
+}
+
 type InitSettings struct {
 	EnableXserver bool              `koanf:"xserver_enabled"`
 	DesktopConfig string            `koanf:"desktop_config"`
@@ -74,6 +80,33 @@ const (
 	ConfirmationPromptDefaultYes ConfirmationPromptBehavior = "default-yes"
 	ConfirmationPromptDefaultNo  ConfirmationPromptBehavior = "default-no"
 )
+
+type DiffTool string
+
+const (
+	DifferInternal DiffTool = "internal"
+	DifferNvd      DiffTool = "nvd"
+	DifferNix      DiffTool = "nix"
+	DifferCommand  DiffTool = "command"
+)
+
+var AvailableDiffToolOptions = map[string]string{
+	string(DifferInternal): "Use the builtin closure diff facility; queries the Nix store database directly",
+	string(DifferNix):      "Use `nix store diff-closures` to run diffs",
+	string(DifferNvd):      "Use `nvd` to run diffs",
+	string(DifferCommand):  "Use an external command or script to run diffs",
+}
+
+func (d *DiffTool) UnmarshalText(text []byte) error {
+	v := DiffTool(text)
+	switch v {
+	case DifferNvd, DifferNix, DifferInternal, DifferCommand:
+		*d = v
+		return nil
+	default:
+		return fmt.Errorf("invalid value for differ '%s'", text)
+	}
+}
 
 var AvailableConfirmationPromptSettings = map[string]string{
 	string(ConfirmationPromptDefaultNo):  "Default to input of 'no'",
@@ -202,6 +235,21 @@ var SettingsDocs = map[string]SettingsDocEntry{
 		Short: "Control confirmation prompt behavior when invalid input is provided",
 		Long:  "Control confirmation prompt behavior when invalid input is provided. " + confirmationInputPossibleValues,
 	},
+	"differ": {
+		Short: "Settings for specifying diff tool to use",
+	},
+	"differ.tool": {
+		Short: "Tool used to diff two generations",
+		Long: `The selected closure diff tool that is used. Can be one of 'internal', 'nix', 'nvd' or 'command'.
+If 'command' is the value, then 'differ.command' MUST be specified.
+If a command or function is not available at runtime, then 'nix' is the fallback tool used.`,
+	},
+	"differ.command": {
+		Short: "Command used to run the diff tool",
+		Long: `Shell command that is used to run the diff tool if 'command' is used.
+It must take two positional arguments, appended to the command string at runtime:
+the before and after closure paths.`,
+	},
 	"enter": {
 		Short: "Settings for `enter` command",
 	},
@@ -273,8 +321,9 @@ var SettingsDocs = map[string]SettingsDocEntry{
 		Long:  "Enables commonly used command aliases by default; these can be overridden by configuring the `aliases` setting. Defaults are shown in the `aliases` setting.",
 	},
 	"use_nvd": {
-		Short: "Use 'nvd' instead of `nix store diff-closures`",
-		Long:  "Use the better-looking `nvd` diffing tool when comparing configurations instead of `nix store diff-closures`.",
+		Short:      "Use 'nvd' instead of `nix store diff-closures`",
+		Long:       "Use the better-looking `nvd` diffing tool when comparing configurations instead of `nix store diff-closures`.",
+		Deprecated: "Set `differ.type` to `nvd` intead.",
 	},
 }
 
@@ -288,6 +337,9 @@ func NewSettings() *Settings {
 			Always:  false,
 			Invalid: ConfirmationPromptRetry,
 			Empty:   ConfirmationPromptDefaultNo,
+		},
+		Differ: DifferSettings{
+			Tool: DifferInternal,
 		},
 		Enter: EnterSettings{
 			MountResolvConf: true,
@@ -372,6 +424,14 @@ func (cfg *Settings) Validate() SettingsErrors {
 			Alternative: "set `confirmation.always` to `true` instead",
 		})
 		cfg.Confirmation.Always = true
+	}
+
+	if cfg.UseNvd {
+		errs = append(errs, DeprecatedSettingError{
+			Field:       "use_nvd",
+			Alternative: "set 'differ.tool=nvd' instead",
+		})
+		cfg.Differ.Tool = DifferNvd
 	}
 
 	if len(errs) > 0 {
