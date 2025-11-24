@@ -158,6 +158,11 @@ func diffClosureSets(before, after []PathInfo) *ClosureDiff {
 }
 
 func getClosurePaths(conn *sql.DB, closurePath string) ([]PathInfo, error) {
+	resolvedClosurePath, err := filepath.EvalSymlinks(closurePath)
+	if err != nil {
+		return nil, err
+	}
+
 	const query = `
 WITH RECURSIVE closure(id) AS (
     SELECT id FROM ValidPaths WHERE path = ?
@@ -168,7 +173,7 @@ WITH RECURSIVE closure(id) AS (
 SELECT id, path, hash, narSize FROM ValidPaths WHERE id IN closure;
 `
 
-	rows, err := conn.Query(query, closurePath)
+	rows, err := conn.Query(query, resolvedClosurePath)
 	if err != nil {
 		return nil, err
 	}
@@ -182,7 +187,7 @@ SELECT id, path, hash, narSize FROM ValidPaths WHERE id IN closure;
 		var hash string
 		var size int
 
-		err := rows.Scan(&id, &path, &hash, &size)
+		err = rows.Scan(&id, &path, &hash, &size)
 		if err != nil {
 			return results, fmt.Errorf("error scanning rows: %w", err)
 		}
@@ -195,7 +200,7 @@ SELECT id, path, hash, narSize FROM ValidPaths WHERE id IN closure;
 			Size:    size,
 		})
 	}
-	if rows.Err() != nil {
+	if err = rows.Err(); err != nil {
 		return nil, fmt.Errorf("error scanning rows: %w", err)
 	}
 
