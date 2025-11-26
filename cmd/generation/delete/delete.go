@@ -165,8 +165,11 @@ func generationDeleteMain(cmd *cobra.Command, genOpts *cmdOpts.GenerationOpts, o
 	log.Printf("\nThere will be %v generations remaining on this machine.", remainingGenCount)
 	log.Print()
 
-	if !opts.AlwaysConfirm {
-		confirm, err := cmdUtils.ConfirmationInput("Proceed?")
+	if !opts.AlwaysConfirm && !cfg.Confirmation.Always {
+		confirm, err := cmdUtils.ConfirmationInput("Proceed?", cmdUtils.ConfirmationPromptOptions{
+			InvalidBehavior: cfg.Confirmation.Invalid,
+			EmptyBehavior:   cfg.Confirmation.Empty,
+		})
 		if err != nil {
 			log.Errorf("failed to get confirmation: %v", err)
 			return err

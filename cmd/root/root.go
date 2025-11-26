@@ -164,6 +164,8 @@ func mainCommand() (*cobra.Command, error) {
 }
 
 func Execute() {
+	cobra.EnableTraverseRunHooks = true
+
 	cmd, err := mainCommand()
 	if err != nil {
 		os.Exit(1)

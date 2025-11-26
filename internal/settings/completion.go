@@ -188,16 +188,18 @@ func completeKeys(candidate string) ([]string, cobra.ShellCompDirective) {
 type CompletionValueFunc func(key string, candidate string) ([]string, cobra.ShellCompDirective)
 
 func boolCompletionFunc(key string, candidate string) ([]string, cobra.ShellCompDirective) {
-	options := []string{"true\tTurn this setting on", "false\tTurn this setting off"}
+	return stringCompletionFunc(key, candidate, map[string]string{
+		"true":  "Turn this setting on",
+		"false": "Turn this setting off",
+	})
+}
+
+func stringCompletionFunc(key string, candidate string, candidates map[string]string) ([]string, cobra.ShellCompDirective) {
 	var matches []string
 
-	for _, option := range options {
-		if strings.HasPrefix(option, candidate) {
-			// Yeah, this kind of sucks. It would be preferable to not have to include
-			// the prefix in the arguments, since this becomes rather verbose,
-			// but this works alright, for now.
-
-			match := fmt.Sprintf("%v=%v", key, option)
+	for c, desc := range candidates {
+		if strings.HasPrefix(c, candidate) {
+			match := fmt.Sprintf("%v=%v\t%v", key, c, desc)
 			matches = append(matches, match)
 		}
 	}
@@ -205,8 +207,15 @@ func boolCompletionFunc(key string, candidate string) ([]string, cobra.ShellComp
 	return matches, cobra.ShellCompDirectiveNoFileComp
 }
 
+func completeConfirmationBehaviorKey(key, candidate string) ([]string, cobra.ShellCompDirective) {
+	return stringCompletionFunc(key, candidate, AvailableConfirmationPromptSettings)
+}
+
 // For custom completion functions, use this.
-var completionValueFuncs = map[string]CompletionValueFunc{}
+var completionValueFuncs = map[string]CompletionValueFunc{
+	"confirmation.empty":   completeConfirmationBehaviorKey,
+	"confirmation.invalid": completeConfirmationBehaviorKey,
+}
 
 func completeValues(key string, value string) ([]string, cobra.ShellCompDirective) {
 	cfg := NewSettings()
