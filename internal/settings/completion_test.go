@@ -1,6 +1,7 @@
 package settings_test
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -29,16 +30,16 @@ func TestCompleteConfigFlag(t *testing.T) {
 		{"ent", []string{"enter."}},
 
 		// Fields after a . should be underneath the nested option
-		{"option.", []string{"option.min_score", "option.prettify", "option.debounce_time"}},
+		{"option.", []string{"option.debounce_time", "option.min_score", "option.prettify"}},
 
-		{"apply.use_", []string{"apply.use_nom", "apply.use_git_commit_msg"}},
+		{"apply.use_", []string{"apply.use_git_commit_msg", "apply.use_nom"}},
 
 		// Invalid fields should result in no completions
 		{"invalid", []string{}},
 		{"bruh.lmao", []string{}},
 
 		// Boolean field value completion
-		{"color=", []string{"color=true", "color=false"}},
+		{"color=", []string{"color=false", "color=true"}},
 		{"color=t", []string{"color=true"}},
 		{"color=f", []string{"color=false"}},
 		{"color=invalid", []string{}},
@@ -51,6 +52,8 @@ func TestCompleteConfigFlag(t *testing.T) {
 		for i, v := range actual {
 			actual[i] = stripAfterTab(v)
 		}
+
+		slices.Sort(actual)
 
 		if !slicesEqual(actual, testCase.Expected) {
 			t.Errorf("for input '%s': expected %v, got %v", testCase.Input, testCase.Expected, actual)
