@@ -14,17 +14,18 @@ import (
 )
 
 type Settings struct {
-	Aliases        map[string][]string `koanf:"aliases" noset:"true"`
-	Apply          ApplySettings       `koanf:"apply"`
-	AutoRollback   bool                `koanf:"auto_rollback"`
-	UseColor       bool                `koanf:"color"`
-	ConfigLocation string              `koanf:"config_location"`
-	Enter          EnterSettings       `koanf:"enter"`
-	Init           InitSettings        `koanf:"init"`
-	NoConfirm      bool                `koanf:"no_confirm"`
-	Option         OptionSettings      `koanf:"option"`
-	RootCommand    string              `koanf:"root_command"`
-	UseNvd         bool                `koanf:"use_nvd"`
+	Aliases        map[string][]string  `koanf:"aliases" noset:"true"`
+	Apply          ApplySettings        `koanf:"apply"`
+	AutoRollback   bool                 `koanf:"auto_rollback"`
+	Confirmation   ConfirmationSettings `koanf:"confirmation"`
+	UseColor       bool                 `koanf:"color"`
+	ConfigLocation string               `koanf:"config_location"`
+	Enter          EnterSettings        `koanf:"enter"`
+	Init           InitSettings         `koanf:"init"`
+	NoConfirm      bool                 `koanf:"no_confirm"`
+	Option         OptionSettings       `koanf:"option"`
+	RootCommand    string               `koanf:"root_command"`
+	UseNvd         bool                 `koanf:"use_nvd"`
 }
 
 type ApplySettings struct {
@@ -33,6 +34,12 @@ type ApplySettings struct {
 	UseNom                bool   `koanf:"use_nom"`
 	UseGitCommitMsg       bool   `koanf:"use_git_commit_msg"`
 	IgnoreDirtyTree       bool   `koanf:"ignore_dirty_tree"`
+}
+
+type ConfirmationSettings struct {
+	Always  bool                       `koanf:"always"`
+	Invalid ConfirmationPromptBehavior `koanf:"invalid"`
+	Empty   ConfirmationPromptBehavior `koanf:"empty"`
 }
 
 type EnterSettings struct {
@@ -52,6 +59,31 @@ type OptionSettings struct {
 	DebounceTime int64 `koanf:"debounce_time"`
 }
 
+type ConfirmationPromptBehavior string
+
+const (
+	ConfirmationPromptRetry      ConfirmationPromptBehavior = "retry"
+	ConfirmationPromptDefaultYes ConfirmationPromptBehavior = "default-yes"
+	ConfirmationPromptDefaultNo  ConfirmationPromptBehavior = "default-no"
+)
+
+var AvailableConfirmationPromptSettings = map[string]string{
+	string(ConfirmationPromptDefaultNo):  "Default to input of 'no'",
+	string(ConfirmationPromptDefaultYes): "Default to input of 'yes'",
+	string(ConfirmationPromptRetry):      "Retry the input function again",
+}
+
+func (c *ConfirmationPromptBehavior) UnmarshalText(text []byte) error {
+	val := ConfirmationPromptBehavior(text)
+	switch val {
+	case ConfirmationPromptDefaultYes, ConfirmationPromptDefaultNo, ConfirmationPromptRetry:
+		*c = val
+		return nil
+	}
+
+	return fmt.Errorf("invalid value for ConfirmationPromptBehavior '%s'", val)
+}
+
 type DescriptionEntry struct {
 	Short string
 	Long  string
@@ -63,6 +95,9 @@ genlist = ["generation", "list"]
 switch = ["generation", "switch"]
 rollback = ["generation", "rollback"]
 ` + "```\n"
+
+	confirmationInputPossibleValues = "Possible values are `default-no` (treat as a no input), `default-yes` (treat as a yes input), or `retry` (try again)."
+	deprecatedDocString             = "This setting has been deprecated, and will be removed in a future release."
 )
 
 var SettingsDocs = map[string]DescriptionEntry{
@@ -106,6 +141,21 @@ var SettingsDocs = map[string]DescriptionEntry{
 		Short: "Where to look for configuration by default",
 		Long:  "Path to a Nix file or directory to look for user configuration in by default.",
 	},
+	"confirmation": {
+		Short: "Settings for confirmation prompts throughout the program",
+	},
+	"confirmation.always": {
+		Short: "Disable interactive confirmation input entirely",
+		Long:  "Disables prompts that ask for user confirmation; useful for automation.",
+	},
+	"confirmation.empty": {
+		Short: "Control confirmation prompt behavior when no input is provided",
+		Long:  "Control confirmation prompt behavior when no input is provided. " + confirmationInputPossibleValues,
+	},
+	"confirmation.invalid": {
+		Short: "Control confirmation prompt behavior when invalid input is provided",
+		Long:  "Control confirmation prompt behavior when invalid input is provided. " + confirmationInputPossibleValues,
+	},
 	"enter": {
 		Short: "Settings for `enter` command",
 	},
@@ -126,7 +176,8 @@ var SettingsDocs = map[string]DescriptionEntry{
 	},
 	"no_confirm": {
 		Short: "Disable interactive confirmation input",
-		Long:  "Disables prompts that ask for user confirmation, useful for automation.",
+		Long: "Disables prompts that ask for user confirmation, useful for automation.\n" + bolded(deprecatedDocString) +
+			"\nSet `confirmation.always` to `true` instead.",
 	},
 	"option": {
 		Short: "Settings for `option` command",
@@ -158,6 +209,11 @@ func NewSettings() *Settings {
 		AutoRollback:   true,
 		UseColor:       true,
 		ConfigLocation: "/etc/nixos",
+		Confirmation: ConfirmationSettings{
+			Always:  false,
+			Invalid: ConfirmationPromptRetry,
+			Empty:   ConfirmationPromptDefaultNo,
+		},
 		Enter: EnterSettings{
 			MountResolvConf: true,
 		},
@@ -233,6 +289,14 @@ func (cfg *Settings) Validate() SettingsErrors {
 		}
 	}
 
+	if cfg.NoConfirm {
+		errs = append(errs, SettingsError{
+			Field:   "no_confirm",
+			Message: deprecatedDocString + "\nhint: set `confirmation.always` to `true` instead.",
+		})
+		cfg.Confirmation.Always = true
+	}
+
 	if len(errs) > 0 {
 		return errs
 	}
@@ -259,7 +323,7 @@ func (cfg *Settings) SetValue(key string, value string) error {
 			return SettingsError{Field: field, Message: "setting not found"}
 		}
 
-		if current.Kind() == reflect.Ptr {
+		if current.Kind() == reflect.Pointer {
 			if current.IsNil() {
 				current.Set(reflect.New(current.Type().Elem()))
 			}
@@ -310,4 +374,11 @@ func isSettable(value *reflect.Value) bool {
 	}
 
 	return false
+}
+
+// A naive way to bold a given input.
+//
+// Does not escape contents, so use wisely.
+func bolded(input string) string {
+	return fmt.Sprintf("**%s**", input)
 }

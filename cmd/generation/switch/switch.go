@@ -143,9 +143,12 @@ func generationSwitchMain(cmd *cobra.Command, genOpts *cmdOpts.GenerationOpts, o
 		log.Errorf("failed to run diff command: %v", err)
 	}
 
-	if !opts.AlwaysConfirm {
+	if !opts.AlwaysConfirm && !cfg.Confirmation.Always {
 		log.Printf("\n")
-		confirm, err := cmdUtils.ConfirmationInput("Activate this generation?")
+		confirm, err := cmdUtils.ConfirmationInput("Activate this generation?", cmdUtils.ConfirmationPromptOptions{
+			InvalidBehavior: cfg.Confirmation.Invalid,
+			EmptyBehavior:   cfg.Confirmation.Empty,
+		})
 		if err != nil {
 			log.Errorf("failed to get confirmation: %v", err)
 			return err

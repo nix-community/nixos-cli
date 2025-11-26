@@ -19,6 +19,7 @@ import (
 	shlex "github.com/carapace-sh/carapace-shlex"
 	cmdUtils "github.com/nix-community/nixos-cli/internal/cmd/utils"
 	"github.com/nix-community/nixos-cli/internal/logger"
+	"github.com/nix-community/nixos-cli/internal/settings"
 	"github.com/nix-community/nixos-cli/internal/utils"
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
@@ -210,7 +211,13 @@ func wrappedKnownHostsCallback(log logger.Logger, origCallback ssh.HostKeyCallba
 				log.Infof("the authenticity of host '%s' (%s) can't be established", hostname, key.Type())
 				log.Infof("SHA256 fingerprint: %s", fingerprint)
 
-				confirm, err := cmdUtils.ConfirmationInput("Are you sure you want to continue connecting (yes/no)?")
+				confirm, err := cmdUtils.ConfirmationInput("Are you sure you want to continue connecting?", cmdUtils.ConfirmationPromptOptions{
+					// Copy the default SSH behavior of retrying for invalid input.
+					// Disregard user configuration in this case, since this is mimicking
+					// OpenSSH's behavior.
+					InvalidBehavior: settings.ConfirmationPromptRetry,
+					EmptyBehavior:   settings.ConfirmationPromptRetry,
+				})
 				if err != nil {
 					log.Errorf("failed to get confirmation: %v", err)
 					return err
