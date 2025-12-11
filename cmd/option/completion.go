@@ -11,7 +11,7 @@ import (
 	"github.com/nix-community/nixos-cli/internal/settings"
 	"github.com/nix-community/nixos-cli/internal/system"
 	"github.com/spf13/cobra"
-	"github.com/water-sucks/optnix/option"
+	"snare.dev/optnix/option"
 )
 
 func loadOptions(log logger.Logger, cfg *settings.Settings, includes []string) (option.NixosOptionSource, error) {
