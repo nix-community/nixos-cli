@@ -85,7 +85,7 @@ with the following Makefile rules:
 
 - Documentation for all available settings in `config.toml`
 - Module documentation for `services.nixos-cli`, built using
-  [`nix-options-doc`](https://github.com/Thunderbottom/nix-options-doc)
+  [`optnix`](https://github.com/water-sucks/optnix)
 
 The rest of the site documentation files are located in [doc/man](./doc/src).
 

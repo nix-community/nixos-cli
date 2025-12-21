@@ -11,7 +11,7 @@
 
     flake-parts.url = "github:hercules-ci/flake-parts";
 
-    nix-options-doc.url = "github:Thunderbottom/nix-options-doc/v0.2.0";
+    optnix.url = "github:water-sucks/optnix";
   };
 
   outputs = {
@@ -31,7 +31,6 @@
       perSystem = {
         self',
         pkgs,
-        system,
         ...
       }: {
         packages = {
@@ -47,8 +46,6 @@
         devShells = let
           inherit (pkgs) go golangci-lint mkShell mdbook scdoc;
           inherit (pkgs.nodePackages) prettier;
-
-          nix-options-doc = inputs.nix-options-doc.packages.${system}.default;
         in {
           default = mkShell {
             name = "nixos-shell";
@@ -59,7 +56,6 @@
               mdbook
               prettier
               scdoc
-              nix-options-doc
             ];
           };
         };

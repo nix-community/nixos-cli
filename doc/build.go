@@ -8,12 +8,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
-	"regexp"
 	"sort"
 	"strings"
 
 	"github.com/nix-community/nixos-cli/internal/settings"
 	"github.com/spf13/cobra"
+	"snare.dev/optnix/option"
 )
 
 func main() {
@@ -28,8 +28,9 @@ func main() {
 	var gitRev string
 
 	siteCmd := &cobra.Command{
-		Use:   "site",
-		Short: "Generate Markdown documentation for settings and modules",
+		Use:          "site",
+		Short:        "Generate Markdown documentation for settings and modules",
+		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Println("generating settings documentation")
 
@@ -75,7 +76,7 @@ func generateSettingsDocMarkdown(filename string) error {
 
 	defaults := *settings.NewSettings()
 
-	writeSettingsDoc(reflect.TypeOf(defaults), reflect.ValueOf(defaults), "", &sb, 2, MarkdownSettingsFormatter{})
+	writeSettingsDoc(reflect.TypeFor[settings.Settings](), reflect.ValueOf(defaults), "", &sb, 2, MarkdownSettingsFormatter{})
 
 	return os.WriteFile(filename, []byte(sb.String()), 0o644)
 }
@@ -88,7 +89,7 @@ func generateSettingsDocManpage(filename string) error {
 
 	defaults := *settings.NewSettings()
 
-	writeSettingsDoc(reflect.TypeOf(defaults), reflect.ValueOf(defaults), "", &sb, 2, ManpageSettingsFormatter{})
+	writeSettingsDoc(reflect.TypeFor[settings.Settings](), reflect.ValueOf(defaults), "", &sb, 2, ManpageSettingsFormatter{})
 
 	contents := fmt.Sprintf(settingsTemplate, sb.String())
 
@@ -96,37 +97,101 @@ func generateSettingsDocManpage(filename string) error {
 }
 
 func generateModuleDoc(filename string, rev string) error {
-	var sb strings.Builder
-
-	cmd := exec.Command("nix-options-doc", "--strip-prefix")
-	cmd.Stdout = &sb
-
-	if err := cmd.Run(); err != nil {
-		fmt.Printf("error: couldn't generate docs for module with nix-options-doc: %v\n", err)
+	fullOptionSrc, err := buildModuleOptionsJSON()
+	if err != nil {
 		return err
 	}
 
-	// Strip the first line and some whitespace (assumed to be the title)
-	lines := strings.Split(sb.String(), "\n")
-	if len(lines) == 0 {
-		return fmt.Errorf("no output from nix-options-doc")
-	}
-	lines = lines[3:]
+	var options []option.NixosOption
+	for _, o := range fullOptionSrc {
+		if !strings.HasPrefix(o.Name, "services.nixos-cli") {
+			continue
+		}
 
-	repoBaseURL := fmt.Sprintf("https://github.com/nix-community/nixos-cli/blob/%s", rev)
-
-	re := regexp.MustCompile(`(?m)^## \[` +
-		`(?P<name>.*?)` +
-		`\]\(` +
-		`(?P<file>[^)]+)` +
-		`\)`)
-
-	for i, line := range lines {
-		lines[i] = re.ReplaceAllString(line, fmt.Sprintf("## [`${name}`](%s/${file})", repoBaseURL))
+		options = append(options, o)
 	}
 
-	final := strings.Join(lines, "\n")
-	return os.WriteFile(filename, []byte(final), 0o644)
+	var sb strings.Builder
+
+	for _, opt := range options {
+		sb.WriteString(formatOptionMarkdown(opt, rev))
+		sb.WriteString("\n")
+	}
+
+	err = os.WriteFile(filename, []byte(sb.String()), 0o644)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func buildModuleOptionsJSON() (option.NixosOptionSource, error) {
+	buildModuleDocArgv := []string{"nix-build", "./doc/options.nix"}
+
+	var buildModuleDocStdout bytes.Buffer
+	var buildModuleDocStderr bytes.Buffer
+
+	buildModuleDocCmd := exec.Command(buildModuleDocArgv[0], buildModuleDocArgv[1:]...)
+	buildModuleDocCmd.Stdout = &buildModuleDocStdout
+	buildModuleDocCmd.Stderr = &buildModuleDocStderr
+
+	err := buildModuleDocCmd.Run()
+	if err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, "failed to build docs")
+		_, _ = fmt.Fprintf(os.Stderr, "build logs:\n%s\n", buildModuleDocStderr.String())
+		return nil, err
+	}
+
+	optionsDocFilename := strings.TrimSpace(buildModuleDocStdout.String())
+
+	optionsDocFile, err := os.Open(optionsDocFilename)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = optionsDocFile.Close() }()
+
+	return option.LoadOptions(optionsDocFile)
+}
+
+func formatOptionMarkdown(opt option.NixosOption, rev string) string {
+	var sb strings.Builder
+
+	titleWasGenerated := false
+
+	if len(opt.Declarations) > 0 {
+		// Strip the /nix/store/<hash>-<name> from /nix/store/<hash>-<name>/path/to/module
+		declPath := opt.Declarations[0]
+		declPathParts := strings.Split(filepath.Clean(declPath), string(filepath.Separator))
+
+		if len(declPathParts) > 4 {
+			modulePath := filepath.Join(declPathParts[4:]...)
+			optionURL := fmt.Sprintf("https://github.com/nix-community/nixos-cli/blob/%s/%s", rev, modulePath)
+
+			fmt.Fprintf(&sb, "## [`%s`](%s)\n\n", opt.Name, optionURL)
+			titleWasGenerated = true
+		}
+	}
+
+	if !titleWasGenerated {
+		fmt.Fprintf(&sb, "## `%s`\n\n", opt.Name)
+	}
+
+	if opt.Description != "" {
+		sb.WriteString(opt.Description + "\n\n")
+	}
+
+	fmt.Fprintf(&sb, "**Type:** `%s`\n\n", opt.Type)
+
+	if opt.Default != nil {
+		fmt.Fprintf(&sb, "**Default:** `%s`\n\n", opt.Default.Text)
+	}
+
+	if opt.Example != nil {
+		fmt.Fprintf(&sb, "**Example:** `%s`\n\n", opt.Example.Text)
+	}
+
+	return sb.String()
 }
 
 type SettingsFormatter interface {
