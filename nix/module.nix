@@ -71,6 +71,7 @@ in {
       default = lib.maybeEnv "NIXOS_GENERATION_TAG" null;
       description = "A description for this generation";
       example = "Sign Git GPG commits by default";
+      internal = true;
     };
 
     prebuildOptionCache = lib.mkOption {
