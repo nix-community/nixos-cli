@@ -38,7 +38,7 @@ buildGoModule (finalAttrs: {
 
   buildPhase = ''
     runHook preBuild
-    make all gen-manpages
+    make main gen-manpages
     runHook postBuild
   '';
 
