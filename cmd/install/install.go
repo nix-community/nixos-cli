@@ -521,10 +521,12 @@ func installMain(cmd *cobra.Command, opts *cmdOpts.InstallOpts) error {
 	}
 	_ = etcNixos.Close()
 
-	log.Step("Installing bootloader...")
+	if !opts.NoBootloader {
+		log.Step("Installing bootloader...")
 
-	if err := installBootloader(s, mountpoint); err != nil {
-		return err
+		if err := installBootloader(s, mountpoint); err != nil {
+			return err
+		}
 	}
 
 	if !opts.NoRootPassword {
