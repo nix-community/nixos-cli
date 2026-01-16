@@ -452,11 +452,13 @@ func installMain(cmd *cobra.Command, opts *cmdOpts.InstallOpts) error {
 	}
 	nixConfig.SetBuilder(s)
 
-	log.Step("Copying channel...")
+	if !opts.NoChannelCopy {
+		log.Step("Copying channel...")
 
-	err = copyChannel(cmd, s, mountpoint, opts.Channel, opts.NixOptions)
-	if err != nil {
-		return err
+		err = copyChannel(cmd, s, mountpoint, opts.Channel, opts.NixOptions)
+		if err != nil {
+			return err
+		}
 	}
 
 	envMap := map[string]string{}
