@@ -525,9 +525,9 @@ func installMain(cmd *cobra.Command, opts *cmdOpts.InstallOpts) error {
 		return err
 	}
 
-	log.Step("Setting root password...")
-
 	if !opts.NoRootPassword {
+		log.Step("Setting root password...")
+
 		manualHint := fmt.Sprintf("you can set the root password manually by executing `nixos enter --root %s` and then running `passwd` in the shell of the new system", mountpoint)
 
 		if !term.IsTerminal(int(os.Stdin.Fd())) {
