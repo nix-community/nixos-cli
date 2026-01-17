@@ -8,9 +8,8 @@ import (
 	"sort"
 	"strings"
 
+	cmdUtils "github.com/nix-community/nixos-cli/internal/cmd/utils"
 	"github.com/nix-community/nixos-cli/internal/configuration"
-	"github.com/nix-community/nixos-cli/internal/logger"
-	"github.com/nix-community/nixos-cli/internal/settings"
 	"github.com/spf13/cobra"
 )
 
@@ -89,8 +88,7 @@ func CompleteSpecialisationFlag(generationDirname string) cobra.CompletionFunc {
 
 func CompleteSpecialisationFlagFromConfig(flakeRefStr string, includes []string) cobra.CompletionFunc {
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		log := logger.FromContext(cmd.Context())
-		cfg := settings.FromContext(cmd.Context())
+		log, cfg := cmdUtils.PrepareCompletionResources()
 
 		var nixConfig configuration.Configuration
 		if flakeRefStr != "" {
