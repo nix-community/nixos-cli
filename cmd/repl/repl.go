@@ -58,6 +58,7 @@ func ReplCommand() *cobra.Command {
 
 			return nil
 		},
+		ValidArgsFunction: cmdUtils.FlakeOrNixFileCompletions,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return cmdUtils.CommandErrorHandler(replMain(cmd, &opts))
 		},

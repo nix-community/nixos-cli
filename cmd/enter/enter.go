@@ -44,6 +44,9 @@ func EnterCommand() *cobra.Command {
 	cmd.Flags().BoolVarP(&opts.Silent, "silent", "s", false, "Suppress all system activation output")
 	cmd.Flags().BoolVarP(&opts.Verbose, "verbose", "v", false, "Show verbose logging")
 
+	_ = cmd.RegisterFlagCompletionFunc("root", cmdUtils.DirCompletions)
+	_ = cmd.RegisterFlagCompletionFunc("system", cmdUtils.DirCompletions)
+
 	cmd.MarkFlagsMutuallyExclusive("silent", "verbose")
 
 	cmdUtils.SetHelpFlagText(&cmd)
