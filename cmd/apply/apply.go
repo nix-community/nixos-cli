@@ -90,6 +90,7 @@ func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 
 			return nil
 		},
+		ValidArgsFunction: cmdUtils.FlakeOrNixFileCompletions,
 		PreRun: func(cmd *cobra.Command, args []string) {
 			ctx := cmd.Context()
 			log := logger.FromContext(ctx)

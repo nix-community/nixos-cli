@@ -35,5 +35,8 @@ func InitCommand() *cobra.Command {
 	cmd.Flags().StringVarP(&opts.Root, "root", "r", "/", "Treat `path` as the root directory")
 	cmd.Flags().BoolVarP(&opts.ShowHardwareConfig, "show-hardware-config", "s", false, "Print hardware config to stdout and exit")
 
+	_ = cmd.RegisterFlagCompletionFunc("dir", cmdUtils.DirCompletions)
+	_ = cmd.RegisterFlagCompletionFunc("root", cmdUtils.DirCompletions)
+
 	return &cmd
 }

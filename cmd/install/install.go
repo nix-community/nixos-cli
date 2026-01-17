@@ -80,6 +80,7 @@ func InstallCommand() *cobra.Command {
 
 			return nil
 		},
+		ValidArgsFunction: cmdUtils.FlakeOrNixFileCompletions,
 		PreRun: func(cmd *cobra.Command, args []string) {
 			ctx := cmd.Context()
 			log := logger.FromContext(ctx)
@@ -131,6 +132,10 @@ func InstallCommand() *cobra.Command {
 		nixopts.AddUpdateInputNixOption(&cmd, &opts.NixOptions.UpdateInputs)
 		nixopts.AddOverrideInputNixOption(&cmd, &opts.NixOptions.OverrideInputs)
 	}
+
+	_ = cmd.RegisterFlagCompletionFunc("channel", cmdUtils.DirCompletions)
+	_ = cmd.RegisterFlagCompletionFunc("root", cmdUtils.DirCompletions)
+	_ = cmd.RegisterFlagCompletionFunc("system", cmdUtils.DirCompletions)
 
 	cmd.MarkFlagsMutuallyExclusive("channel", "no-channel-copy")
 
