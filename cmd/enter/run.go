@@ -248,15 +248,11 @@ func activate(s system.CommandRunner, root string, systemClosure string, silent 
 
 	// Create a tmpfs for building/activating the NixOS system.
 	systemdTmpfiles := filepath.Join(systemClosure, "sw", "bin", "systemd-tmpfiles")
-	argv = []string{"chroot", root, systemdTmpfiles, "--create", "--remove", "-E"}
+	argv = []string{"chroot", root, systemdTmpfiles, "--create", "--remove", "--graceful", "-E"}
 
 	s.Logger().CmdArray(argv)
 
 	tmpfilesCmd := system.NewCommand(argv[0], argv[1:]...)
-
-	// Hide the unhelpful "failed to replace specifiers" errors caused by missing /etc/machine-id.
-	tmpfilesCmd.Stdout = nil
-	tmpfilesCmd.Stderr = nil
 
 	_, err = s.Run(tmpfilesCmd)
 	return err
