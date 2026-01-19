@@ -18,9 +18,9 @@ import (
 	"github.com/nix-community/nixos-cli/internal/utils"
 	"github.com/sahilm/fuzzy"
 	"github.com/spf13/cobra"
+	"github.com/yarlson/pin"
 	"snare.dev/optnix/option"
 	optionTUI "snare.dev/optnix/tui"
-	"github.com/yarlson/pin"
 )
 
 func OptionCommand() *cobra.Command {
