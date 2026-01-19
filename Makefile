@@ -32,6 +32,8 @@ clean:
 .PHONY: check
 check:
 	golangci-lint run
+	@mapfile -t GOFMT < <(gofmt -l $$(find . -type f -name '*.go' | grep -v "/vendor/")); \
+	if [ -n "$${GOFMT[0]}" ]; then echo "These files need formatting:"; printf "%s\n" "$${GOFMT[@]}"; exit 1; fi
 
 .PHONY: test
 test:
