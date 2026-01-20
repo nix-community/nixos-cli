@@ -37,15 +37,17 @@ func InstallCommand() *cobra.Command {
 		Long:  "Install a NixOS system from a given configuration.",
 		Args: func(cmd *cobra.Command, args []string) error {
 			if build.Flake() {
-				if err := cobra.ExactArgs(1)(cmd, args); err != nil {
+				if err := cobra.MaximumNArgs(1)(cmd, args); err != nil {
 					return err
 				}
 
-				ref := configuration.FlakeRefFromString(args[0])
-				if ref.System == "" {
-					return fmt.Errorf("missing required argument {SYSTEM-NAME}")
+				if len(args) > 0 {
+					ref := configuration.FlakeRefFromString(args[0])
+					if ref.System == "" {
+						return fmt.Errorf("missing required argument {SYSTEM-NAME}")
+					}
+					opts.FlakeRef = ref
 				}
-				opts.FlakeRef = ref
 			} else {
 				if err := cobra.MaximumNArgs(2)(cmd, args); err != nil {
 					return err
@@ -65,17 +67,25 @@ func InstallCommand() *cobra.Command {
 			}
 
 			if opts.SystemClosure != "" {
-				if !filepath.IsAbs(opts.SystemClosure) {
-					return fmt.Errorf("--system must be an absolute path")
+				if build.Flake() && opts.FlakeRef != nil || !build.Flake() && opts.File != "" {
+					var nixConfigArg string
+					if build.Flake() {
+						nixConfigArg = "[FLAKE-REF]"
+					} else {
+						nixConfigArg = "[FILE]"
+					}
+					return fmt.Errorf("--system was specified, but %v was also provided; use one or the other", nixConfigArg)
 				}
 
-				if opts.FlakeRef != nil {
-					return fmt.Errorf("--system was specified, but [FLAKE-REF] was also provided; use one or the other")
+				if !filepath.IsAbs(opts.SystemClosure) {
+					return fmt.Errorf("--system must be an absolute path")
 				}
 
 				if _, err := os.Stat(opts.SystemClosure); err != nil {
 					return err
 				}
+			} else if build.Flake() && opts.FlakeRef == nil {
+				return fmt.Errorf("one of [FLAKE-REF] or --system must be provided")
 			}
 
 			return nil
@@ -408,57 +418,61 @@ func installMain(cmd *cobra.Command, opts *cmdOpts.InstallOpts) error {
 		}
 	}()
 
-	// Find config location. Do not use the config utils to find the configuration,
-	// since the configuration must be specified explicitly. We must avoid
-	// the assumptions about `NIX_PATH` containing `nixos-config`, since it
-	// refers to the installer's configuration, not the target one to install.
-	log.Step("Finding configuration...")
-
 	var nixConfig configuration.Configuration
-	if build.Flake() {
-		nixConfig = opts.FlakeRef
-		log.Debugf("using flake ref %s", opts.FlakeRef)
-	} else if opts.File != "" {
-		configPath, err := utils.ResolveNixFilename(opts.File)
-		if err != nil {
-			log.Error(err)
-			return err
-		}
 
-		nixConfig = &configuration.LegacyConfiguration{
-			Includes:        opts.NixOptions.Includes,
-			ConfigPath:      configPath,
-			Attribute:       opts.Attr,
-			UseExplicitPath: true,
-		}
+	if opts.SystemClosure == "" {
+		// Find config location. Do not use the config utils to find the configuration,
+		// since the configuration must be specified explicitly. We must avoid
+		// the assumptions about `NIX_PATH` containing `nixos-config`, since it
+		// refers to the installer's configuration, not the target one to install.
+		log.Step("Finding configuration...")
 
-		log.Debugf("found configuration at %s", configPath)
-		if opts.Attr != "" {
-			log.Debugf("using attribute %s", opts.Attr)
-		}
-	} else {
-		var configLocation string
+		if build.Flake() {
+			nixConfig = opts.FlakeRef
+			log.Debugf("using flake ref %s", opts.FlakeRef)
+		} else if opts.File != "" {
+			configPath, err := utils.ResolveNixFilename(opts.File)
+			if err != nil {
+				log.Error(err)
+				return err
+			}
 
-		if nixosCfg, set := os.LookupEnv("NIXOS_CONFIG"); set {
-			log.Debug("$NIXOS_CONFIG is set, using automatically")
-			configLocation = nixosCfg
+			nixConfig = &configuration.LegacyConfiguration{
+				Includes:        opts.NixOptions.Includes,
+				ConfigPath:      configPath,
+				Attribute:       opts.Attr,
+				UseExplicitPath: true,
+			}
+
+			log.Debugf("found configuration at %s", configPath)
+			if opts.Attr != "" {
+				log.Debugf("using attribute %s", opts.Attr)
+			}
 		} else {
-			configLocation = filepath.Join(mountpoint, "etc", "nixos", "configuration.nix")
-		}
+			var configLocation string
 
-		resolvedLocation, err := utils.ResolveNixFilename(configLocation)
-		if err != nil {
-			return err
-		}
+			if nixosCfg, set := os.LookupEnv("NIXOS_CONFIG"); set {
+				log.Debug("$NIXOS_CONFIG is set, using automatically")
+				configLocation = nixosCfg
+			} else {
+				configLocation = filepath.Join(mountpoint, "etc", "nixos", "configuration.nix")
+			}
 
-		log.Debugf("using configuration at %s", configLocation)
+			resolvedLocation, err := utils.ResolveNixFilename(configLocation)
+			if err != nil {
+				log.Errorf("failed to find configuration: %v", err)
+				return err
+			}
 
-		nixConfig = &configuration.LegacyConfiguration{
-			Includes:   opts.NixOptions.Includes,
-			ConfigPath: resolvedLocation,
+			log.Debugf("using configuration at %s", resolvedLocation)
+
+			nixConfig = &configuration.LegacyConfiguration{
+				Includes:   opts.NixOptions.Includes,
+				ConfigPath: resolvedLocation,
+			}
 		}
+		nixConfig.SetBuilder(s)
 	}
-	nixConfig.SetBuilder(s)
 
 	if !opts.NoChannelCopy {
 		log.Step("Copying channel...")
@@ -469,23 +483,23 @@ func installMain(cmd *cobra.Command, opts *cmdOpts.InstallOpts) error {
 		}
 	}
 
-	envMap := map[string]string{}
-	if os.Getenv("TMPDIR") == "" {
-		envMap["TMPDIR"] = tmpDirname
-	}
-
-	if c, ok := nixConfig.(*configuration.LegacyConfiguration); ok {
-		// This value gets appended to the list of includes,
-		// and does not replace existing values already provided
-		// for -I on the command line.
-		if err := cmd.Flags().Set("include", fmt.Sprintf("nixos-config=%s", c.ConfigPath)); err != nil {
-			panic("failed to set --include flag for nixos install command for legacy systems")
-		}
-	}
-
 	var resultLocation string
 
 	if opts.SystemClosure == "" {
+		envMap := map[string]string{}
+		if os.Getenv("TMPDIR") == "" {
+			envMap["TMPDIR"] = tmpDirname
+		}
+
+		if c, ok := nixConfig.(*configuration.LegacyConfiguration); ok {
+			// This value gets appended to the list of includes,
+			// and does not replace existing values already provided
+			// for -I on the command line.
+			if err := cmd.Flags().Set("include", fmt.Sprintf("nixos-config=%s", c.ConfigPath)); err != nil {
+				panic("failed to set --include flag for nixos install command for legacy systems")
+			}
+		}
+
 		systemBuildOptions := configuration.SystemBuildOptions{
 			CmdFlags:  cmd.Flags(),
 			NixOpts:   opts.NixOptions,
