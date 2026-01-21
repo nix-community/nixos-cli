@@ -164,7 +164,7 @@ const NIXOS_REEXEC = "_NIXOS_ENTER_REEXEC"
 func execSandboxedEnterProcess(log logger.Logger) error {
 	log.Debugf("sandboxing process with unshare")
 
-	argv := []string{"unshare", "--fork", "--mount", "--uts", "--mount-proc", "--pid"}
+	argv := []string{"unshare", "--fork", "--mount", "--uts", "--mount-proc"}
 	argv = append(argv, os.Args...)
 
 	// Map root user if not running as root
