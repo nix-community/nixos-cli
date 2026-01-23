@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"syscall"
 
 	cmdOpts "github.com/nix-community/nixos-cli/internal/cmd/opts"
@@ -16,6 +15,7 @@ import (
 	"github.com/nix-community/nixos-cli/internal/settings"
 	"github.com/nix-community/nixos-cli/internal/system"
 	"github.com/spf13/cobra"
+	"golang.org/x/sys/unix"
 )
 
 func enterMain(cmd *cobra.Command, opts *cmdOpts.EnterOpts) error {
@@ -75,16 +75,14 @@ func enterMain(cmd *cobra.Command, opts *cmdOpts.EnterOpts) error {
 	}
 
 	var resolvConfErr error
+	sourceFd := -1
 	if cfg.Enter.MountResolvConf {
-		if _, err := os.Stat("/etc/resolv.conf"); err == nil {
+		sourceFd, err = unix.OpenTree(unix.AT_FDCWD, "/etc/resolv.conf", unix.OPEN_TREE_CLONE|unix.OPEN_TREE_CLOEXEC)
+		switch err {
+		case nil:
 			log.Infof("bind-mounting /etc/resolv.conf to %v for Internet access", opts.RootLocation)
 
-			targetResolvConf, err := findResolvConfLocation(opts.RootLocation)
-			if err != nil {
-				log.Warnf("failed to find resolv.conf location: %v", err)
-				resolvConfErr = err
-				goto resolvConfDone
-			}
+			targetResolvConf := filepath.Join(opts.RootLocation, "/etc/resolv.conf")
 
 			// Ensure parent directory exists
 			err = os.MkdirAll(filepath.Dir(targetResolvConf), 0o755)
@@ -94,28 +92,45 @@ func enterMain(cmd *cobra.Command, opts *cmdOpts.EnterOpts) error {
 				goto resolvConfDone
 			}
 
-			// Ensure the target file exists
-			targetFile, err := os.OpenFile(targetResolvConf, os.O_CREATE, 0o644)
+			// Create the target file if it doesn't exist
+			// If it is a symlink, open it directly
+			openHow := unix.OpenHow{
+				Flags:   unix.O_CREAT | unix.O_NOFOLLOW | unix.O_CLOEXEC | unix.O_RDONLY,
+				Mode:    0o644,
+				Resolve: 0,
+			}
+			targetFd, err := unix.Openat2(unix.AT_FDCWD, targetResolvConf, &openHow)
+			if err == unix.ELOOP {
+				openHow.Flags = unix.O_PATH | unix.O_NOFOLLOW | unix.O_CLOEXEC
+				openHow.Mode = 0
+				targetFd, err = unix.Openat2(unix.AT_FDCWD, targetResolvConf, &openHow)
+			}
 			if err != nil {
 				log.Warnf("failed to create target resolv.conf: %v", err)
 				resolvConfErr = err
 				goto resolvConfDone
 			}
-			_ = targetFile.Close()
 
 			// Do the bind mount
-			err = syscall.Mount("/etc/resolv.conf", targetResolvConf, "", syscall.MS_BIND, "")
+			err = unix.MoveMount(sourceFd, "", targetFd, "", unix.MOVE_MOUNT_F_EMPTY_PATH|unix.MOVE_MOUNT_T_EMPTY_PATH)
+			_ = unix.Close(targetFd)
 			if err != nil {
 				log.Warnf("failed to bind-mount /etc/resolv.conf to chroot: %v", err)
 				resolvConfErr = err
 				goto resolvConfDone
 			}
-		} else {
-			log.Warnf("/etc/resolv.conf does not exist, skipping mounting: %v", err)
+		case unix.ENOENT:
+			log.Warnf("/etc/resolv.conf does not exist, skipping mounting")
+		default:
+			log.Warnf("failed to open /etc/resolv.conf: %v", err)
+			resolvConfErr = err
 		}
 	}
 
 resolvConfDone:
+	if sourceFd != -1 {
+		_ = unix.Close(sourceFd)
+	}
 	if resolvConfErr != nil {
 		log.Warnf("Internet access may not be available", err)
 	}
@@ -197,30 +212,6 @@ func bindMountDirectory(root string, subdir string) error {
 
 	err = syscall.Mount(source, target, "", syscall.MS_BIND|syscall.MS_REC, "")
 	return err
-}
-
-func findResolvConfLocation(root string) (string, error) {
-	targetResolvConf := filepath.Join(root, "/etc/resolv.conf")
-
-	resolvConf, err := os.OpenFile(targetResolvConf, os.O_CREATE|os.O_RDONLY, 0o644)
-	if err != nil {
-		return "", err
-	}
-	_ = resolvConf.Close()
-
-	resolvedLocation, err := filepath.EvalSymlinks(targetResolvConf)
-	if err != nil {
-		return "", err
-	}
-
-	var finalLocation string
-	if !strings.HasPrefix(resolvedLocation, "/") {
-		finalLocation = filepath.Join(root, resolvedLocation)
-	} else {
-		finalLocation = filepath.Join(root, "etc", resolvedLocation)
-	}
-
-	return finalLocation, nil
 }
 
 func activate(s system.CommandRunner, root string, systemClosure string, silent bool) error {
