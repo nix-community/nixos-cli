@@ -179,6 +179,17 @@ global *--config* flag as such:
 
 	Default: *system*
 
+*--re-exec-root*
+	If the command is executed by a non-root user, this option will cause *nixos-cli*
+	to re-execute with root privileges, instead of elevating to root separately each
+	time it is required.
+
+	This option only applies when activating or creating boot entries on a local system
+	(i.e when not passing both _--no-activate_ and _--no-boot_, or _--target-host_).
+
+	Note: Enabling this will cause the configuration build process to bypass the eval
+	cache of the non-root user.
+
 *--remote-root*
 	Prefix remote activation commands with an escalation command like _sudo_.
 
