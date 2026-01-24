@@ -36,6 +36,7 @@ type ApplyOpts struct {
 	NoBoot                bool
 	OutputPath            string
 	ProfileName           string
+	LocalRoot             bool
 	RemoteRoot            bool
 	Specialisation        string
 	TargetHost            string

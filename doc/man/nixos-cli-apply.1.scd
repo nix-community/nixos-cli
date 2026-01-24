@@ -179,6 +179,17 @@ global *--config* flag as such:
 
 	Default: *system*
 
+*--local-root*
+	Prefix local activation and channel upgrade commands with an escalation command like _sudo_.
+
+	Only applies for local hosts.
+
+	This is applicable to switching the active Nix profile, running
+	the _switch-to-configuration_ script, and upgrading the root users
+	Nix channels.
+
+	The escalation command used is defined by the setting _root_command_.
+
 *--remote-root*
 	Prefix remote activation commands with an escalation command like _sudo_.
 
@@ -188,7 +199,7 @@ global *--config* flag as such:
 	the _switch-to-configuration_ script, so users may need to type in a
 	password twice if NOPASSWD is not set for that user.
 
-	This is defined by the setting _root_command_.
+	The escalation command used is defined by the setting _root_command_.
 
 *-s*, *--specialisation* <NAME>
 	Activate a specialisation *NAME* from the available specialisations.

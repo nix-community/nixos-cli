@@ -34,6 +34,7 @@ type ApplySettings struct {
 	UseNom                bool   `koanf:"use_nom"`
 	UseGitCommitMsg       bool   `koanf:"use_git_commit_msg"`
 	IgnoreDirtyTree       bool   `koanf:"ignore_dirty_tree"`
+	ReexecRoot            bool   `koanf:"reexec_as_root"`
 }
 
 type ConfirmationSettings struct {
@@ -127,6 +128,11 @@ var SettingsDocs = map[string]DescriptionEntry{
 	"apply.ignore_dirty_tree": {
 		Short: "Ignore dirty working tree when using Git commit message for --tag",
 		Long:  "Allows 'apply' to use Git commit messages even when the working directory is dirty.",
+	},
+	"apply.reexec_as_root": {
+		Short: "Re-execute process as root using `root_command`",
+		Long: "Re-execute process as root using `root_command`. Only applies when activating or creating boot entries on a local system," +
+			" or upgrading the root user's Nix channels.",
 	},
 	"auto_rollback": {
 		Short: "Automatically rollback profile on activation failure",
