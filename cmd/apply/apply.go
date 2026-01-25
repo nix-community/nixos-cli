@@ -66,8 +66,8 @@ func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 					return fmt.Errorf("--install-bootloader requires activation, remove --no-activate and/or --no-boot to use this option")
 				}
 
-				if opts.OutputPath == "" {
-					return fmt.Errorf("if --no-activate and --no-boot are both specified, --output must be specified too")
+				if opts.OutputPath == "" && !opts.Dry {
+					return fmt.Errorf("if --no-activate and --no-boot are both specified, one of --output or --dry must also be specified")
 				}
 			}
 
