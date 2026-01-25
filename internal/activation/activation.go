@@ -1,6 +1,7 @@
 package activation
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -65,6 +66,31 @@ func EnsureSystemProfileDirectoryExists(s system.System) error {
 	return nil
 }
 
+func IsNixOSClosure(s system.System, closure string) (bool, error) {
+	nixosVersionFile := filepath.Join(closure, constants.NixOSVersionFile)
+
+	_, err := s.FS().Stat(nixosVersionFile)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return false, nil
+		}
+
+		return false, err
+	}
+
+	return true, nil
+}
+
+var ErrNixosClosureMissingFiles = `
+Your NixOS closure path seems to be missing essential files.
+To avoid corrupting your current NixOS installation, the activation will abort.
+
+This could be caused by a Nix bug: https://github.com/NixOS/nix/issues/13367.
+This is the evaluated NixOS closure path: %v.
+Change the directory to somewhere else (e.g., 'cd $HOME') before trying again.
+
+Please open an issue if you think this is a mistake.`
+
 type AddNewNixProfileOptions struct {
 	RootCommand    string
 	UseRootCommand bool
@@ -76,6 +102,14 @@ func AddNewNixProfile(s system.System, profile string, closure string, opts *Add
 		if err != nil {
 			return err
 		}
+	}
+
+	if isClosure, err := IsNixOSClosure(s, closure); !isClosure {
+		if err == nil {
+			return fmt.Errorf(ErrNixosClosureMissingFiles, closure)
+		}
+
+		return err
 	}
 
 	profileDirectory := generation.GetProfileDirectoryFromName(profile)
