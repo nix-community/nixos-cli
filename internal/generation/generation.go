@@ -93,7 +93,7 @@ func GenerationFromDirectory(generationDirname string, number uint64) (*Generati
 	// Fall back to reading the nixos-version file that should always
 	// exist if the `nixos-version.json` file doesn't exist.
 	if info.NixosVersion == "" {
-		nixosVersionFile := filepath.Join(generationDirname, "nixos-version")
+		nixosVersionFile := filepath.Join(generationDirname, constants.NixOSVersionFile)
 		nixosVersionContents, err := os.ReadFile(nixosVersionFile)
 		if err != nil {
 			encounteredErrors = append(encounteredErrors, err)
