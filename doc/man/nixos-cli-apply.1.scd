@@ -72,7 +72,7 @@ _nixos-rebuild dry-activate_
 
 _nixos-rebuild dry-build_
 
-	*nixos apply --dry --no-activate --no-boot --output ./result*
+	*nixos apply --dry --no-activate --no-boot*
 
 Many other behaviors for _nixos-rebuild_ are in the *nixos generation*
 command tree. See *nixos-cli-generation(1)* for details.
@@ -146,8 +146,8 @@ global *--config* flag as such:
 	a real configuration to be built beforehand.
 
 	Dry builds of the configuration can be achieved by passing *--no-activate*
-	and *--no-boot*, as well as *--output*. If any of these options are not
-	passed, then dry activation is assumed.
+	and *--no-boot*. If any of these options are not passed, then dry activation
+	is assumed.
 
 	The list of changes is not guaranteed to be complete for dry activations.
 
