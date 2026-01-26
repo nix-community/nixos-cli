@@ -312,15 +312,18 @@ func createInitialGeneration(s system.CommandRunner, mountpoint string, closure 
 
 const (
 	bootloaderTemplate = `
-mount --rbind --mkdir / '%s'
-mount --make-rslave '%s'
+set -e
+hash -r
+mount --rbind --mkdir / '%[1]s'
+mount --make-rslave '%[1]s'
 /run/current-system/bin/switch-to-configuration boot
-umount -R '%s' && rmdir '%s'
+umount -R '%[1]s' && (rmdir '%[1]s' 2>/dev/null || true)
 `
 )
 
 func installBootloader(s system.CommandRunner, root string) error {
-	bootloaderScript := fmt.Sprintf(bootloaderTemplate, root, root, root, root)
+	bootloaderScript := fmt.Sprintf(bootloaderTemplate, root)
+
 	mtabLocation := filepath.Join(root, "etc", "mtab")
 
 	log := s.Logger()
