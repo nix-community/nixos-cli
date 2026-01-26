@@ -10,6 +10,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const (
+	NIXOS_STC_PARENT_EXE = "__NIXOS_SWITCH_TO_CONFIGURATION_PARENT_EXE"
+)
+
 func ActivateCommand() *cobra.Command {
 	var opts cmdOpts.ActivateOpts
 

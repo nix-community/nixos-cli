@@ -39,8 +39,6 @@ const (
 	RELOAD_BY_ACTIVATION_LIST_FILE      = "/run/nixos/activation-reload-list"
 	RESTART_BY_ACTIVATION_LIST_FILE     = "/run/nixos/activation-restart-list"
 
-	NIXOS_STC_PARENT_EXE = "__NIXOS_SWITCH_TO_CONFIGURATION_PARENT_EXE"
-
 	SYSINIT_REACTIVATION_TARGET = "sysinit-reactivation.target"
 )
 
