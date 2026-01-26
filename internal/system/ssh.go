@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"net/url"
 	"os"
 	"os/signal"
 	"os/user"
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -40,39 +40,35 @@ type SSHSystem struct {
 }
 
 func NewSSHSystem(host string, log logger.Logger) (*SSHSystem, error) {
-	if host == "" {
-		return nil, fmt.Errorf("host string is empty")
+	if after, ok := strings.CutPrefix(host, "ssh://"); ok {
+		host = after
 	}
 
-	if !strings.Contains(host, "://") {
-		host = "ssh://" + host
-	}
-
-	parsedURL, err := url.Parse(host)
+	hostInfo, err := parseUserHostPort(host)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse host: %v", err)
+		return nil, err
 	}
 
 	var username string
-	if u := parsedURL.User; u != nil {
-		username = u.Username()
-	} else {
-		current, err := user.Current()
-		if err != nil {
-			username = os.Getenv("USER")
-			if username == "" {
-				return nil, fmt.Errorf("failed to determine current user: %w", err)
-			}
-		} else {
+	var address string
+	var port string
+
+	if hostInfo.User == "" {
+		if current, err := user.Current(); err == nil {
 			username = current.Username
+		} else if current := os.Getenv("USER"); current != "" {
+			username = current
+		} else {
+			return nil, fmt.Errorf("failed to determine current user")
 		}
+	} else {
+		username = hostInfo.User
 	}
 
-	address := parsedURL.Hostname()
+	address = hostInfo.Host
 
-	var port string
-	if p := parsedURL.Port(); p != "" {
-		port = p
+	if hostInfo.Port != "" {
+		port = hostInfo.Port
 	} else {
 		port = "22"
 	}
@@ -86,7 +82,7 @@ func NewSSHSystem(host string, log logger.Logger) (*SSHSystem, error) {
 			agentClient := agent.NewClient(conn)
 			auth = append(auth, ssh.PublicKeysCallback(agentClient.Signers))
 		} else {
-			log.Debug("failed to connect to SSH agent")
+			log.Debug("failed to connect to SSH agent: %v", err)
 			log.Debug("falling back to password auth")
 		}
 	}
@@ -137,6 +133,80 @@ func NewSSHSystem(host string, log logger.Logger) (*SSHSystem, error) {
 	}
 
 	return s, nil
+}
+
+type userHostPort struct {
+	User string
+	Host string
+	Port string
+}
+
+func parseUserHostPort(s string) (*userHostPort, error) {
+	var user string
+	var rest string
+
+	if at := strings.LastIndex(s, "@"); at != -1 {
+		user = s[:at]
+		rest = s[at+1:]
+	} else {
+		rest = s
+	}
+
+	host, port, err := parseHostPort(rest)
+	if err != nil {
+		return nil, err
+	}
+
+	return &userHostPort{
+		User: user,
+		Host: host,
+		Port: port,
+	}, nil
+}
+
+func parseHostPort(s string) (host, port string, err error) {
+	// Bracketed IPv6 (with or without port)
+	if strings.HasPrefix(s, "[") {
+		end := strings.Index(s, "]")
+		if end == -1 {
+			return "", "", fmt.Errorf("invalid IPv6 address")
+		}
+
+		host = s[1:end]
+
+		if len(s) > end+1 {
+			if s[end+1] != ':' {
+				return "", "", fmt.Errorf("invalid host format")
+			}
+			port = s[end+2:]
+		}
+
+		return host, port, nil
+	}
+
+	colonCount := strings.Count(s, ":")
+
+	// host:port or IPv4:port
+	if colonCount == 1 {
+		parts := strings.SplitN(s, ":", 2)
+		return parts[0], parts[1], nil
+	}
+
+	// Possible unbracketed IPv6
+	if colonCount > 1 {
+		last := s[strings.LastIndex(s, ":")+1:]
+
+		// Reject addresses with ambiguous last numbers that look like a port
+		if p, err := strconv.ParseUint(last, 10, 16); err == nil && p != 0 {
+			return "", "", fmt.Errorf("IPv6 address with port must be in brackets")
+		}
+
+		// Otherwise, treat it as a pure IPv6 address
+		return s, "", nil
+	}
+
+	// No colon at all, so just a host
+	return s, "", nil
 }
 
 func (s *SSHSystem) EnsureRemoteRootPassword(rootCmd string) error {
