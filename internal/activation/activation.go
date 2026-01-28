@@ -65,6 +65,13 @@ func EnsureSystemProfileDirectoryExists(s system.System) error {
 	return nil
 }
 
+func IsNixOSClosure(s system.System, closure string) error {
+	nixosVersionFile := filepath.Join(closure, constants.NixOSVersionFile)
+
+	_, err := s.FS().Stat(nixosVersionFile)
+	return err
+}
+
 type AddNewNixProfileOptions struct {
 	RootCommand    string
 	UseRootCommand bool
@@ -76,6 +83,10 @@ func AddNewNixProfile(s system.System, profile string, closure string, opts *Add
 		if err != nil {
 			return err
 		}
+	}
+
+	if err := IsNixOSClosure(s, closure); err != nil {
+		return err
 	}
 
 	profileDirectory := generation.GetProfileDirectoryFromName(profile)
