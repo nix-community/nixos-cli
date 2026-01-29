@@ -41,6 +41,8 @@
           };
 
           nixosLegacy = self'.packages.nixos.override {flake = false;};
+
+          activation-supervisor = pkgs.callPackage ./nix/supervisor.nix {};
         };
 
         devShells = let
