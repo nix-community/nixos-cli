@@ -385,7 +385,6 @@ func (s *SSHSystem) Run(cmd *Command) (int, error) {
 			// seems to have a bug where the first attempt is wrong due to
 			// the PTY discarding the first inputted byte.
 			restoreLocal, err := requestRootPasswordPTY(session, cmd.Stdin)
-
 			if err != nil {
 				log.Warnf("unable to make local terminal raw: %v", err)
 			} else {
@@ -466,7 +465,11 @@ func osSignalToSSHSignal(s os.Signal) ssh.Signal {
 }
 
 func requestRootPasswordPTY(session *ssh.Session, stdin io.Reader) (func(), error) {
-	file := stdin.(*os.File)
+	file, ok := stdin.(*os.File)
+	if !ok {
+		return nil, errors.New("stdin is not a file")
+	}
+
 	w, h, err := term.GetSize(int(file.Fd()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get terminal size: %w", err)
