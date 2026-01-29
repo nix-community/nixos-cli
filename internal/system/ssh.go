@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	shlex "github.com/carapace-sh/carapace-shlex"
 	cmdUtils "github.com/nix-community/nixos-cli/internal/cmd/utils"
@@ -77,7 +78,8 @@ func NewSSHSystem(host string, log logger.Logger) (*SSHSystem, error) {
 
 	var conn net.Conn
 	if sock := os.Getenv("SSH_AUTH_SOCK"); sock != "" {
-		conn, err = net.Dial("unix", sock)
+		dialer := net.Dialer{Timeout: 2 * time.Second}
+		conn, err = dialer.Dial("unix", sock)
 		if err == nil {
 			agentClient := agent.NewClient(conn)
 			auth = append(auth, ssh.PublicKeysCallback(agentClient.Signers))
