@@ -412,9 +412,10 @@ func (s *SSHSystem) Run(cmd *Command) (int, error) {
 
 	go func() {
 		for sig := range sigCh {
-			s := osSignalToSSHSignal(sig)
-			if err := session.Signal(s); err != nil {
-				log.Warnf("failed to forward signal '%v': %v", s, err)
+			if s := osSignalToSSHSignal(sig); s != "" {
+				if err := session.Signal(s); err != nil {
+					log.Warnf("failed to forward signal '%v': %v", s, err)
+				}
 			}
 		}
 	}()
