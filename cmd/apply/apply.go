@@ -120,6 +120,7 @@ func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 	cmd.Flags().BoolVarP(&opts.Verbose, "verbose", "v", opts.Verbose, "Show verbose logging")
 	cmd.Flags().BoolVar(&opts.BuildVM, "vm", false, "Build a NixOS VM script")
 	cmd.Flags().BoolVar(&opts.BuildVMWithBootloader, "vm-with-bootloader", false, "Build a NixOS VM script with a bootloader")
+	cmd.Flags().BoolVar(&opts.ReexecRoot, "re-exec-root", false, "Re-execute as root")
 	cmd.Flags().BoolVar(&opts.RemoteRoot, "remote-root", false, "Prefix activation commands with an escalation command like sudo")
 	cmd.Flags().BoolVarP(&opts.AlwaysConfirm, "yes", "y", false, "Automatically confirm activation")
 	cmd.Flags().StringVar(&opts.BuildHost, "build-host", "", "Use specified `user@host:port` to perform build")
@@ -243,7 +244,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 	// to gain access to activation commands. Do this as early as
 	// possible to prevent excessive initialization code from
 	// running.
-	if os.Geteuid() != 0 && !targetHost.IsRemote() {
+	if os.Geteuid() != 0 && opts.ReexecRoot && !targetHost.IsRemote() {
 		// Only re-execute if running activation on local system for the
 		// system build type.
 		if v, ok := buildType.(*configuration.SystemBuild); ok && v.Activate {
@@ -254,6 +255,9 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 			}
 		}
 	}
+	effectiveRoot := os.Geteuid() == 0
+	upgradeChannelsUseRoot := !effectiveRoot
+	activationUseRoot := !effectiveRoot && !targetHost.IsRemote() || opts.RemoteRoot && targetHost.IsRemote()
 
 	var buildHost system.System
 
@@ -339,7 +343,9 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 		log.Step("Upgrading channels...")
 
 		if err := upgradeChannels(localSystem, &upgradeChannelsOptions{
-			UpgradeAll: opts.UpgradeAllChannels,
+			UpgradeAll:     opts.UpgradeAllChannels,
+			RootCommand:    cfg.RootCommand,
+			UseRootCommand: upgradeChannelsUseRoot,
 		}); err != nil {
 			log.Warnf("failed to update channels: %v", err)
 			log.Warnf("continuing with existing channels")
@@ -562,7 +568,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 			resultLocation,
 			&activation.AddNewNixProfileOptions{
 				RootCommand:    cfg.RootCommand,
-				UseRootCommand: opts.RemoteRoot && targetHost.IsRemote(),
+				UseRootCommand: activationUseRoot,
 			},
 		); err != nil {
 			log.Errorf("failed to set system profile: %v", err)
@@ -595,7 +601,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 				opts.ProfileName,
 				previousGenNumber, &activation.SetNixProfileGenerationOptions{
 					RootCommand:    cfg.RootCommand,
-					UseRootCommand: opts.RemoteRoot && targetHost.IsRemote(),
+					UseRootCommand: activationUseRoot,
 				},
 			); err != nil {
 				log.Errorf("failed to rollback system profile: %v", err)
@@ -622,7 +628,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 	err = activation.SwitchToConfiguration(targetHost, resultLocation, stcAction, &activation.SwitchToConfigurationOptions{
 		InstallBootloader: opts.InstallBootloader,
 		Specialisation:    specialisation,
-		UseRootCommand:    opts.RemoteRoot && targetHost.IsRemote(),
+		UseRootCommand:    activationUseRoot,
 		RootCommand:       cfg.RootCommand,
 	})
 	if err != nil {
@@ -637,7 +643,9 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 const channelDirectory = constants.NixProfileDirectory + "/per-user/root/channels"
 
 type upgradeChannelsOptions struct {
-	UpgradeAll bool
+	UpgradeAll     bool
+	RootCommand    string
+	UseRootCommand bool
 }
 
 func upgradeChannels(s system.CommandRunner, opts *upgradeChannelsOptions) error {
@@ -665,6 +673,9 @@ func upgradeChannels(s system.CommandRunner, opts *upgradeChannelsOptions) error
 	s.Logger().CmdArray(argv)
 
 	cmd := system.NewCommand(argv[0], argv[1:]...)
+	if opts.UseRootCommand {
+		cmd.RunAsRoot(opts.RootCommand)
+	}
 	_, err := s.Run(cmd)
 	return err
 }
