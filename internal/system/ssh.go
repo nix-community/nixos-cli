@@ -21,6 +21,7 @@ import (
 	cmdUtils "github.com/nix-community/nixos-cli/internal/cmd/utils"
 	"github.com/nix-community/nixos-cli/internal/logger"
 	"github.com/nix-community/nixos-cli/internal/settings"
+	sshUtils "github.com/nix-community/nixos-cli/internal/ssh"
 	"github.com/nix-community/nixos-cli/internal/utils"
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
@@ -35,7 +36,7 @@ type SSHSystem struct {
 	sftp     *sftp.Client
 	user     string
 	address  string
-	port     string
+	port     int
 	password []byte
 	logger   logger.Logger
 }
@@ -45,14 +46,14 @@ func NewSSHSystem(host string, log logger.Logger) (*SSHSystem, error) {
 		host = after
 	}
 
-	hostInfo, err := parseUserHostPort(host)
+	hostInfo, err := sshUtils.ParseUserHostPort(host)
 	if err != nil {
 		return nil, err
 	}
 
 	var username string
 	var address string
-	var port string
+	var port int
 
 	if hostInfo.User == "" {
 		if current, err := user.Current(); err == nil {
@@ -68,10 +69,10 @@ func NewSSHSystem(host string, log logger.Logger) (*SSHSystem, error) {
 
 	address = hostInfo.Host
 
-	if hostInfo.Port != "" {
+	if hostInfo.Port != 0 {
 		port = hostInfo.Port
 	} else {
-		port = "22"
+		port = 22
 	}
 
 	auth := []ssh.AuthMethod{}
@@ -108,7 +109,7 @@ func NewSSHSystem(host string, log logger.Logger) (*SSHSystem, error) {
 
 	hostKeyCallback := wrappedKnownHostsCallback(log, knownHostsKeyCallback, knownHostsFile)
 
-	client, err := ssh.Dial("tcp", net.JoinHostPort(address, port), &ssh.ClientConfig{
+	client, err := ssh.Dial("tcp", net.JoinHostPort(address, strconv.Itoa(port)), &ssh.ClientConfig{
 		User:            username,
 		Auth:            auth,
 		HostKeyCallback: hostKeyCallback,
@@ -135,80 +136,6 @@ func NewSSHSystem(host string, log logger.Logger) (*SSHSystem, error) {
 	}
 
 	return s, nil
-}
-
-type userHostPort struct {
-	User string
-	Host string
-	Port string
-}
-
-func parseUserHostPort(s string) (*userHostPort, error) {
-	var user string
-	var rest string
-
-	if at := strings.LastIndex(s, "@"); at != -1 {
-		user = s[:at]
-		rest = s[at+1:]
-	} else {
-		rest = s
-	}
-
-	host, port, err := parseHostPort(rest)
-	if err != nil {
-		return nil, err
-	}
-
-	return &userHostPort{
-		User: user,
-		Host: host,
-		Port: port,
-	}, nil
-}
-
-func parseHostPort(s string) (host, port string, err error) {
-	// Bracketed IPv6 (with or without port)
-	if strings.HasPrefix(s, "[") {
-		end := strings.Index(s, "]")
-		if end == -1 {
-			return "", "", fmt.Errorf("invalid IPv6 address")
-		}
-
-		host = s[1:end]
-
-		if len(s) > end+1 {
-			if s[end+1] != ':' {
-				return "", "", fmt.Errorf("invalid host format")
-			}
-			port = s[end+2:]
-		}
-
-		return host, port, nil
-	}
-
-	colonCount := strings.Count(s, ":")
-
-	// host:port or IPv4:port
-	if colonCount == 1 {
-		parts := strings.SplitN(s, ":", 2)
-		return parts[0], parts[1], nil
-	}
-
-	// Possible unbracketed IPv6
-	if colonCount > 1 {
-		last := s[strings.LastIndex(s, ":")+1:]
-
-		// Reject addresses with ambiguous last numbers that look like a port
-		if p, err := strconv.ParseUint(last, 10, 16); err == nil && p != 0 {
-			return "", "", fmt.Errorf("IPv6 address with port must be in brackets")
-		}
-
-		// Otherwise, treat it as a pure IPv6 address
-		return s, "", nil
-	}
-
-	// No colon at all, so just a host
-	return s, "", nil
 }
 
 func (s *SSHSystem) EnsureRemoteRootPassword(rootCmd string) error {
@@ -585,7 +512,7 @@ func (s *SSHSystem) IsNixOS() bool {
 }
 
 func (s *SSHSystem) Address() string {
-	return fmt.Sprintf("%s@%s:%s", s.user, s.address, s.port)
+	return fmt.Sprintf("%s@%s:%d", s.user, s.address, s.port)
 }
 
 func (s *SSHSystem) IsRemote() bool {
