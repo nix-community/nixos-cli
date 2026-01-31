@@ -1,18 +1,25 @@
 package activation
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/nix-community/nixos-cli/internal/constants"
 	"github.com/nix-community/nixos-cli/internal/generation"
 	"github.com/nix-community/nixos-cli/internal/logger"
 	"github.com/nix-community/nixos-cli/internal/settings"
 	"github.com/nix-community/nixos-cli/internal/system"
+)
+
+const (
+	RUNNING_ACTIVATION_SUPERVISOR = "NIXOS_CLI_RUNNING_ACTIVATION_SUPERVISOR"
 )
 
 // Parse the generation's `nixos-cli` configuration to find the default specialisation
@@ -260,4 +267,122 @@ func SwitchToConfiguration(s system.CommandRunner, generationLocation string, ac
 	cmd.SetEnv("NIXOS_CLI_ATTEMPTING_ACTIVATION", "1")
 	_, err := s.Run(cmd)
 	return err
+}
+
+// Create an activation trigger path name from a NixOS system
+// closure's location.
+//
+// Used for remote activation.
+func MakeActivationTriggerPath(systemLocation string) string {
+	// Obtain the cryptographic hash + nixos system closure name
+	basename := filepath.Base(systemLocation)
+
+	hash, _, found := strings.Cut(basename, "-")
+	if !found {
+		// Use the SHA256 hash of the whole path if the hash
+		// part in the filename is not found. This should be
+		// rare, if it happens at all, so this ensures collisions
+		// do not happen most of the time.
+		hashedBasename := sha256.Sum256([]byte(systemLocation))
+		hash = hex.EncodeToString(hashedBasename[:])
+	}
+
+	return filepath.Join(constants.NixOSActivationDirectory, "trigger", hash)
+}
+
+// Create the activation runtime directories with the required
+// structure.
+//
+// This creates the trigger directory as sticky, in case non-root users
+// need to activate things.
+func EnsureActivationDirectoryExists() error {
+	err := os.MkdirAll(constants.NixOSActivationDirectory, 0o755)
+	if err != nil {
+		return fmt.Errorf("failed to create %s: %s", constants.NixOSActivationDirectory, err)
+	}
+
+	triggerDirectory := filepath.Join(constants.NixOSActivationDirectory, "trigger")
+
+	err = os.MkdirAll(triggerDirectory, 0o1755)
+	if err != nil {
+		return fmt.Errorf("failed to create %s: %s", triggerDirectory, err)
+	}
+
+	return nil
+}
+
+type RunActivationSupervisorOptions struct {
+	ProfileName       string
+	InstallBootloader bool
+	Specialisation    string
+	UseRootCommand    bool
+	RootCommand       string
+}
+
+func RunActivationSupervisor(
+	s system.System,
+	generationLocation string,
+	action SwitchToConfigurationAction,
+	opts *RunActivationSupervisorOptions,
+) error {
+	log := s.Logger()
+
+	exePath := filepath.Join(generationLocation, "bin", "activation-supervisor")
+
+	currentGeneration, err := s.FS().ReadLink(constants.CurrentSystem)
+	if err != nil {
+		return err
+	}
+
+	argv := []string{
+		"systemd-run",
+		"--collect",
+		"--no-ask-password",
+		"--pipe",
+		"--quiet",
+		"--service-type=exec",
+		"--unit=nixos-cli-activation-supervisor-run",
+		"--wait",
+		"-E", "LOCALE_ARCHIVE",
+		"-E", fmt.Sprintf("%s=1", RUNNING_ACTIVATION_SUPERVISOR),
+	}
+
+	if opts.InstallBootloader {
+		argv = append(argv, "-E", "NIXOS_INSTALL_BOOTLOADER=1")
+	}
+
+	argv = append(argv, exePath, "run", action.String(), "--previous-gen", currentGeneration)
+
+	if opts.ProfileName != "" && opts.ProfileName != "system" {
+		argv = append(argv, "-p", opts.ProfileName)
+	}
+
+	if opts.Specialisation != "" {
+		argv = append(argv, "-s", opts.Specialisation)
+	}
+
+	if log.GetLogLevel() == logger.LogLevelDebug {
+		argv = append(argv, "-v")
+	}
+
+	log.CmdArray(argv)
+
+	cmd := system.NewCommand(argv[0], argv[1:]...)
+	if opts.UseRootCommand {
+		cmd.RunAsRoot(opts.RootCommand)
+	}
+
+	_, err = s.Run(cmd)
+	if err != nil {
+		return fmt.Errorf("activation supervisor exited abnormally: %v", err)
+	}
+
+	triggerPath := MakeActivationTriggerPath(generationLocation)
+
+	err = s.FS().CreateFile(triggerPath)
+	if err != nil {
+		log.Errorf("failed to create acknowledgement file on remote system: %v", err)
+	}
+
+	return nil
 }

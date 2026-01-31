@@ -38,4 +38,4 @@ jobs:
         run: nix develop .# -c make test
 
       - name: Build Nix packages
-        run: nix build .#{nixos,nixosLegacy}
+        run: nix build .#{nixos,nixosLegacy,activation-supervisor}
