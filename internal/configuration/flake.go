@@ -11,6 +11,7 @@ import (
 
 	"github.com/nix-community/nixos-cli/internal/cmd/nixopts"
 	"github.com/nix-community/nixos-cli/internal/logger"
+	"github.com/nix-community/nixos-cli/internal/nix"
 	"github.com/nix-community/nixos-cli/internal/system"
 )
 
@@ -82,12 +83,23 @@ func (f *FlakeRef) String() string {
 	return fmt.Sprintf("%s#%s", f.URI, f.System)
 }
 
+func (f *FlakeRef) ConfigAttr(attrs ...string) string {
+	attrs = append([]string{"nixosConfigurations", nix.MakeAttrName(f.System), "config"}, attrs...)
+	attrPath := nix.MakeAttrPath(attrs...)
+	return fmt.Sprintf("%s#%s", f.URI, attrPath)
+}
+
+func (f *FlakeRef) BuildAttr(attrs ...string) string {
+	attrs = append([]string{"system", "build"}, attrs...)
+	return f.ConfigAttr(attrs...)
+}
+
 func (f *FlakeRef) SetBuilder(builder system.CommandRunner) {
 	f.Builder = builder
 }
 
 func (f *FlakeRef) EvalAttribute(attr string) (*string, error) {
-	evalArg := fmt.Sprintf(`%s#nixosConfigurations.%s.config.%s`, f.URI, f.System, attr)
+	evalArg := f.ConfigAttr(attr)
 	argv := []string{"nix", "eval", evalArg}
 
 	var stdout bytes.Buffer
@@ -116,7 +128,7 @@ func (f *FlakeRef) buildLocalSystem(s *system.LocalSystem, buildType BuildType, 
 		nixCommand = "nom"
 	}
 
-	systemAttribute := fmt.Sprintf("%s#nixosConfigurations.%s.config.system.build.%s", f.URI, f.System, buildType.BuildAttr())
+	systemAttribute := f.BuildAttr(buildType.BuildAttr())
 
 	argv := []string{nixCommand, "build", systemAttribute, "--print-out-paths"}
 
@@ -180,7 +192,7 @@ func (f *FlakeRef) buildRemoteSystem(s *system.SSHSystem, buildType BuildType, o
 
 	// 1. Determine the drv path.
 	// Equivalent of `nix eval --raw "${attr}.drvPath"`
-	drvPathAttr := fmt.Sprintf("%s#nixosConfigurations.%s.config.system.build.%s.drvPath", f.URI, f.System, buildType.BuildAttr())
+	drvPathAttr := f.BuildAttr(buildType.BuildAttr(), "drvPath")
 
 	evalDrvCmdArgv := []string{"nix", "eval", "--raw", drvPathAttr}
 	evalDrvCmdArgv = append(evalDrvCmdArgv, evalArgs...)

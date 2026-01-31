@@ -19,6 +19,7 @@ import (
 	"github.com/nix-community/nixos-cli/internal/constants"
 	"github.com/nix-community/nixos-cli/internal/generation"
 	"github.com/nix-community/nixos-cli/internal/logger"
+	"github.com/nix-community/nixos-cli/internal/nix"
 	"github.com/nix-community/nixos-cli/internal/settings"
 	"github.com/nix-community/nixos-cli/internal/system"
 	"github.com/nix-community/nixos-cli/internal/utils"
@@ -769,7 +770,7 @@ func getAvailableImageAttrs(
 	case *configuration.FlakeRef:
 		evalArgs := nixopts.NixOptionsToArgsListByCategory(cobraCmd.Flags(), nixOpts, "lock")
 
-		attr = fmt.Sprintf("%s#nixosConfigurations.%s.config.system.build.images", v.URI, v.System)
+		attr = v.BuildAttr("images")
 		argv = []string{"nix", "eval", "--json", attr, "--apply", "builtins.attrNames"}
 		argv = append(argv, evalArgs...)
 	case *configuration.LegacyConfiguration:
@@ -814,11 +815,12 @@ func getImageName(
 	var argv []string
 	var attr string
 
+	imgName = nix.MakeAttrName(imgName)
 	switch v := cfg.(type) {
 	case *configuration.FlakeRef:
 		evalArgs := nixopts.NixOptionsToArgsListByCategory(cobraCmd.Flags(), nixOpts, "lock")
 
-		attr = fmt.Sprintf("%s#nixosConfigurations.%s.config.system.build.images.%s.passthru.filePath", v.URI, v.System, imgName)
+		attr = v.BuildAttr("images", imgName, "passthru", "filePath")
 		argv = []string{"nix", "eval", "--raw", attr}
 		argv = append(argv, evalArgs...)
 	case *configuration.LegacyConfiguration:

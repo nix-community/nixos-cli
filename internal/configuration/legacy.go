@@ -10,6 +10,7 @@ import (
 
 	"github.com/nix-community/nixos-cli/internal/cmd/nixopts"
 	"github.com/nix-community/nixos-cli/internal/logger"
+	"github.com/nix-community/nixos-cli/internal/nix"
 	"github.com/nix-community/nixos-cli/internal/system"
 	"github.com/nix-community/nixos-cli/internal/utils"
 )
@@ -86,21 +87,29 @@ func (l *LegacyConfiguration) SetBuilder(builder system.CommandRunner) {
 	l.Builder = builder
 }
 
-func (l *LegacyConfiguration) EvalAttribute(attr string) (*string, error) {
-	var argv []string
+func (l *LegacyConfiguration) ConfigPathArg() string {
 	if l.UseExplicitPath {
-		var fullAttrPath strings.Builder
-		if l.Attribute != "" {
-			fullAttrPath.WriteString(l.Attribute)
-			fullAttrPath.WriteString(".")
-		}
-		fullAttrPath.WriteString("config.")
-		fullAttrPath.WriteString(attr)
-
-		argv = []string{"nix-instantiate", "--eval", l.ConfigPath, "-A", fullAttrPath.String()}
-	} else {
-		argv = []string{"nix-instantiate", "--eval", "<nixpkgs/nixos>", "-A", fmt.Sprintf("config.%s", attr)}
+		return l.ConfigPath
 	}
+	return "<nixpkgs/nixos>"
+}
+
+func (l *LegacyConfiguration) ConfigAttr(attrs ...string) string {
+	toplevelAttr := ""
+	if l.UseExplicitPath {
+		toplevelAttr = l.Attribute
+	}
+	attrs = append([]string{toplevelAttr, "config"}, attrs...)
+	return nix.MakeAttrPath(attrs...)
+}
+
+func (l *LegacyConfiguration) BuildAttr(attrs ...string) string {
+	attrs = append([]string{"system", "build"}, attrs...)
+	return l.ConfigAttr(attrs...)
+}
+
+func (l *LegacyConfiguration) EvalAttribute(attr string) (*string, error) {
+	argv := []string{"nix-instantiate", "--eval", l.ConfigPathArg(), "-A", l.ConfigAttr(attr)}
 
 	for _, v := range l.Includes {
 		argv = append(argv, "-I", v)
@@ -132,12 +141,7 @@ func (l *LegacyConfiguration) buildLocalSystem(s *system.LocalSystem, buildType 
 		nixCommand = "nom-build"
 	}
 
-	var argv []string
-	if l.UseExplicitPath {
-		argv = []string{nixCommand, l.ConfigPath, "-A", makeBuildAttrPath(l.Attribute, buildType)}
-	} else {
-		argv = []string{nixCommand, "<nixpkgs/nixos>", "-A", fmt.Sprintf("config.system.build.%s", buildType.BuildAttr())}
-	}
+	argv := []string{nixCommand, l.ConfigPathArg(), "-A", l.BuildAttr(buildType.BuildAttr())}
 
 	// Mimic `nixos-rebuild` behavior of using -k option
 	// for all commands except for `switch` and `boot`
@@ -193,12 +197,7 @@ func (l *LegacyConfiguration) buildRemoteSystem(s *system.SSHSystem, buildType B
 
 	// 1. Determine the drv path.
 	// Equivalent of `nix-instantiate -A "${attr}" ${extraBuildFlags[@]}`
-	var instantiateArgv []string
-	if l.UseExplicitPath {
-		instantiateArgv = []string{"nix-instantiate", l.ConfigPath, "-A", makeBuildAttrPath(l.Attribute, buildType)}
-	} else {
-		instantiateArgv = []string{"nix-instantiate", "<nixpkgs/nixos>", "-A", fmt.Sprintf("config.system.build.%s", buildType.BuildAttr())}
-	}
+	instantiateArgv := []string{"nix-instantiate", l.ConfigPathArg(), "-A", l.BuildAttr(buildType.BuildAttr())}
 	instantiateArgv = append(instantiateArgv, extraBuildFlags...)
 
 	var drvPathBuf bytes.Buffer
@@ -248,19 +247,6 @@ func (l *LegacyConfiguration) buildRemoteSystem(s *system.SSHSystem, buildType B
 
 	_, err := s.Run(realiseDrvCmd)
 	return strings.TrimSpace(realisedPathBuf.String()), err
-}
-
-func makeBuildAttrPath(toplevelAttr string, buildType BuildType) string {
-	var s strings.Builder
-	if toplevelAttr != "" {
-		s.WriteString(toplevelAttr)
-		s.WriteString(".")
-	}
-
-	s.WriteString("config.system.build.")
-	s.WriteString(buildType.BuildAttr())
-
-	return s.String()
 }
 
 func (l *LegacyConfiguration) BuildSystem(buildType BuildType, opts *SystemBuildOptions) (string, error) {
