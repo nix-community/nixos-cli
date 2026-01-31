@@ -75,6 +75,14 @@ nixos-cli - a tool for managing NixOS installations
 *--version*
 	Display the version of the *nixos-cli* tool.
 
+# ARGUMENTS
+
+Nix attribute arguments containing special characters are interpreted as follows:
+
+- *Spaces*: Attribute names with spaces must be enclosed in quotes. For example: "my flake host".
+- *Dots*: Dots (.) are treated as separators in attribute paths. To include a literal dot as part of an attribute name, escape it with a backslash (\\.). For example, the argument "path.to\\..config" is interpreted as the attribute path: [ "path" "to." "config" ]. A literal backslash can be included by escaping it with another backslash (\\\\). The number of backslashes required depends on how the argument is quoted (unquoted, single-quoted, or double-quoted), since your shell may consume some escapes before _nixos-cli_ sees them. For example, when the path is not quoted, two backslashes are required to produce a single literal backslash. Consult your shell’s manual for details on its escaping rules.
+- *Double Quotation Marks*: Double quotation marks (") cannot be part of attribute names, even when escaped. For example, the following will not work: 'my flake \\"host'. This is a limitation of the underlying _nix_ command that _nixos-cli_ depends on.
+
 # AUTHORS
 
 Maintained by Varun Narravula <varun@snare.dev>. Up-to-date sources can be

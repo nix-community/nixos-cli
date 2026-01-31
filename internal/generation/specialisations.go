@@ -2,7 +2,6 @@ package generation
 
 import (
 	"encoding/json"
-	"fmt"
 	"os/exec"
 	"path/filepath"
 	"sort"
@@ -37,7 +36,7 @@ func CollectSpecialisationsFromConfig(cfg configuration.Configuration) []string 
 
 	switch c := cfg.(type) {
 	case *configuration.FlakeRef:
-		attr := fmt.Sprintf("%s#nixosConfigurations.%s.config.specialisation", c.URI, c.System)
+		attr := c.ConfigAttr("specialisation")
 		argv = []string{"nix", "eval", attr, "--apply", "builtins.attrNames", "--json"}
 	case *configuration.LegacyConfiguration:
 		argv = []string{

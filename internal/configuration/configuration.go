@@ -5,6 +5,7 @@ import (
 
 	"github.com/nix-community/nixos-cli/internal/build"
 	"github.com/nix-community/nixos-cli/internal/logger"
+	"github.com/nix-community/nixos-cli/internal/nix"
 	"github.com/nix-community/nixos-cli/internal/settings"
 	"github.com/nix-community/nixos-cli/internal/system"
 	"github.com/spf13/pflag"
@@ -97,5 +98,5 @@ type ImageBuild struct {
 }
 
 func (i *ImageBuild) BuildAttr() string {
-	return fmt.Sprintf("images.%s", i.Variant)
+	return nix.MakeAttrPath("images", nix.MakeAttrName(i.Variant))
 }
