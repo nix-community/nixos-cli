@@ -109,3 +109,24 @@ func ResolveNixFilename(input string) (string, error) {
 
 	return absolutePath, nil
 }
+
+func ResolveDirectory(input string) (string, error) {
+	fileInfo, err := os.Stat(input)
+	if err != nil {
+		return "", err
+	} else if !fileInfo.IsDir() {
+		return "", fmt.Errorf("not a directory: %v", input)
+	}
+
+	realPath, err := filepath.EvalSymlinks(input)
+	if err != nil {
+		return "", err
+	}
+
+	absolutePath, err := filepath.Abs(realPath)
+	if err != nil {
+		return "", err
+	}
+
+	return absolutePath, nil
+}

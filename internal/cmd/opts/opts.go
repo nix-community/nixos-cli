@@ -39,6 +39,7 @@ type ApplyOpts struct {
 	LocalRoot             bool
 	RemoteRoot            bool
 	Specialisation        string
+	StorePath             string
 	TargetHost            string
 	UpgradeAllChannels    bool
 	UpgradeChannels       bool
