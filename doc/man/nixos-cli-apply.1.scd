@@ -211,6 +211,27 @@ global *--config* flag as such:
 	This requires activation, and as such, conflicts with the *--no-activate*
 	option.
 
+*--store-path* <PATH>
+	Use a pre-built NixOS system store path at *PATH* instead of evaluating
+	and building from the configuration. This skips the evaluation and build
+	phases entirely. The path must be a valid NixOS system closure
+	(containing _nixos-version_ and _bin/switch-to-configuration_).
+
+	This is useful for deploying closures that were built elsewhere, such as
+	in CI systems or on remote build machines.
+
+	Cannot be used with [dry-]builds (i.e. passing both *--no-activate*
+	and *--no-boot*).
+
+	Mutually exclusive with the *FLAKE-REF* and *FILE* *ATTR*
+	arguments, as well as the *--vm[-with-bootloader]* and *--image*
+	options.
+
+	The following options are ignored when *--store-path* is specified:
+	*--output*, *--upgrade[-all]*, *--use-nom*.
+
+	If *--build-host* is specified then *PATH* must be valid on the build host.
+
 *-t*, *--tag* <DESCRIPTION>
 	Tag this generation with the given *DESCRIPTION*.
 

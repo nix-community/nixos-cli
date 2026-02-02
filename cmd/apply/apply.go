@@ -69,6 +69,10 @@ func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 				if opts.OutputPath == "" && !opts.Dry {
 					return fmt.Errorf("if --no-activate and --no-boot are both specified, one of --output or --dry must also be specified")
 				}
+
+				if opts.StorePath != "" {
+					return fmt.Errorf("--store-path skips building, remove --no-activate and/or --no-boot to use this option")
+				}
 			}
 
 			if build.Flake() && opts.GenerationTag != "" && !opts.NixOptions.Impure {
@@ -78,6 +82,26 @@ func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 					}
 				} else {
 					return fmt.Errorf("--impure is required when using --tag for flake configurations")
+				}
+			}
+
+			if opts.StorePath != "" {
+				if build.Flake() && opts.FlakeRef != "" || !build.Flake() && opts.File != "" {
+					var nixConfigArg string
+					if build.Flake() {
+						nixConfigArg = "[FLAKE-REF]"
+					} else {
+						nixConfigArg = "[FILE]"
+					}
+					return fmt.Errorf("--store-path was specified, but %v was also provided; use one or the other", nixConfigArg)
+				}
+
+				if opts.BuildHost == "" {
+					storePath, err := utils.ResolveDirectory(opts.StorePath)
+					if err != nil {
+						return fmt.Errorf("failed to resolve store path: %v", err)
+					}
+					opts.StorePath = storePath
 				}
 			}
 
@@ -125,6 +149,7 @@ func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 	cmd.Flags().BoolVarP(&opts.AlwaysConfirm, "yes", "y", false, "Automatically confirm activation")
 	cmd.Flags().StringVar(&opts.BuildHost, "build-host", "", "Use specified `user@host:port` to perform build")
 	cmd.Flags().StringVar(&opts.TargetHost, "target-host", "", "Deploy to a remote machine at `user@host:port`")
+	cmd.Flags().StringVar(&opts.StorePath, "store-path", "", "Use a pre-built NixOS system store `path` instead of building")
 
 	nixopts.AddQuietNixOption(&cmd, &opts.NixOptions.Quiet)
 	nixopts.AddPrintBuildLogsNixOption(&cmd, &opts.NixOptions.PrintBuildLogs)
@@ -163,11 +188,12 @@ func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 
 	_ = cmd.RegisterFlagCompletionFunc("profile-name", generation.CompleteProfileFlag)
 	_ = cmd.RegisterFlagCompletionFunc("specialisation", generation.CompleteSpecialisationFlagFromConfig(opts.FlakeRef, opts.NixOptions.Includes))
+	_ = cmd.RegisterFlagCompletionFunc("store-path", cmdUtils.DirCompletions)
 
 	cmd.MarkFlagsMutuallyExclusive("dry", "output")
 	cmd.MarkFlagsMutuallyExclusive("output", "build-host")
 	cmd.MarkFlagsMutuallyExclusive("output", "target-host")
-	cmd.MarkFlagsMutuallyExclusive("vm", "vm-with-bootloader", "image")
+	cmd.MarkFlagsMutuallyExclusive("vm", "vm-with-bootloader", "image", "store-path")
 	cmd.MarkFlagsMutuallyExclusive("no-activate", "specialisation")
 
 	helpTemplate := cmd.HelpTemplate()
@@ -248,6 +274,13 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 		buildType = &configuration.SystemBuild{Activate: !opts.NoActivate || !opts.NoBoot}
 	}
 
+	// Dry activation requires a real build, so --dry-run shouldn't be set
+	// if running activation scripts.
+	dryBuild := opts.Dry
+	if v, ok := buildType.(*configuration.SystemBuild); ok && v.Activate {
+		dryBuild = false
+	}
+
 	// The local host may need to re-execute as root in order
 	// to gain access to activation or channel upgrade commands.
 	// Do this as early as possible to prevent excessive initialization
@@ -282,191 +315,190 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 		buildHost = localSystem
 	}
 
-	log.Step("Looking for configuration...")
-
 	var nixConfig configuration.Configuration
-	if opts.FlakeRef != "" {
-		nixConfig = configuration.FlakeRefFromString(opts.FlakeRef)
-		if err := nixConfig.(*configuration.FlakeRef).InferSystemFromHostnameIfNeeded(); err != nil {
-			log.Errorf("failed to infer hostname: %v", err)
+	var resultLocation string
+
+	if opts.StorePath == "" {
+		log.Step("Looking for configuration...")
+
+		if opts.FlakeRef != "" {
+			nixConfig = configuration.FlakeRefFromString(opts.FlakeRef)
+			if err := nixConfig.(*configuration.FlakeRef).InferSystemFromHostnameIfNeeded(); err != nil {
+				log.Errorf("failed to infer hostname: %v", err)
+				return err
+			}
+		} else if opts.File != "" {
+			configPath, err := utils.ResolveNixFilename(opts.File)
+			if err != nil {
+				log.Error(err)
+				return err
+			}
+
+			nixConfig = &configuration.LegacyConfiguration{
+				Includes:        opts.NixOptions.Includes,
+				ConfigPath:      configPath,
+				Attribute:       opts.Attr,
+				UseExplicitPath: true,
+			}
+
+			log.Debugf("found configuration at %s", configPath)
+			if opts.Attr != "" {
+				log.Debugf("using attribute '%s'", opts.Attr)
+			}
+		} else {
+			c, err := configuration.FindConfiguration(log, cfg, opts.NixOptions.Includes)
+			if err != nil {
+				log.Errorf("failed to find configuration: %v", err)
+				return err
+			}
+			nixConfig = c
+		}
+
+		nixConfig.SetBuilder(buildHost)
+
+		var configDirname string
+		switch c := nixConfig.(type) {
+		case *configuration.FlakeRef:
+			configDirname = c.URI
+		case *configuration.LegacyConfiguration:
+			configDirname = c.Dirname()
+		}
+
+		configIsDirectory := true
+		originalCwd, err := os.Getwd()
+		if err != nil {
+			log.Errorf("failed to get current directory: %v", err)
 			return err
 		}
-	} else if opts.File != "" {
-		configPath, err := utils.ResolveNixFilename(opts.File)
-		if err != nil {
+		if configDirname != "" {
+			// Change to the configuration directory, if it exists:
+			// this will likely fail for remote configurations or
+			// configurations accessed through the registry, which
+			// should be a rare occurrence, but valid, so ignore any
+			// errors in that case.
+			err := os.Chdir(configDirname)
+			if err != nil {
+				configIsDirectory = false
+			}
+		}
+
+		if !build.Flake() && (opts.UpgradeChannels || opts.UpgradeAllChannels) {
+			log.Step("Upgrading channels...")
+
+			if !effectiveRoot && !opts.LocalRoot {
+				err := errRequiresLocalRoot{Action: "upgrading channels"}
+				log.Error(err)
+				return err
+			}
+
+			if err := upgradeChannels(localSystem, &upgradeChannelsOptions{
+				UpgradeAll:     opts.UpgradeAllChannels,
+				RootCommand:    cfg.RootCommand,
+				UseRootCommand: !effectiveRoot && opts.LocalRoot,
+			}); err != nil {
+				log.Warnf("failed to update channels: %v", err)
+				log.Warnf("continuing with existing channels")
+			}
+		}
+
+		// Confirm if the requested image exists, or list available images
+		// if no parameter is specified/is empty.
+		if imgBuild, ok := buildType.(*configuration.ImageBuild); ok {
+			images, err := getAvailableImageAttrs(cmd, localSystem, nixConfig, &opts.NixOptions)
+			if err != nil {
+				log.Errorf("failed to get available images: %v", err)
+				return err
+			}
+
+			if imgBuild.Variant == "_list" {
+				for _, image := range images {
+					fmt.Println(image)
+				}
+				return nil
+			}
+
+			if slices.Index(images, imgBuild.Variant) < 0 {
+				err := fmt.Errorf("image type '%s' is not available", imgBuild.Variant)
+				log.Error(err)
+				log.Info("pass an empty string to `--image` to get a list of available images")
+				return err
+			}
+		}
+
+		switch buildType.(type) {
+		case *configuration.SystemBuild:
+			log.Step("Building configuration...")
+		case *configuration.VMBuild:
+			log.Step("Building VM...")
+		}
+
+		useNom := cfg.Apply.UseNom || opts.UseNom
+		nomFound := buildHost.HasCommand("nom")
+		if opts.UseNom && !nomFound {
+			err := fmt.Errorf("--use-nom was specified, but `nom` is not executable")
 			log.Error(err)
 			return err
+		} else if cfg.Apply.UseNom && !nomFound {
+			log.Warn("apply.use_nom is specified in config, but `nom` is not executable")
+			log.Warn("falling back to `nix` command for building")
+			useNom = false
 		}
 
-		nixConfig = &configuration.LegacyConfiguration{
-			Includes:        opts.NixOptions.Includes,
-			ConfigPath:      configPath,
-			Attribute:       opts.Attr,
-			UseExplicitPath: true,
+		generationTag := opts.GenerationTag
+		if generationTag == "" {
+			if tagVar := os.Getenv("NIXOS_GENERATION_TAG"); tagVar != "" {
+				log.Debugf("using explicitly set NIXOS_GENERATION_TAG variable for generation tag")
+				generationTag = tagVar
+			}
 		}
 
-		log.Debugf("found configuration at %s", configPath)
-		if opts.Attr != "" {
-			log.Debugf("using attribute '%s'", opts.Attr)
+		if generationTag == "" && cfg.Apply.UseGitCommitMsg {
+			if !configIsDirectory {
+				log.Warn("configuration is not a directory")
+			} else {
+				commitMsg, err := getLatestGitCommitMessage(configDirname, cfg.Apply.IgnoreDirtyTree)
+				if err == errDirtyGitTree {
+					log.Warn("git tree is dirty")
+				} else if err != nil {
+					log.Warnf("failed to get latest git commit message: %v", err)
+				} else {
+					generationTag = commitMsg
+				}
+			}
+		}
+
+		generationTag = strings.TrimSpace(generationTag)
+
+		if generationTag != "" {
+			// Make sure --impure is added to the Nix options if
+			// an implicit commit message is used.
+			if err := cmd.Flags().Set("impure", "true"); err != nil {
+				panic("failed to set --impure flag for apply command before exec with implicit generation tag with git message")
+			}
+		}
+
+		outputPath := opts.OutputPath
+		if outputPath != "" && !filepath.IsAbs(outputPath) {
+			outputPath = filepath.Join(originalCwd, outputPath)
+		}
+
+		buildOptions := &configuration.SystemBuildOptions{
+			ResultLocation: outputPath,
+			DryBuild:       dryBuild,
+			UseNom:         useNom,
+			GenerationTag:  generationTag,
+
+			CmdFlags: cmd.Flags(),
+			NixOpts:  &opts.NixOptions,
+		}
+
+		resultLocation, err = nixConfig.BuildSystem(buildType, buildOptions)
+		if err != nil {
+			log.Errorf("failed to build configuration: %v", err)
+			return err
 		}
 	} else {
-		c, err := configuration.FindConfiguration(log, cfg, opts.NixOptions.Includes)
-		if err != nil {
-			log.Errorf("failed to find configuration: %v", err)
-			return err
-		}
-		nixConfig = c
-	}
-
-	nixConfig.SetBuilder(buildHost)
-
-	var configDirname string
-	switch c := nixConfig.(type) {
-	case *configuration.FlakeRef:
-		configDirname = c.URI
-	case *configuration.LegacyConfiguration:
-		configDirname = c.Dirname()
-	}
-
-	configIsDirectory := true
-	originalCwd, err := os.Getwd()
-	if err != nil {
-		log.Errorf("failed to get current directory: %v", err)
-		return err
-	}
-	if configDirname != "" {
-		// Change to the configuration directory, if it exists:
-		// this will likely fail for remote configurations or
-		// configurations accessed through the registry, which
-		// should be a rare occurrence, but valid, so ignore any
-		// errors in that case.
-		err := os.Chdir(configDirname)
-		if err != nil {
-			configIsDirectory = false
-		}
-	}
-
-	if !build.Flake() && (opts.UpgradeChannels || opts.UpgradeAllChannels) {
-		log.Step("Upgrading channels...")
-
-		if !effectiveRoot && !opts.LocalRoot {
-			err := errRequiresLocalRoot{Action: "upgrading channels"}
-			log.Error(err)
-			return err
-		}
-
-		if err := upgradeChannels(localSystem, &upgradeChannelsOptions{
-			UpgradeAll:     opts.UpgradeAllChannels,
-			RootCommand:    cfg.RootCommand,
-			UseRootCommand: !effectiveRoot && opts.LocalRoot,
-		}); err != nil {
-			log.Warnf("failed to update channels: %v", err)
-			log.Warnf("continuing with existing channels")
-		}
-	}
-
-	// Confirm if the requested image exists, or list available images
-	// if no parameter is specified/is empty.
-	if imgBuild, ok := buildType.(*configuration.ImageBuild); ok {
-		images, err := getAvailableImageAttrs(cmd, localSystem, nixConfig, &opts.NixOptions)
-		if err != nil {
-			log.Errorf("failed to get available images: %v", err)
-			return err
-		}
-
-		if imgBuild.Variant == "_list" {
-			for _, image := range images {
-				fmt.Println(image)
-			}
-			return nil
-		}
-
-		if slices.Index(images, imgBuild.Variant) < 0 {
-			err := fmt.Errorf("image type '%s' is not available", imgBuild.Variant)
-			log.Error(err)
-			log.Info("pass an empty string to `--image` to get a list of available images")
-			return err
-		}
-	}
-
-	switch buildType.(type) {
-	case *configuration.SystemBuild:
-		log.Step("Building configuration...")
-	case *configuration.VMBuild:
-		log.Step("Building VM...")
-	}
-
-	useNom := cfg.Apply.UseNom || opts.UseNom
-	nomFound := buildHost.HasCommand("nom")
-	if opts.UseNom && !nomFound {
-		err := fmt.Errorf("--use-nom was specified, but `nom` is not executable")
-		log.Error(err)
-		return err
-	} else if cfg.Apply.UseNom && !nomFound {
-		log.Warn("apply.use_nom is specified in config, but `nom` is not executable")
-		log.Warn("falling back to `nix` command for building")
-		useNom = false
-	}
-
-	generationTag := opts.GenerationTag
-	if generationTag == "" {
-		if tagVar := os.Getenv("NIXOS_GENERATION_TAG"); tagVar != "" {
-			log.Debugf("using explicitly set NIXOS_GENERATION_TAG variable for generation tag")
-			generationTag = tagVar
-		}
-	}
-
-	if generationTag == "" && cfg.Apply.UseGitCommitMsg {
-		if !configIsDirectory {
-			log.Warn("configuration is not a directory")
-		} else {
-			commitMsg, err := getLatestGitCommitMessage(configDirname, cfg.Apply.IgnoreDirtyTree)
-			if err == errDirtyGitTree {
-				log.Warn("git tree is dirty")
-			} else if err != nil {
-				log.Warnf("failed to get latest git commit message: %v", err)
-			} else {
-				generationTag = commitMsg
-			}
-		}
-	}
-
-	generationTag = strings.TrimSpace(generationTag)
-
-	if generationTag != "" {
-		// Make sure --impure is added to the Nix options if
-		// an implicit commit message is used.
-		if err := cmd.Flags().Set("impure", "true"); err != nil {
-			panic("failed to set --impure flag for apply command before exec with implicit generation tag with git message")
-		}
-	}
-
-	// Dry activation requires a real build, so --dry-run shouldn't be set
-	// if running activation scripts.
-	dryBuild := opts.Dry
-	if v, ok := buildType.(*configuration.SystemBuild); ok && v.Activate {
-		dryBuild = false
-	}
-
-	outputPath := opts.OutputPath
-	if outputPath != "" && !filepath.IsAbs(outputPath) {
-		outputPath = filepath.Join(originalCwd, outputPath)
-	}
-
-	buildOptions := &configuration.SystemBuildOptions{
-		ResultLocation: outputPath,
-		DryBuild:       dryBuild,
-		UseNom:         useNom,
-		GenerationTag:  generationTag,
-
-		CmdFlags: cmd.Flags(),
-		NixOpts:  &opts.NixOptions,
-	}
-
-	resultLocation, err := nixConfig.BuildSystem(buildType, buildOptions)
-	if err != nil {
-		log.Errorf("failed to build configuration: %v", err)
-		return err
+		resultLocation = opts.StorePath
 	}
 
 	if !dryBuild {
@@ -514,7 +546,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 
 	log.Step("Comparing changes...")
 
-	err = generation.RunDiffCommand(targetHost, constants.CurrentSystem, resultLocation, &generation.DiffCommandOptions{
+	err := generation.RunDiffCommand(targetHost, constants.CurrentSystem, resultLocation, &generation.DiffCommandOptions{
 		UseNvd: cfg.UseNvd,
 	})
 	if err != nil {
