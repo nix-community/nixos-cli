@@ -1,0 +1,32 @@
+version: '2'
+linters:
+  settings:
+    govet:
+      enable:
+        - printf
+      settings:
+        printf:
+          funcs:
+            - (github.com/nix-community/nixos-cli/internal/logger.Logger).Printf
+            - (github.com/nix-community/nixos-cli/internal/logger.Logger).Debugf
+            - (github.com/nix-community/nixos-cli/internal/logger.Logger).Infof
+            - (github.com/nix-community/nixos-cli/internal/logger.Logger).Warnf
+            - (github.com/nix-community/nixos-cli/internal/logger.Logger).Errorf
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
