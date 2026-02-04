@@ -132,7 +132,7 @@ resolvConfDone:
 		_ = unix.Close(sourceFd)
 	}
 	if resolvConfErr != nil {
-		log.Warnf("Internet access may not be available", err)
+		log.Warnf("Internet access may not be available")
 	}
 
 	systemClosure := opts.System

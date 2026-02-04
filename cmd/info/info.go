@@ -2,6 +2,7 @@ package info
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -48,9 +49,9 @@ func infoMain(cmd *cobra.Command, opts *cmdOpts.InfoOpts) error {
 	s := system.NewLocalSystem(log)
 
 	if !s.IsNixOS() {
-		msg := "the info command is only supported on NixOS systems"
-		log.Errorf(msg)
-		return fmt.Errorf("%v", msg)
+		err := errors.New("the info command is only supported on NixOS systems")
+		log.Errorf("%v", err)
+		return err
 	}
 
 	// Only support the `system` profile for now.

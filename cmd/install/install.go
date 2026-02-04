@@ -212,11 +212,10 @@ func validateMountpoint(log logger.Logger, mountpoint string) error {
 		hasCorrectPermission := mode.Perm()&0o005 >= 0o005
 
 		if !hasCorrectPermission {
-			msg := fmt.Sprintf("path %s should have permissions 755, but had permissions %s", currentPath, mode.Perm())
-			log.Errorf(msg)
-			log.Printf("hint: consider running `chmod o+rx %s", currentPath)
-
-			return fmt.Errorf("%v", msg)
+			err := fmt.Errorf("path %s should have permissions 755, but had permissions %o", currentPath, mode.Perm())
+			log.Errorf("%v", err)
+			log.Printf("hint: consider running `chmod o+rx %s`", currentPath)
+			return err
 		}
 	}
 
