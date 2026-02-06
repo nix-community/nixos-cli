@@ -236,6 +236,10 @@ func (l *LegacyConfiguration) buildRemoteSystem(s *system.SSHSystem, buildType B
 		realiseArgv = append(realiseArgv, "-k")
 	}
 
+	if opts.ResultLocation != "" {
+		realiseArgv = append(realiseArgv, "--add-root", opts.ResultLocation)
+	}
+
 	log.CmdArray(realiseArgv)
 
 	var realisedPathBuf bytes.Buffer

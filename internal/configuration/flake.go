@@ -216,6 +216,10 @@ func (f *FlakeRef) buildRemoteSystem(s *system.SSHSystem, buildType BuildType, o
 	realiseDrvArgv := []string{"nix-store", "-r", drvPath}
 	realiseDrvArgv = append(realiseDrvArgv, buildArgs...)
 
+	if opts.ResultLocation != "" {
+		realiseDrvArgv = append(realiseDrvArgv, "--add-root", opts.ResultLocation)
+	}
+
 	log.CmdArray(realiseDrvArgv)
 
 	var realisedPathBuf bytes.Buffer
