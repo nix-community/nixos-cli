@@ -66,10 +66,6 @@ func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 					return fmt.Errorf("--install-bootloader requires activation, remove --no-activate and/or --no-boot to use this option")
 				}
 
-				if opts.OutputPath == "" && !opts.Dry {
-					return fmt.Errorf("if --no-activate and --no-boot are both specified, one of --output or --dry must also be specified")
-				}
-
 				if opts.StorePath != "" {
 					return fmt.Errorf("--store-path skips building, remove --no-activate and/or --no-boot to use this option")
 				}
@@ -191,8 +187,6 @@ func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 	_ = cmd.RegisterFlagCompletionFunc("store-path", cmdUtils.DirCompletions)
 
 	cmd.MarkFlagsMutuallyExclusive("dry", "output")
-	cmd.MarkFlagsMutuallyExclusive("output", "build-host")
-	cmd.MarkFlagsMutuallyExclusive("output", "target-host")
 	cmd.MarkFlagsMutuallyExclusive("vm", "vm-with-bootloader", "image", "store-path")
 	cmd.MarkFlagsMutuallyExclusive("no-activate", "specialisation")
 
@@ -356,32 +350,6 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 
 		nixConfig.SetBuilder(buildHost)
 
-		var configDirname string
-		switch c := nixConfig.(type) {
-		case *configuration.FlakeRef:
-			configDirname = c.URI
-		case *configuration.LegacyConfiguration:
-			configDirname = c.Dirname()
-		}
-
-		configIsDirectory := true
-		originalCwd, err := os.Getwd()
-		if err != nil {
-			log.Errorf("failed to get current directory: %v", err)
-			return err
-		}
-		if configDirname != "" {
-			// Change to the configuration directory, if it exists:
-			// this will likely fail for remote configurations or
-			// configurations accessed through the registry, which
-			// should be a rare occurrence, but valid, so ignore any
-			// errors in that case.
-			err := os.Chdir(configDirname)
-			if err != nil {
-				configIsDirectory = false
-			}
-		}
-
 		if !build.Flake() && (opts.UpgradeChannels || opts.UpgradeAllChannels) {
 			log.Step("Upgrading channels...")
 
@@ -453,8 +421,17 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 		}
 
 		if generationTag == "" && cfg.Apply.UseGitCommitMsg {
-			if !configIsDirectory {
-				log.Warn("configuration is not a directory")
+			var configDirname string
+			switch c := nixConfig.(type) {
+			case *configuration.FlakeRef:
+				configDirname = c.URI
+			case *configuration.LegacyConfiguration:
+				configDirname = c.Dirname()
+			}
+			configDirname, err := utils.ResolveDirectory(configDirname)
+
+			if err != nil {
+				log.Warnf("failed to resolve configuration path: %v", err)
 			} else {
 				commitMsg, err := getLatestGitCommitMessage(configDirname, cfg.Apply.IgnoreDirtyTree)
 				if err == errDirtyGitTree {
@@ -477,13 +454,8 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 			}
 		}
 
-		outputPath := opts.OutputPath
-		if outputPath != "" && !filepath.IsAbs(outputPath) {
-			outputPath = filepath.Join(originalCwd, outputPath)
-		}
-
 		buildOptions := &configuration.SystemBuildOptions{
-			ResultLocation: outputPath,
+			ResultLocation: opts.OutputPath,
 			DryBuild:       dryBuild,
 			UseNom:         useNom,
 			GenerationTag:  generationTag,
@@ -492,10 +464,14 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 			NixOpts:  &opts.NixOptions,
 		}
 
-		resultLocation, err = nixConfig.BuildSystem(buildType, buildOptions)
+		resultLocation, err := nixConfig.BuildSystem(buildType, buildOptions)
 		if err != nil {
 			log.Errorf("failed to build configuration: %v", err)
 			return err
+		}
+
+		if opts.NoActivate && opts.NoBoot && !dryBuild {
+			log.Infof("the built configuration is %v", resultLocation)
 		}
 	} else {
 		resultLocation = opts.StorePath
