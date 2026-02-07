@@ -31,17 +31,19 @@ import (
 )
 
 type SSHSystem struct {
-	conn     net.Conn
-	client   *ssh.Client
-	sftp     *sftp.Client
-	user     string
-	address  string
-	port     int
-	password []byte
-	logger   logger.Logger
+	conn       net.Conn
+	client     *ssh.Client
+	sftp       *sftp.Client
+	user       string
+	address    string
+	port       int
+	password   []byte
+	keyFile    *TempFile
+	nixSSHOpts []string
+	logger     logger.Logger
 }
 
-func NewSSHSystem(host string, log logger.Logger) (*SSHSystem, error) {
+func NewSSHSystem(localSystem *LocalSystem, host string, log logger.Logger, cfg *settings.Settings) (*SSHSystem, error) {
 	if after, ok := strings.CutPrefix(host, "ssh://"); ok {
 		host = after
 	}
@@ -78,6 +80,21 @@ func NewSSHSystem(host string, log logger.Logger) (*SSHSystem, error) {
 
 	auth := []ssh.AuthMethod{}
 
+	var keyFile *TempFile
+	var nixSSHOpts []string
+	if privateKeyCmd := cfg.SSH.PrivateKeyCmd; len(privateKeyCmd) > 0 {
+		log.CmdArray(privateKeyCmd)
+
+		var sshAuth ssh.AuthMethod
+		sshAuth, keyFile, err = getPrivateKeyAuth(localSystem, host, username, privateKeyCmd)
+		if err == nil {
+			auth = append(auth, sshAuth)
+			nixSSHOpts = append(nixSSHOpts, "-i", keyFile.Path())
+		} else {
+			log.Warnf("failed to obtain private key: %v", err)
+		}
+	}
+
 	var conn net.Conn
 	if sock := os.Getenv("SSH_AUTH_SOCK"); sock != "" {
 		dialer := net.Dialer{Timeout: 2 * time.Second}
@@ -86,13 +103,26 @@ func NewSSHSystem(host string, log logger.Logger) (*SSHSystem, error) {
 			agentClient := agent.NewClient(conn)
 			auth = append(auth, ssh.PublicKeysCallback(agentClient.Signers))
 		} else {
-			log.Debug("failed to connect to SSH agent: %v", err)
-			log.Debug("falling back to password auth")
+			log.Warnf("failed to connect to SSH agent: %v", err)
+			log.Warnf("falling back to password auth")
 		}
 	}
 
-	knownHostsFile := filepath.Join(os.Getenv("HOME"), ".ssh", "known_hosts")
-	knownHostsKeyCallback, err := knownhosts.New(knownHostsFile)
+	getKnownHostsFiles := func(files []string, logFunc func(string, ...any)) (result []string) {
+		for _, f := range files {
+			if _, err = os.Stat(f); err != nil {
+				logFunc("failed to access known hosts file: %v", err)
+			} else {
+				result = append(result, f)
+			}
+		}
+		return result
+	}
+	knownHostsFileUser := filepath.Join(os.Getenv("HOME"), ".ssh", "known_hosts")
+	knownHostsFilesBase := []string{"/etc/ssh/ssh_known_hosts", knownHostsFileUser}
+	knownHostsFiles := getKnownHostsFiles(knownHostsFilesBase, log.Debugf)
+	knownHostsFiles = append(knownHostsFiles, getKnownHostsFiles(cfg.SSH.KnownHostsFiles, log.Warnf)...)
+	knownHostsKeyCallback, err := knownhosts.New(knownHostsFiles...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create known hosts callback: %v", err)
 	}
@@ -109,7 +139,7 @@ func NewSSHSystem(host string, log logger.Logger) (*SSHSystem, error) {
 	})
 	auth = append(auth, passwordCallback)
 
-	hostKeyCallback := wrappedKnownHostsCallback(log, knownHostsKeyCallback, knownHostsFile)
+	hostKeyCallback := wrappedKnownHostsCallback(log, knownHostsKeyCallback, knownHostsFileUser)
 
 	client, err := ssh.Dial("tcp", net.JoinHostPort(address, strconv.Itoa(port)), &ssh.ClientConfig{
 		User:            username,
@@ -127,14 +157,16 @@ func NewSSHSystem(host string, log logger.Logger) (*SSHSystem, error) {
 	}
 
 	s := &SSHSystem{
-		conn:     conn,
-		client:   client,
-		sftp:     sftpClient,
-		user:     username,
-		address:  address,
-		port:     port,
-		password: password,
-		logger:   log,
+		conn:       conn,
+		client:     client,
+		sftp:       sftpClient,
+		user:       username,
+		address:    address,
+		port:       port,
+		password:   password,
+		keyFile:    keyFile,
+		nixSSHOpts: nixSSHOpts,
+		logger:     log,
 	}
 
 	return s, nil
@@ -170,6 +202,36 @@ func (s *SSHSystem) testRemoteRoot(rootCmd string) error {
 
 	_, err := s.Run(cmd)
 	return err
+}
+
+func getPrivateKeyAuth(s *LocalSystem, host string, username string, privateKeyCmd []string) (ssh.AuthMethod, *TempFile, error) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	cmd := NewCommand(privateKeyCmd[0], privateKeyCmd[1:]...)
+	cmd.SetEnv("NIXOS_CLI_SSH_HOST", host)
+	cmd.SetEnv("NIXOS_CLI_SSH_USER", username)
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	var err error
+	if _, err = s.Run(cmd); err != nil {
+		return nil, nil, fmt.Errorf("failed to run private key command: %v\n%v", err, strings.TrimSpace(stderr.String()))
+	}
+
+	var signer ssh.Signer
+	if signer, err = ssh.ParsePrivateKey(stdout.Bytes()); err != nil {
+		return nil, nil, fmt.Errorf("failed to parse private key: %v", err)
+	}
+
+	keyFile, err := NewTempFile("nixos-cli-ssh-key", stdout.Bytes())
+	if err != nil {
+		return nil, nil, err
+	}
+
+	auth := ssh.PublicKeys(signer)
+
+	return auth, keyFile, nil
 }
 
 func promptForPassword(username string, address string) ([]byte, error) {
@@ -520,6 +582,10 @@ func (s *SSHSystem) Address() string {
 	return fmt.Sprintf("%s@%s:%d", s.user, s.address, s.port)
 }
 
+func (s *SSHSystem) NixSSHOpts() []string {
+	return s.nixSSHOpts
+}
+
 func (s *SSHSystem) IsRemote() bool {
 	return true
 }
@@ -543,6 +609,10 @@ func (s *SSHSystem) HasCommand(name string) bool {
 func (s *SSHSystem) Close() {
 	_ = s.sftp.Close()
 	_ = s.client.Close()
+
+	if s.keyFile != nil {
+		_ = s.keyFile.Remove()
+	}
 
 	if s.conn != nil {
 		_ = s.conn.Close()

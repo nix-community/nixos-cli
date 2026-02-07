@@ -127,8 +127,15 @@ global *--config* flag as such:
 
 	*HOST* is a simple SSH address with the format "_user@address:port_".
 
-	SSH keys must be loaded into _ssh-agent_ for them to be used by the program.
-	If an agent is not detected, then an error will be displayed.
+	SSH can be authenticated using private keys via the following methods:
+	- the *ssh.private_key_cmd* setting (see *nixos-cli-settings(5)*)
+	- an SSH agent (detected via *$SSH_AUTH_SOCK*)
+
+	Each method will be attempted once, in order. If none of them are configured,
+	or all fail, password authentication will be attempted.
+
+	You can pass extra ssh options to _nix-copy-closure_ by defining the
+	environment variable _$NIX_SSHOPTS_.
 
 	If *--target-host* is not set, the build will be copied back to the local
 	machine when done.

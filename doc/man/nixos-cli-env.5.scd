@@ -87,6 +87,9 @@ Among other things.
 	_nixos activate_ skips syncing the Nix store to disk before activating. Can
 	speed up activations at the cost of risking data loss if interrupted.
 
+*NIX_SSHOPTS*
+	Additional ssh options to be passed to _nix-copy-closure_ on the command line.
+
 *STC_DISPLAY_ALL_UNITS*
 	Show all actual units that are being modified by _nixos activate_.
 

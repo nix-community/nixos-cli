@@ -236,7 +236,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 
 	if opts.TargetHost != "" {
 		log.Debugf("connecting to %s", opts.TargetHost)
-		host, err := system.NewSSHSystem(opts.TargetHost, log)
+		host, err := system.NewSSHSystem(localSystem, opts.TargetHost, log, cfg)
 		if err != nil {
 			log.Errorf("%v", err)
 			return err
@@ -298,7 +298,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 
 	if opts.BuildHost != "" {
 		log.Debugf("connecting to %s", opts.BuildHost)
-		host, err := system.NewSSHSystem(opts.BuildHost, log)
+		host, err := system.NewSSHSystem(localSystem, opts.BuildHost, log, cfg)
 		if err != nil {
 			log.Errorf("%v", err)
 			return err

@@ -24,6 +24,7 @@ type Settings struct {
 	Init           InitSettings         `koanf:"init"`
 	NoConfirm      bool                 `koanf:"no_confirm"`
 	Option         OptionSettings       `koanf:"option"`
+	SSH            SSHSettings          `koanf:"ssh"`
 	RootCommand    string               `koanf:"root_command"`
 	UseNvd         bool                 `koanf:"use_nvd"`
 }
@@ -58,6 +59,11 @@ type OptionSettings struct {
 	MinScore     int64 `koanf:"min_score"`
 	Prettify     bool  `koanf:"prettify"`
 	DebounceTime int64 `koanf:"debounce_time"`
+}
+
+type SSHSettings struct {
+	KnownHostsFiles []string `koanf:"known_hosts_files"`
+	PrivateKeyCmd   []string `koanf:"private_key_cmd"`
 }
 
 type ConfirmationPromptBehavior string
@@ -99,6 +105,10 @@ rollback = ["generation", "rollback"]
 
 	confirmationInputPossibleValues = "Possible values are `default-no` (treat as a no input), `default-yes` (treat as a yes input), or `retry` (try again)."
 	deprecatedDocString             = "This setting has been deprecated, and will be removed in a future release."
+
+	sshPrivateKeyCmdExample = "```\n" + `[ssh]
+private_key_cmd = ["sh", "-c", "rbw get $NIXOS_CLI_SSH_HOST"]
+` + "```\n"
 )
 
 var SettingsDocs = map[string]DescriptionEntry{
@@ -200,6 +210,20 @@ var SettingsDocs = map[string]DescriptionEntry{
 		Short: "Debounce time for searching options using the UI, in milliseconds",
 		Long:  "Controls how often search results are recomputed when typing in the options UI, in milliseconds.",
 	},
+	"ssh": {
+		Short: "Settings for ssh",
+	},
+	"ssh.known_hosts_files": {
+		Short: "List of paths to known hosts files",
+		Long:  "List of paths to known hosts files. `/etc/ssh/ssh_known_hosts` and `$HOME/.ssh/known_hosts` are always included.",
+	},
+	"ssh.private_key_cmd": {
+		Short: "Command to run to obtain SSH private key",
+		Long: "Specifies the command to run to obtain the private key for SSH connections." +
+			" The command receives the host and user as the environment variables $NIXOS_CLI_SSH_HOST" +
+			" and $NIXOS_CLI_SSH_USER respectively, and should output a single private key to standard output." +
+			"\nExample:\n" + sshPrivateKeyCmdExample,
+	},
 	"root_command": {
 		Short: "Command to use to promote process to root",
 		Long:  "Specifies which command to use for privilege escalation (e.g., sudo or doas).",
@@ -230,6 +254,7 @@ func NewSettings() *Settings {
 			Prettify:     true,
 			DebounceTime: 25,
 		},
+		SSH: SSHSettings{},
 	}
 }
 
