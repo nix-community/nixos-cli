@@ -464,7 +464,8 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 			NixOpts:  &opts.NixOptions,
 		}
 
-		resultLocation, err := nixConfig.BuildSystem(buildType, buildOptions)
+		var err error
+		resultLocation, err = nixConfig.BuildSystem(buildType, buildOptions)
 		if err != nil {
 			log.Errorf("failed to build configuration: %v", err)
 			return err
