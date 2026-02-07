@@ -2,7 +2,9 @@ package system
 
 import (
 	"fmt"
+	"os"
 
+	shlex "github.com/carapace-sh/carapace-shlex"
 	"github.com/nix-community/nixos-cli/internal/logger"
 )
 
@@ -24,6 +26,16 @@ func CopyClosures(src System, dest System, paths []string, extraArgs ...string) 
 	}
 
 	argv := []string{"nix-copy-closure"}
+
+	var nixSSHOpts []string
+	nixSSHOptsEnv := os.Getenv("NIX_SSHOPTS")
+	if nixSSHOptsEnv != "" {
+		nixSSHOptsTokens, err := shlex.Split(nixSSHOptsEnv)
+		if err != nil {
+			return fmt.Errorf("failed to parse NIX_SSHOPTS: %v", err)
+		}
+		nixSSHOpts = nixSSHOptsTokens.Strings()
+	}
 
 	srcIsRemote := src.IsRemote()
 	destIsRemote := dest.IsRemote()
@@ -51,6 +63,8 @@ func CopyClosures(src System, dest System, paths []string, extraArgs ...string) 
 		}
 		srcArg := fmt.Sprintf("ssh://%s", srcAddr)
 		argv = append(argv, "--store", srcArg, "--to", destAddr)
+		nixSSHOpts = append(nixSSHOpts, src.(*SSHSystem).NixSSHOpts()...)
+		nixSSHOpts = append(nixSSHOpts, dest.(*SSHSystem).NixSSHOpts()...)
 	} else if srcIsRemote && !destIsRemote {
 		// remote -> local, so use --from and run on the local host (dest), since there
 		// is no reliable way to run this on the remote while determining how
@@ -58,11 +72,13 @@ func CopyClosures(src System, dest System, paths []string, extraArgs ...string) 
 		commandRunner = dest
 		srcAddr := src.(*SSHSystem).Address()
 		argv = append(argv, "--from", srcAddr)
+		nixSSHOpts = append(nixSSHOpts, src.(*SSHSystem).NixSSHOpts()...)
 	} else if !srcIsRemote && destIsRemote {
 		// local -> remote, so run this command on the local host.
 		commandRunner = src
 		destAddr := dest.(*SSHSystem).Address()
 		argv = append(argv, "--to", destAddr)
+		nixSSHOpts = append(nixSSHOpts, dest.(*SSHSystem).NixSSHOpts()...)
 	} else {
 		// local -> local, no-op
 		log.Debugf("both systems are local, skipping copy")
@@ -79,6 +95,10 @@ func CopyClosures(src System, dest System, paths []string, extraArgs ...string) 
 	log.CmdArray(argv)
 
 	cmd := NewCommand(argv[0], argv[1:]...)
+	nixSSHOptsEnv = shlex.Join(nixSSHOpts)
+	if nixSSHOptsEnv != "" {
+		cmd.SetEnv("NIX_SSHOPTS", nixSSHOptsEnv)
+	}
 	_, err := commandRunner.Run(cmd)
 	return err
 }

@@ -93,9 +93,10 @@ automatically escalates to `root` using the command defined in the
 `root_command` setting. If you wish not to enter a password, then deploy using a
 user that has the `NOPASSWD` `sudo` rule.
 
-In order to access remote machines, prefer using an SSH agent and keys. Password
-access is supported, but not recommended, and can be buggy. If you find any
-issues, report them on the issue tracker.
+In order to access remote machines, it is recommended to use SSH keys managed by
+an SSH agent, or to provide a key via the `ssh.private_key_cmd` setting. Password
+access is supported, but not recommended, and can be buggy. If you find any issues,
+report them on the issue tracker.
 
 ### `nixos-enter`
 
