@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/carapace-sh/carapace"
+	cmdUtils "github.com/nix-community/nixos-cli/internal/cmd/utils"
 	"github.com/nix-community/nixos-cli/internal/utils"
 	"github.com/spf13/cobra"
 )
@@ -38,7 +39,7 @@ func addAliasCmd(parent *cobra.Command, alias string, args []string) error {
 
 			root := cmd.Root()
 			root.SetArgs(fullArgsList)
-			return root.Execute()
+			return cmdUtils.CommandErrorHandler(root.Execute())
 		},
 	}
 
