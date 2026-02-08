@@ -165,7 +165,7 @@ func optionMain(cmd *cobra.Command, opts *cmdOpts.OptionOpts) error {
 		if err != nil {
 			spinner.Stop()
 			log.Errorf("failed to build option list: %v", err)
-			log.Errorf("evaluation trace: %v", f)
+			log.Print(f)
 			return err
 		}
 		optionsFileName = f

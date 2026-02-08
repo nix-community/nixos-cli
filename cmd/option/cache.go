@@ -63,7 +63,7 @@ func buildOptionCache(s system.CommandRunner, cfg configuration.Configuration) (
 
 	_, err := s.Run(cmd)
 	if err != nil {
-		return "", err
+		return stderr.String(), err
 	}
 
 	return strings.TrimSpace(stdout.String()), nil
