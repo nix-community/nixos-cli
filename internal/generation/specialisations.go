@@ -9,15 +9,16 @@ import (
 
 	cmdUtils "github.com/nix-community/nixos-cli/internal/cmd/utils"
 	"github.com/nix-community/nixos-cli/internal/configuration"
+	"github.com/nix-community/nixos-cli/internal/system"
 	"github.com/spf13/cobra"
 )
 
-func CollectSpecialisations(generationDirname string) ([]string, error) {
+func CollectSpecialisations(s system.System, generationDirname string) ([]string, error) {
 	var specialisations []string
 
 	specialisationsGlob := filepath.Join(generationDirname, "specialisation", "*")
 
-	specialisationsMatches, err := filepath.Glob(specialisationsGlob)
+	specialisationsMatches, err := s.FS().Glob(specialisationsGlob)
 	if err != nil {
 		return nil, err
 	} else {
@@ -64,7 +65,10 @@ func CollectSpecialisationsFromConfig(cfg configuration.Configuration) []string 
 
 func CompleteSpecialisationFlag(generationDirname string) cobra.CompletionFunc {
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		specialisations, err := CollectSpecialisations(generationDirname)
+		log, _ := cmdUtils.PrepareCompletionResources()
+		s := system.NewLocalSystem(log)
+
+		specialisations, err := CollectSpecialisations(s, generationDirname)
 		if err != nil {
 			return []string{}, cobra.ShellCompDirectiveNoFileComp
 		}
