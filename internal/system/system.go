@@ -43,9 +43,14 @@ func CopyClosures(src System, dest System, paths []string, extraArgs ...string) 
 		// This should either be running as a trusted user or as root, so
 		// remote store access should exist.
 		commandRunner = NewLocalSystem(log)
-		srcAddr := fmt.Sprintf("ssh://%s", dest.(*SSHSystem).Address())
+		srcAddr := src.(*SSHSystem).Address()
 		destAddr := dest.(*SSHSystem).Address()
-		argv = append(argv, "--store", srcAddr, "--to", destAddr)
+		if srcAddr == destAddr {
+			log.Debugf("remotes have the same address, skipping copy")
+			return nil
+		}
+		srcArg := fmt.Sprintf("ssh://%s", srcAddr)
+		argv = append(argv, "--store", srcArg, "--to", destAddr)
 	} else if srcIsRemote && !destIsRemote {
 		// remote -> local, so use --from and run on the local host (dest), since there
 		// is no reliable way to run this on the remote while determining how
