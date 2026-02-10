@@ -203,7 +203,8 @@ func validateMountpoint(log logger.Logger, mountpoint string) error {
 
 		currentPath = filepath.Join(currentPath, component)
 
-		info, err := os.Stat(currentPath)
+		var info os.FileInfo
+		info, err = os.Stat(currentPath)
 		if err != nil {
 			return fmt.Errorf("failed to stat %s: %w", currentPath, err)
 		}
@@ -212,7 +213,7 @@ func validateMountpoint(log logger.Logger, mountpoint string) error {
 		hasCorrectPermission := mode.Perm()&0o005 >= 0o005
 
 		if !hasCorrectPermission {
-			err := fmt.Errorf("path %s should have permissions 755, but had permissions %o", currentPath, mode.Perm())
+			err = fmt.Errorf("path %s should have permissions 755, but had permissions %o", currentPath, mode.Perm())
 			log.Errorf("%v", err)
 			log.Printf("hint: consider running `chmod o+rx %s`", currentPath)
 			return err
@@ -246,7 +247,7 @@ func copyChannel(cobraCmd *cobra.Command, s system.CommandRunner, mountpoint str
 		cmd := system.NewCommand(argv[0], argv[1:]...)
 		cmd.Stdout = &stdout
 
-		_, err := s.Run(cmd)
+		_, err = s.Run(cmd)
 		if err != nil {
 			log.Errorf("failed to obtain default nixos channel location: %v", err)
 			return err
@@ -402,7 +403,7 @@ func installMain(cmd *cobra.Command, opts *cmdOpts.InstallOpts) error {
 		return err
 	}
 
-	if err := validateMountpoint(log, mountpoint); err != nil {
+	if err = validateMountpoint(log, mountpoint); err != nil {
 		return err
 	}
 	tmpDirname, err := os.MkdirTemp(mountpoint, "system")
@@ -430,7 +431,8 @@ func installMain(cmd *cobra.Command, opts *cmdOpts.InstallOpts) error {
 			nixConfig = opts.FlakeRef
 			log.Debugf("using flake ref %s", opts.FlakeRef)
 		} else if opts.File != "" {
-			configPath, err := utils.ResolveNixFilename(opts.File)
+			var configPath string
+			configPath, err = utils.ResolveNixFilename(opts.File)
 			if err != nil {
 				log.Error(err)
 				return err
@@ -457,7 +459,8 @@ func installMain(cmd *cobra.Command, opts *cmdOpts.InstallOpts) error {
 				configLocation = filepath.Join(mountpoint, "etc", "nixos", "configuration.nix")
 			}
 
-			resolvedLocation, err := utils.ResolveNixFilename(configLocation)
+			var resolvedLocation string
+			resolvedLocation, err = utils.ResolveNixFilename(configLocation)
 			if err != nil {
 				log.Errorf("failed to find configuration: %v", err)
 				return err
@@ -494,7 +497,7 @@ func installMain(cmd *cobra.Command, opts *cmdOpts.InstallOpts) error {
 			// This value gets appended to the list of includes,
 			// and does not replace existing values already provided
 			// for -I on the command line.
-			if err := cmd.Flags().Set("include", fmt.Sprintf("nixos-config=%s", c.ConfigPath)); err != nil {
+			if err = cmd.Flags().Set("include", fmt.Sprintf("nixos-config=%s", c.ConfigPath)); err != nil {
 				panic("failed to set --include flag for nixos install command for legacy systems")
 			}
 		}
@@ -519,7 +522,7 @@ func installMain(cmd *cobra.Command, opts *cmdOpts.InstallOpts) error {
 
 	log.Step("Creating initial generation...")
 
-	if err := createInitialGeneration(s, mountpoint, resultLocation); err != nil {
+	if err = createInitialGeneration(s, mountpoint, resultLocation); err != nil {
 		return err
 	}
 
@@ -545,7 +548,7 @@ func installMain(cmd *cobra.Command, opts *cmdOpts.InstallOpts) error {
 	if !opts.NoBootloader {
 		log.Step("Installing bootloader...")
 
-		if err := installBootloader(s, mountpoint); err != nil {
+		if err = installBootloader(s, mountpoint); err != nil {
 			return err
 		}
 	}
@@ -559,7 +562,7 @@ func installMain(cmd *cobra.Command, opts *cmdOpts.InstallOpts) error {
 			log.Warn("stdin is not a terminal; skipping setting root password")
 			log.Info(manualHint)
 		} else {
-			err := setRootPassword(s, mountpoint)
+			err = setRootPassword(s, mountpoint)
 			if err != nil {
 				log.Warnf("failed to set root password: %v", err)
 				log.Info(manualHint)

@@ -92,7 +92,7 @@ func NixOptionsToArgsListByCategory(flags *pflag.FlagSet, options any, category 
 	val := reflect.ValueOf(options)
 	typ := reflect.TypeOf(options)
 
-	if val.Kind() == reflect.Ptr {
+	if val.Kind() == reflect.Pointer {
 		val = val.Elem()
 		typ = typ.Elem()
 	}
@@ -106,7 +106,7 @@ func NixOptionsToArgsListByCategory(flags *pflag.FlagSet, options any, category 
 		nixOption := getNixFlag(fieldType.Name)
 
 		categories := strings.Split(fieldType.Tag.Get("nixCategory"), ",")
-		if i := slices.Index(categories, category); i == -1 {
+		if categoryIndex := slices.Index(categories, category); categoryIndex == -1 {
 			continue
 		}
 

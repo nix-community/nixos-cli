@@ -56,7 +56,8 @@ func NewSSHSystem(host string, log logger.Logger) (*SSHSystem, error) {
 	var port int
 
 	if hostInfo.User == "" {
-		if current, err := user.Current(); err == nil {
+		var current *user.User
+		if current, err = user.Current(); err == nil {
 			username = current.Username
 		} else if current := os.Getenv("USER"); current != "" {
 			username = current
@@ -98,7 +99,8 @@ func NewSSHSystem(host string, log logger.Logger) (*SSHSystem, error) {
 
 	var password []byte
 	passwordCallback := ssh.PasswordCallback(func() (string, error) {
-		bytePassword, err := promptForPassword(username, address)
+		var bytePassword []byte
+		bytePassword, err = promptForPassword(username, address)
 		if err != nil {
 			return "", err
 		}
@@ -156,7 +158,7 @@ func (s *SSHSystem) EnsureRemoteRootPassword(rootCmd string) error {
 
 	s.password = bytePassword
 
-	if err := s.testRemoteRoot(rootCmd); err != nil {
+	if err = s.testRemoteRoot(rootCmd); err != nil {
 		return fmt.Errorf("failed to verify %s password: %s", rootCmd, err)
 	}
 
@@ -210,7 +212,8 @@ func wrappedKnownHostsCallback(log logger.Logger, origCallback ssh.HostKeyCallba
 				log.Infof("the authenticity of host '%s' (%s) can't be established", hostname, key.Type())
 				log.Infof("SHA256 fingerprint: %s", fingerprint)
 
-				confirm, err := cmdUtils.ConfirmationInput("Are you sure you want to continue connecting?", cmdUtils.ConfirmationPromptOptions{
+				var confirm bool
+				confirm, err = cmdUtils.ConfirmationInput("Are you sure you want to continue connecting?", cmdUtils.ConfirmationPromptOptions{
 					// Copy the default SSH behavior of retrying for invalid input.
 					// Disregard user configuration in this case, since this is mimicking
 					// OpenSSH's behavior.
@@ -225,14 +228,15 @@ func wrappedKnownHostsCallback(log logger.Logger, origCallback ssh.HostKeyCallba
 					return fmt.Errorf("user declined unknown host")
 				}
 
-				f, err := os.OpenFile(knownHostsPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+				var knownHostsFile *os.File
+				knownHostsFile, err = os.OpenFile(knownHostsPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 				if err != nil {
 					return fmt.Errorf("failed to open known_hosts: %w", err)
 				}
-				defer func() { _ = f.Close() }()
+				defer func() { _ = knownHostsFile.Close() }()
 
 				line := knownhosts.Line([]string{hostname}, key)
-				if _, err := f.WriteString(line + "\n"); err != nil {
+				if _, err = knownHostsFile.WriteString(line + "\n"); err != nil {
 					return fmt.Errorf("failed to write to known_hosts: %w", err)
 				}
 
@@ -272,8 +276,8 @@ func (s *SSHSystem) Run(cmd *Command) (int, error) {
 	}
 
 	defer func() {
-		if err := session.Close(); err != nil && !errors.Is(err, io.EOF) {
-			log.Debugf("failed to close SSH session cleanly: %v", err)
+		if closeErr := session.Close(); closeErr != nil && !errors.Is(closeErr, io.EOF) {
+			log.Debugf("failed to close SSH session cleanly: %v", closeErr)
 		}
 	}()
 
@@ -311,7 +315,8 @@ func (s *SSHSystem) Run(cmd *Command) (int, error) {
 			// FIXME: Entering passwords interactively with `sudo` and a PTY
 			// seems to have a bug where the first attempt is wrong due to
 			// the PTY discarding the first inputted byte.
-			restoreLocal, err := requestRootPasswordPTY(session, cmd.Stdin)
+			var restoreLocal func()
+			restoreLocal, err = requestRootPasswordPTY(session, cmd.Stdin)
 			if err != nil {
 				log.Warnf("unable to make local terminal raw: %v", err)
 			} else {
@@ -340,7 +345,7 @@ func (s *SSHSystem) Run(cmd *Command) (int, error) {
 	go func() {
 		for sig := range sigCh {
 			if s := osSignalToSSHSignal(sig); s != "" {
-				if err := session.Signal(s); err != nil {
+				if err = session.Signal(s); err != nil {
 					log.Warnf("failed to forward signal '%v': %v", s, err)
 				}
 			}
@@ -414,7 +419,7 @@ func requestRootPasswordPTY(session *ssh.Session, stdin io.Reader) (func(), erro
 		ssh.TTY_OP_OSPEED: 14400, // output speed = 14.4kbaud
 	}
 
-	if err := session.RequestPty(termType, h, w, modes); err != nil {
+	if err = session.RequestPty(termType, h, w, modes); err != nil {
 		return nil, fmt.Errorf("failed to allocate pty for process: %w", err)
 	}
 

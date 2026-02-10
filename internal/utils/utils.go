@@ -82,7 +82,8 @@ func ResolveNixFilename(input string) (string, error) {
 	} else {
 		defaultNix := filepath.Join(input, "default.nix")
 
-		defaultNixInfo, err := os.Stat(defaultNix)
+		var defaultNixInfo os.FileInfo
+		defaultNixInfo, err = os.Stat(defaultNix)
 		if err != nil {
 			return "", err
 		}

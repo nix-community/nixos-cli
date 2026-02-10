@@ -94,7 +94,8 @@ func findFilesystems(log logger.Logger, rootDir string) []Filesystem {
 
 		absoluteMountpoint := strings.ReplaceAll(fields[4], "\\040", "")
 
-		if stat, err := os.Stat(absoluteMountpoint); err != nil || !stat.IsDir() {
+		var info os.FileInfo
+		if info, err = os.Stat(absoluteMountpoint); err != nil || !info.IsDir() {
 			continue
 		}
 
@@ -182,7 +183,8 @@ func findFilesystems(log logger.Logger, rootDir string) []Filesystem {
 
 			backerFilename := fmt.Sprintf("/sys/block/loop%s/loop/backing_file", loopNumber)
 
-			if backer, err := os.ReadFile(backerFilename); err == nil {
+			var backer []byte
+			if backer, err = os.ReadFile(backerFilename); err == nil {
 				devicePath = string(backer)
 				extraOptions = append(extraOptions, "loop")
 			}
@@ -306,7 +308,8 @@ func checkDirForEqualDevice(deviceRdev uint64, dirname string) (string, bool) {
 
 	for _, entry := range entries {
 		devicePath := filepath.Join(dirname, entry.Name())
-		rdev, err := getRdev(devicePath)
+		var rdev uint64
+		rdev, err = getRdev(devicePath)
 		if err != nil {
 			continue
 		}

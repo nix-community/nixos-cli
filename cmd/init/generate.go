@@ -184,7 +184,7 @@ func generateConfigNix(log logger.Logger, cfg *settings.Settings, virtType Virtu
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
 `
-	} else if _, err := os.Stat("/boot/extlinux"); err == nil {
+	} else if _, err = os.Stat("/boot/extlinux"); err == nil {
 		log.Info("extlinux bootloader detected, using generic-extlinux-compatible bootloader")
 
 		bootloaderConfig = `  # Use the extlinux bootloader.

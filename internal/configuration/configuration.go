@@ -49,7 +49,7 @@ func FindConfiguration(log logger.Logger, cfg *settings.Settings, includes []str
 			return nil, err
 		}
 
-		if err := f.InferSystemFromHostnameIfNeeded(); err != nil {
+		if err = f.InferSystemFromHostnameIfNeeded(); err != nil {
 			return nil, err
 		}
 

@@ -78,12 +78,14 @@ func ParseUserHostPort(s string) (*UserHostPort, error) {
 
 	var port int
 	if portStr != "" {
-		p, err := parsePort(portStr)
+		var parsedPort int
+
+		parsedPort, err = parsePort(portStr)
 		if err != nil {
 			return nil, err
 		}
 
-		port = p
+		port = parsedPort
 	}
 
 	ret := &UserHostPort{

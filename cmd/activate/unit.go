@@ -97,7 +97,8 @@ func (l *UnitLists) ClassifyActiveUnits(ctx context.Context, units map[string]Un
 		if treatAsNullUnit {
 			// Masked units (aka units that are symlinked to /dev/null) should be stopped
 			// if they contain the X-StopOnRemoval attribute.
-			unitInfo, err := systemdUtils.ParseUnit(resolvedUnit.CurrentUnitFile, resolvedUnit.CurrentBaseFile)
+			var unitInfo systemdUtils.UnitInfo
+			unitInfo, err = systemdUtils.ParseUnit(resolvedUnit.CurrentUnitFile, resolvedUnit.CurrentBaseFile)
 			if err != nil {
 				return err
 			}
@@ -106,7 +107,8 @@ func (l *UnitLists) ClassifyActiveUnits(ctx context.Context, units map[string]Un
 				l.Stop.Add(unit)
 			}
 		} else if strings.HasSuffix(unit, ".target") {
-			newUnitInfo, err := systemdUtils.ParseUnit(resolvedUnit.NewUnitFile, resolvedUnit.NewBaseFile)
+			var newUnitInfo systemdUtils.UnitInfo
+			newUnitInfo, err = systemdUtils.ParseUnit(resolvedUnit.NewUnitFile, resolvedUnit.NewBaseFile)
 			if err != nil {
 				return err
 			}
@@ -142,19 +144,21 @@ func (l *UnitLists) ClassifyActiveUnits(ctx context.Context, units map[string]Un
 				l.Stop.Add(unit)
 			}
 		} else {
-			currentUnitInfo, err := systemdUtils.ParseUnit(resolvedUnit.CurrentUnitFile, resolvedUnit.CurrentBaseFile)
+			var currentUnitInfo systemdUtils.UnitInfo
+			currentUnitInfo, err = systemdUtils.ParseUnit(resolvedUnit.CurrentUnitFile, resolvedUnit.CurrentBaseFile)
 			if err != nil {
 				return err
 			}
 
-			newUnitInfo, err := systemdUtils.ParseUnit(resolvedUnit.NewUnitFile, resolvedUnit.NewBaseFile)
+			var newUnitInfo systemdUtils.UnitInfo
+			newUnitInfo, err = systemdUtils.ParseUnit(resolvedUnit.NewUnitFile, resolvedUnit.NewBaseFile)
 			if err != nil {
 				return err
 			}
 
 			switch systemdUtils.CompareUnits(currentUnitInfo, newUnitInfo) {
 			case systemdUtils.UnitComparisonNeedsRestart:
-				err := l.ClassifyModifiedUnit(
+				err = l.ClassifyModifiedUnit(
 					unit,
 					resolvedUnit.BaseName,
 					resolvedUnit.NewUnitFile,
@@ -493,7 +497,7 @@ func resolveUnit(unit, toplevel string) ResolvedUnit {
 		templateName, _, unitType := matches[1], matches[2], matches[3]
 
 		if _, err := os.Stat(currentUnitFile); os.IsNotExist(err) {
-			if _, err := os.Stat(newUnitFile); os.IsNotExist(err) {
+			if _, err = os.Stat(newUnitFile); os.IsNotExist(err) {
 				baseUnit = fmt.Sprintf("%s@.%s", templateName, unitType)
 				currentBaseFile = filepath.Join("/etc/systemd/system", baseUnit)
 				newBaseFile = filepath.Join(toplevel, "etc/systemd/system", baseUnit)

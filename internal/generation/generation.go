@@ -78,9 +78,8 @@ func GenerationFromDirectory(generationDirname string, number uint64) (*Generati
 		}
 	} else {
 		var manifest GenerationManifest
-		err := json.Unmarshal(manifestBytes, &manifest)
 
-		if err != nil {
+		if err = json.Unmarshal(manifestBytes, &manifest); err != nil {
 			encounteredErrors = append(encounteredErrors, err)
 		} else {
 			info.NixosVersion = manifest.NixosVersion
@@ -94,7 +93,9 @@ func GenerationFromDirectory(generationDirname string, number uint64) (*Generati
 	// exist if the `nixos-version.json` file doesn't exist.
 	if info.NixosVersion == "" {
 		nixosVersionFile := filepath.Join(generationDirname, constants.NixOSVersionFile)
-		nixosVersionContents, err := os.ReadFile(nixosVersionFile)
+
+		var nixosVersionContents []byte
+		nixosVersionContents, err = os.ReadFile(nixosVersionFile)
 		if err != nil {
 			encounteredErrors = append(encounteredErrors, err)
 		} else {
@@ -157,7 +158,8 @@ func CollectGenerationsInProfile(log logger.Logger, profile string) ([]Generatio
 		return nil, err
 	}
 
-	genLinkRegex, err := regexp.Compile(fmt.Sprintf(GenerationLinkTemplateRegex, profile))
+	var genLinkRegex *regexp.Regexp
+	genLinkRegex, err = regexp.Compile(fmt.Sprintf(GenerationLinkTemplateRegex, profile))
 	if err != nil {
 		return nil, fmt.Errorf("failed to compile generation regex: %w", err)
 	}
@@ -173,20 +175,17 @@ func CollectGenerationsInProfile(log logger.Logger, profile string) ([]Generatio
 		name := v.Name()
 
 		if matches := genLinkRegex.FindStringSubmatch(name); len(matches) > 0 {
-			genNumber, err := strconv.ParseInt(matches[1], 10, 64)
+			var genNumber uint64
+			genNumber, err = strconv.ParseUint(matches[1], 10, 64)
 			if err != nil {
 				log.Warnf("failed to parse generation number %v for %v, skipping", matches[1], filepath.Join(profileDirectory, name))
 				continue
 			}
 
-			profileDirectory := constants.NixProfileDirectory
-			if profile != "system" {
-				profileDirectory = constants.NixSystemProfileDirectory
-			}
-
 			generationDirectoryName := filepath.Join(profileDirectory, fmt.Sprintf("%s-%d-link", profile, genNumber))
 
-			info, err := GenerationFromDirectory(generationDirectoryName, uint64(genNumber))
+			var info *Generation
+			info, err = GenerationFromDirectory(generationDirectoryName, genNumber)
 			if err != nil {
 				return nil, err
 			}

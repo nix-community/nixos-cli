@@ -34,12 +34,14 @@ func loadOptions(log logger.Logger, cfg *settings.Settings, includes []string) (
 	optionsFileName := prebuiltOptionCachePath
 	if !useCache {
 		log.Info("building options list")
-		f, err := buildOptionCache(s, nixosConfig)
+
+		var filename string
+		filename, err = buildOptionCache(s, nixosConfig)
 		if err != nil {
 			log.Errorf("failed to build option list: %v", err)
 			return nil, err
 		}
-		optionsFileName = f
+		optionsFileName = filename
 	}
 
 	optionsFile, err := os.Open(optionsFileName)

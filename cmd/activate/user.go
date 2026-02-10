@@ -46,7 +46,7 @@ func userSwitch(log logger.Logger, parentExe string) error {
 	}
 
 	if childExe != parentExe {
-		err := fmt.Errorf("this program is not meant to be called from outside of `nixos activate`")
+		err = fmt.Errorf("this program is not meant to be called from outside of `nixos activate`")
 		log.Error(err)
 		return err
 	}
@@ -77,7 +77,7 @@ func userSwitch(log logger.Logger, parentExe string) error {
 
 	status := <-nixosActivationStatus
 	if status == "timeout" || status == "failed" || status == "dependency" {
-		err := fmt.Errorf("restarting nixos-activation.service failed with status %s", status)
+		err = fmt.Errorf("restarting nixos-activation.service failed with status %s", status)
 		log.Error(err)
 		return err
 	}

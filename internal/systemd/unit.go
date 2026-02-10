@@ -47,7 +47,7 @@ func ParseUnit(unitFilePath string, baseUnitFilePath string) (UnitInfo, error) {
 
 	if unitFilePath != baseUnitFilePath {
 		if _, err := os.Stat(unitFilePath); err == nil {
-			matches, _ := filepath.Glob(fmt.Sprintf("%s.d/*.conf", unitFilePath))
+			matches, _ = filepath.Glob(fmt.Sprintf("%s.d/*.conf", unitFilePath))
 			for _, path := range matches {
 				_ = parseAndMerge(path)
 			}

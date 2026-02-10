@@ -63,7 +63,10 @@ func (l *LocalSystem) Run(cmd *Command) (int, error) {
 	err := command.Wait()
 
 	if exitErr, ok := err.(*exec.ExitError); ok {
-		if status, ok := exitErr.Sys().(interface{ ExitStatus() int }); ok {
+		type exitStatusImpl interface{ ExitStatus() int }
+
+		var status exitStatusImpl
+		if status, ok = exitErr.Sys().(exitStatusImpl); ok {
 			return status.ExitStatus(), err
 		}
 	}
