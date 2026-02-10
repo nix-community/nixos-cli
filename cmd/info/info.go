@@ -61,7 +61,7 @@ func infoMain(cmd *cobra.Command, opts *cmdOpts.InfoOpts) error {
 		return err
 	}
 
-	currentGen, err := generation.GenerationFromDirectory(constants.CurrentSystem, currentGenNumber)
+	currentGen, err := generation.GenerationFromDirectory(s, constants.CurrentSystem, currentGenNumber)
 	if err != nil {
 		log.Warnf("failed to collect generations: %v", err)
 		return err

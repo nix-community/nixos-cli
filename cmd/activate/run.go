@@ -101,13 +101,13 @@ func getRequiredVars() (*RequiredVars, error) {
 }
 
 func execInSwitchContext(
-	s system.CommandRunner,
+	s system.System,
 	log logger.Logger,
 	action activation.SwitchToConfigurationAction,
 	specialisation string,
 ) error {
 	if specialisation != "" {
-		specialisations, err := generation.CollectSpecialisations(constants.CurrentSystem)
+		specialisations, err := generation.CollectSpecialisations(s, constants.CurrentSystem)
 		if err != nil {
 			log.Warnf("unable to access specialisations: %v", err)
 		}
