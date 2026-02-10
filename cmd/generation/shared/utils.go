@@ -3,10 +3,13 @@ package genUtils
 import (
 	"github.com/nix-community/nixos-cli/internal/generation"
 	"github.com/nix-community/nixos-cli/internal/logger"
+	"github.com/nix-community/nixos-cli/internal/system"
 )
 
 func LoadGenerations(log logger.Logger, profileName string, reverse bool) ([]generation.Generation, error) {
-	generations, err := generation.CollectGenerationsInProfile(log, profileName)
+	s := system.NewLocalSystem(log)
+
+	generations, err := generation.CollectGenerationsInProfile(s, log, profileName)
 	if err != nil {
 		switch v := err.(type) {
 		case *generation.GenerationReadError:
