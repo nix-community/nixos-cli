@@ -13,7 +13,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var genLinkRegex = regexp.MustCompile(`-(\d+)-link$`)
+var genLinkPattern = regexp.MustCompile(`-(\d+)-link$`)
 
 func CompleteProfileFlag(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	profiles := []string{"system"}
@@ -26,7 +26,7 @@ func CompleteProfileFlag(_ *cobra.Command, args []string, toComplete string) ([]
 	for _, v := range entries {
 		name := v.Name()
 
-		if matches := genLinkRegex.FindStringSubmatch(name); len(matches) > 0 {
+		if matches := genLinkPattern.FindStringSubmatch(name); len(matches) > 0 {
 			continue
 		}
 
@@ -53,7 +53,8 @@ func CompleteGenerationNumber(profile *string, limit int) cobra.CompletionFunc {
 
 		exclude := []uint64{}
 		for _, v := range args {
-			parsed, err := strconv.ParseUint(v, 10, 64)
+			var parsed uint64
+			parsed, err = strconv.ParseUint(v, 10, 64)
 			if err != nil {
 				continue
 			}

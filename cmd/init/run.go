@@ -56,7 +56,7 @@ func initMain(cmd *cobra.Command, opts *cmdOpts.InitOpts) error {
 		flakeNixFilename := filepath.Join(configDir, "flake.nix")
 		log.Infof("writing %v", flakeNixFilename)
 
-		if _, err := os.Stat(flakeNixFilename); err == nil {
+		if _, err = os.Stat(flakeNixFilename); err == nil {
 			if opts.ForceWrite {
 				log.Warn("overwriting existing flake.nix")
 			} else {
@@ -74,7 +74,7 @@ func initMain(cmd *cobra.Command, opts *cmdOpts.InitOpts) error {
 
 	configNixFilename := filepath.Join(configDir, "configuration.nix")
 	log.Infof("writing %v", configNixFilename)
-	if _, err := os.Stat(configNixFilename); err == nil {
+	if _, err = os.Stat(configNixFilename); err == nil {
 		if opts.ForceWrite {
 			log.Warn("overwriting existing configuration.nix")
 		} else {
@@ -90,7 +90,7 @@ func initMain(cmd *cobra.Command, opts *cmdOpts.InitOpts) error {
 
 	hwConfigNixFilename := filepath.Join(configDir, "hardware-configuration.nix")
 	log.Infof("writing %v", hwConfigNixFilename)
-	if _, err := os.Stat(hwConfigNixFilename); err == nil {
+	if _, err = os.Stat(hwConfigNixFilename); err == nil {
 		log.Warn("overwriting existing hardware-configuration.nix")
 	}
 	err = os.WriteFile(hwConfigNixFilename, []byte(hwConfigNixText), 0o644)

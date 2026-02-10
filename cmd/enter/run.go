@@ -18,7 +18,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func enterMain(cmd *cobra.Command, opts *cmdOpts.EnterOpts) error {
+func enterMain(cmd *cobra.Command, opts *cmdOpts.EnterOpts) (err error) {
 	log := logger.FromContext(cmd.Context())
 	cfg := settings.FromContext(cmd.Context())
 
@@ -27,15 +27,15 @@ func enterMain(cmd *cobra.Command, opts *cmdOpts.EnterOpts) error {
 	}
 
 	nixosMarker := filepath.Join(opts.RootLocation, constants.NixOSMarker)
-	if _, err := os.Stat(nixosMarker); err != nil {
-		err := fmt.Errorf("%v is not a valid NixOS system", opts.RootLocation)
+	if _, err = os.Stat(nixosMarker); err != nil {
+		err = fmt.Errorf("%v is not a valid NixOS system", opts.RootLocation)
 		log.Error(err)
 		return err
 	}
 
 	isReexec := os.Getenv(NIXOS_REEXEC) == "1"
 	if !isReexec {
-		err := execSandboxedEnterProcess(log)
+		err = execSandboxedEnterProcess(log)
 		if err != nil {
 			log.Errorf("failed to exec sandboxed process with unshare: %v", err)
 		}
@@ -47,7 +47,7 @@ func enterMain(cmd *cobra.Command, opts *cmdOpts.EnterOpts) error {
 	log.Step("Bind-mounting resources...")
 	log.Info("remounting root privately for namespace")
 
-	err := syscall.Mount("/", "/", "", syscall.MS_REMOUNT|syscall.MS_PRIVATE|syscall.MS_REC, "")
+	err = syscall.Mount("/", "/", "", syscall.MS_REMOUNT|syscall.MS_PRIVATE|syscall.MS_REC, "")
 	if err != nil {
 		log.Errorf("failed to remount root: %v", err)
 		return err
@@ -99,7 +99,9 @@ func enterMain(cmd *cobra.Command, opts *cmdOpts.EnterOpts) error {
 				Mode:    0o644,
 				Resolve: 0,
 			}
-			targetFd, err := unix.Openat2(unix.AT_FDCWD, targetResolvConf, &openHow)
+
+			var targetFd int
+			targetFd, err = unix.Openat2(unix.AT_FDCWD, targetResolvConf, &openHow)
 			if err == unix.ELOOP {
 				openHow.Flags = unix.O_PATH | unix.O_NOFOLLOW | unix.O_CLOEXEC
 				openHow.Mode = 0

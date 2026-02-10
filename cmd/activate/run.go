@@ -376,14 +376,15 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 	}
 	defer func() { _ = lockfile.Close() }()
 
-	if err := unix.Flock(int(lockfile.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
+	if err = unix.Flock(int(lockfile.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
 		log.Errorf("failed to lock %s", ACTIVATION_LOCKFILE)
 		log.Info("is another activation process running?")
 		return err
 	}
 	defer func() { _ = unix.Flock(int(lockfile.Fd()), unix.LOCK_UN) }()
 
-	if syslogLogger, err := logger.NewSyslogLogger("nixos-cli-activate"); err == nil {
+	var syslogLogger *logger.SyslogLogger
+	if syslogLogger, err = logger.NewSyslogLogger("nixos-cli-activate"); err == nil {
 		log = logger.NewMultiLogger(log, syslogLogger)
 	} else {
 		log.Warnf("failed to initialize syslog logger: %v", err)
@@ -406,7 +407,7 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 	if opts.Action == activation.SwitchToConfigurationActionBoot || opts.Action == activation.SwitchToConfigurationActionSwitch {
 		log.Info("installing bootloader")
 
-		if err := installBootloader(s, vars.InstallBootloaderCmd, vars.Toplevel); err != nil {
+		if err = installBootloader(s, vars.InstallBootloaderCmd, vars.Toplevel); err != nil {
 			log.Errorf("failed to install bootloader: %s", err)
 			return err
 		}
@@ -415,7 +416,8 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 	if skipSync := os.Getenv("NIXOS_NO_SYNC"); skipSync == "" {
 		log.Info("syncing /nix/store to disk")
 
-		dir, err := os.Open("/nix/store")
+		var dir *os.File
+		dir, err = os.Open("/nix/store")
 		if err != nil {
 			log.Errorf("failed to sync /nix/store: %v", err)
 			log.Info("will not proceed with activation")
@@ -423,7 +425,7 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 		}
 		defer func() { _ = dir.Close() }()
 
-		if err := unix.Syncfs(int(dir.Fd())); err != nil {
+		if err = unix.Syncfs(int(dir.Fd())); err != nil {
 			log.Errorf("failed to sync /nix/store: %v", err)
 			log.Info("will not proceed with activation")
 			return err
@@ -491,8 +493,7 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 				log.Infof("would stop swap device %s", device)
 			} else {
 				log.Infof("stopping swap device %s", device)
-				err := swapoff(device)
-				if err != nil {
+				if err = swapoff(device); err != nil {
 					log.Warnf("failed to stop swapping to device %s, continuing activation anyway", device)
 				}
 			}
@@ -508,7 +509,7 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 
 	newPID1Path, err := filepath.EvalSymlinks(filepath.Join(vars.NewSystemd, "lib/systemd/systemd"))
 	if err != nil {
-		err := fmt.Errorf("systemd binary in this system does not exist, cannot continue")
+		err = fmt.Errorf("systemd binary in this system does not exist, cannot continue")
 		log.Errorf("%s", err)
 		return err
 	}
@@ -686,7 +687,7 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 		userProps, _ := logind.GetUserPropertiesContext(ctx, user.Path)
 
 		var gid uint32
-		err := userProps["GID"].Store(&gid)
+		err = userProps["GID"].Store(&gid)
 		if err != nil {
 			log.Warnf("failed to get GID for user %s, skipping", user.Name)
 			continue
@@ -734,7 +735,8 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 	// probably expects them to be started.
 	if len(unitLists.Reload) > 0 {
 		for unit := range unitLists.Reload {
-			active, err := unitIsActive(ctx, systemd, unit)
+			var active bool
+			active, err = unitIsActive(ctx, systemd, unit)
 			if err != nil {
 				log.Errorf("failed to get state of unit %s: %v", unit, err)
 				continue
@@ -745,7 +747,9 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 			}
 
 			unitPath := filepath.Join(vars.Toplevel, "etc/systemd/system", unit)
-			unitInfo, err := systemdUtils.ParseUnit(unitPath, unitPath)
+
+			var unitInfo systemdUtils.UnitInfo
+			unitInfo, err = systemdUtils.ParseUnit(unitPath, unitPath)
 			if err != nil {
 				log.Errorf("failed to parse unit file %s: %s", unitPath, err)
 				continue
@@ -840,7 +844,8 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 		}
 
 		if state.SubState == "auto-restart" && strings.HasSuffix(unit, ".service") {
-			prop, err := systemd.GetUnitTypePropertyContext(ctx, unit, "Service", "ExecMainStatus")
+			var prop *systemdDbus.Property
+			prop, err = systemd.GetUnitTypePropertyContext(ctx, unit, "Service", "ExecMainStatus")
 			if err != nil {
 				log.Errorf("failed to get ExecMainStatus property for %s: %v", unit, err)
 				continue

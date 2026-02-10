@@ -73,8 +73,7 @@ func mainCommand() (*cobra.Command, error) {
 		cfg = settings.NewSettings()
 	}
 
-	errs := cfg.Validate()
-	for _, err := range errs {
+	for _, err := range cfg.Validate() {
 		log.Warn(err.Error())
 	}
 
@@ -92,7 +91,7 @@ func mainCommand() (*cobra.Command, error) {
 		},
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			for key, value := range opts.ConfigValues {
-				err := cfg.SetValue(key, value)
+				err = cfg.SetValue(key, value)
 				if err != nil {
 					return fmt.Errorf("failed to set %v: %w", key, err)
 				}
@@ -152,7 +151,7 @@ func mainCommand() (*cobra.Command, error) {
 	cmd.AddCommand(replCmd.ReplCommand())
 
 	for alias, resolved := range cfg.Aliases {
-		err := addAliasCmd(&cmd, alias, resolved)
+		err = addAliasCmd(&cmd, alias, resolved)
 		if err != nil {
 			log.Warnf("failed to add alias '%v': %v", alias, err.Error())
 		}

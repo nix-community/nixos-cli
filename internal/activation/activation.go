@@ -168,12 +168,13 @@ func GetCurrentGenerationNumber(s system.System, profile string) (uint64, error)
 	}
 
 	if matches := genLinkRegex.FindStringSubmatch(currentGenerationLink); len(matches) > 0 {
-		genNumber, err := strconv.ParseInt(matches[1], 10, 64)
+		var genNumber uint64
+		genNumber, err = strconv.ParseUint(matches[1], 10, 64)
 		if err != nil {
 			return 0, fmt.Errorf("failed to parse generation number %v for %v", matches[1], currentGenerationLink)
 		}
 
-		return uint64(genNumber), nil
+		return genNumber, nil
 	} else {
 		panic("current link format does not match 'profile-generation-link' format")
 	}

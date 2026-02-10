@@ -354,7 +354,7 @@ func generateManPages(inputDir string, outputDir string) error {
 		cmd.Stdout = &outBuf
 		cmd.Stderr = os.Stderr
 
-		if err := cmd.Run(); err != nil {
+		if err = cmd.Run(); err != nil {
 			return fmt.Errorf("scdoc failed for %s: %w", path, err)
 		}
 
@@ -362,7 +362,7 @@ func generateManPages(inputDir string, outputDir string) error {
 		manFile := base[:len(base)-len(".scd")]
 		outPath := filepath.Join(outputDir, manFile)
 
-		if err := os.MkdirAll(outputDir, 0o755); err != nil {
+		if err = os.MkdirAll(outputDir, 0o755); err != nil {
 			return err
 		}
 

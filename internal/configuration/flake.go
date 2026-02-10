@@ -33,7 +33,8 @@ func FlakeRefFromString(s string) *FlakeRef {
 	}
 
 	if _, err := os.Stat(uri); err == nil {
-		if resolved, err := filepath.EvalSymlinks(uri); err == nil {
+		var resolved string
+		if resolved, err = filepath.EvalSymlinks(uri); err == nil {
 			uri = resolved
 		}
 	}

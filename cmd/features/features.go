@@ -34,15 +34,15 @@ func FeatureCommand() *cobra.Command {
 	return &cmd
 }
 
-type features struct {
-	Version            string              `json:"version"`
-	GitRevision        string              `json:"git_rev"`
-	GoVersion          string              `json:"go_version"`
-	DetectedNixVersion string              `json:"nix_version"`
-	CompilationOptions complilationOptions `json:"options"`
+type AvailableFeatures struct {
+	Version            string             `json:"version"`
+	GitRevision        string             `json:"git_rev"`
+	GoVersion          string             `json:"go_version"`
+	DetectedNixVersion string             `json:"nix_version"`
+	CompilationOptions CompilationOptions `json:"options"`
 }
 
-type complilationOptions struct {
+type CompilationOptions struct {
 	NixpkgsVersion string `json:"nixpkgs_version"`
 	Flake          bool   `json:"flake"`
 }
@@ -50,11 +50,11 @@ type complilationOptions struct {
 func featuresMain(cmd *cobra.Command, opts *cmdOpts.FeaturesOpts) {
 	log := logger.FromContext(cmd.Context())
 
-	features := features{
+	features := AvailableFeatures{
 		Version:     build.Version(),
 		GitRevision: build.GitRevision(),
 		GoVersion:   runtime.Version(),
-		CompilationOptions: complilationOptions{
+		CompilationOptions: CompilationOptions{
 			NixpkgsVersion: build.NixpkgsVersion(),
 			Flake:          build.Flake(),
 		},

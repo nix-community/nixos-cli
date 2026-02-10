@@ -166,7 +166,8 @@ func generationDeleteMain(cmd *cobra.Command, genOpts *cmdOpts.GenerationOpts, o
 	log.Print()
 
 	if !opts.AlwaysConfirm && !cfg.Confirmation.Always {
-		confirm, err := cmdUtils.ConfirmationInput("Proceed?", cmdUtils.ConfirmationPromptOptions{
+		var confirm bool
+		confirm, err = cmdUtils.ConfirmationInput("Proceed?", cmdUtils.ConfirmationPromptOptions{
 			InvalidBehavior: cfg.Confirmation.Invalid,
 			EmptyBehavior:   cfg.Confirmation.Empty,
 		})
@@ -183,21 +184,21 @@ func generationDeleteMain(cmd *cobra.Command, genOpts *cmdOpts.GenerationOpts, o
 	log.Step("Deleting generations...")
 
 	profileDirectory := generation.GetProfileDirectoryFromName(genOpts.ProfileName)
-	if err := deleteGenerations(s, profileDirectory, gensToDelete); err != nil {
+	if err = deleteGenerations(s, profileDirectory, gensToDelete); err != nil {
 		log.Errorf("failed to delete generations: %v", err)
 		return err
 	}
 
 	log.Step("Regenerating boot menu entries...")
 
-	if err := regenerateBootMenu(s); err != nil {
+	if err = regenerateBootMenu(s); err != nil {
 		log.Errorf("failed to regenerate boot menu entries: %v", err)
 		return err
 	}
 
 	log.Step("Collecting garbage...")
 
-	if err := collectGarbage(s); err != nil {
+	if err = collectGarbage(s); err != nil {
 		log.Errorf("failed to collect garbage: %v", err)
 		return err
 	}

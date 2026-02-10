@@ -386,7 +386,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 			}
 
 			if slices.Index(images, imgBuild.Variant) < 0 {
-				err := fmt.Errorf("image type '%s' is not available", imgBuild.Variant)
+				err = fmt.Errorf("image type '%s' is not available", imgBuild.Variant)
 				log.Error(err)
 				log.Info("pass an empty string to `--image` to get a list of available images")
 				return err
@@ -433,7 +433,8 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 			if err != nil {
 				log.Warnf("failed to resolve configuration path: %v", err)
 			} else {
-				commitMsg, err := getLatestGitCommitMessage(configDirname, cfg.Apply.IgnoreDirtyTree)
+				var commitMsg string
+				commitMsg, err = getLatestGitCommitMessage(configDirname, cfg.Apply.IgnoreDirtyTree)
 				if err == errDirtyGitTree {
 					log.Warn("git tree is dirty")
 				} else if err != nil {
@@ -532,7 +533,9 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 
 	if !opts.AlwaysConfirm && !cfg.Confirmation.Always {
 		log.Printf("\n")
-		confirm, err := cmdUtils.ConfirmationInput("Activate this configuration?", cmdUtils.ConfirmationPromptOptions{
+
+		var confirm bool
+		confirm, err = cmdUtils.ConfirmationInput("Activate this configuration?", cmdUtils.ConfirmationPromptOptions{
 			InvalidBehavior: cfg.Confirmation.Invalid,
 			EmptyBehavior:   cfg.Confirmation.Empty,
 		})
@@ -557,7 +560,8 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 
 	specialisation := opts.Specialisation
 	if specialisation == "" {
-		defaultSpecialisation, err := activation.FindDefaultSpecialisationFromConfig(targetHost, resultLocation)
+		var defaultSpecialisation string
+		defaultSpecialisation, err = activation.FindDefaultSpecialisationFromConfig(targetHost, resultLocation)
 		if err != nil {
 			log.Warnf("unable to find default specialisation from config: %v", err)
 		} else {
@@ -593,7 +597,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 			return err
 		}
 
-		if err := activation.AddNewNixProfile(
+		if err = activation.AddNewNixProfile(
 			targetHost,
 			opts.ProfileName,
 			resultLocation,
@@ -627,7 +631,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 
 			log.Step("Rolling back system profile...")
 
-			if err := activation.SetNixProfileGeneration(
+			if err = activation.SetNixProfileGeneration(
 				targetHost,
 				opts.ProfileName,
 				previousGenNumber, &activation.SetNixProfileGenerationOptions{
@@ -700,7 +704,7 @@ func upgradeChannels(s system.CommandRunner, opts *upgradeChannelsOptions) error
 
 		for _, entry := range entries {
 			if entry.IsDir() {
-				if _, err := os.Stat(filepath.Join(channelDirectory, entry.Name(), ".update-on-nixos-rebuild")); err == nil {
+				if _, err = os.Stat(filepath.Join(channelDirectory, entry.Name(), ".update-on-nixos-rebuild")); err == nil {
 					argv = append(argv, entry.Name())
 				}
 			}

@@ -185,7 +185,8 @@ func optionMain(cmd *cobra.Command, opts *cmdOpts.OptionOpts) error {
 	}
 
 	var evaluator option.EvaluatorFunc = func(optionName string) (string, error) {
-		value, err := nixosConfig.EvalAttribute(optionName)
+		var value *string
+		value, err = nixosConfig.EvalAttribute(optionName)
 		realValue := ""
 		if value != nil {
 			realValue = *value
@@ -230,7 +231,8 @@ func optionMain(cmd *cobra.Command, opts *cmdOpts.OptionOpts) error {
 
 		spinner.UpdateMessage("Evaluating option value...")
 
-		evaluatedValue, err := evaluator(o.Name)
+		var evaluatedValue string
+		evaluatedValue, err = evaluator(o.Name)
 
 		spinner.Stop()
 

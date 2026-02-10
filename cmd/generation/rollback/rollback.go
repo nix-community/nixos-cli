@@ -93,7 +93,9 @@ func generationRollbackMain(cmd *cobra.Command, genOpts *cmdOpts.GenerationOpts,
 
 	if !opts.AlwaysConfirm && !cfg.Confirmation.Always {
 		log.Printf("\n")
-		confirm, err := cmdUtils.ConfirmationInput("Activate the previous generation?", cmdUtils.ConfirmationPromptOptions{
+
+		var confirm bool
+		confirm, err = cmdUtils.ConfirmationInput("Activate the previous generation?", cmdUtils.ConfirmationPromptOptions{
 			InvalidBehavior: cfg.Confirmation.Invalid,
 			EmptyBehavior:   cfg.Confirmation.Empty,
 		})
@@ -110,7 +112,8 @@ func generationRollbackMain(cmd *cobra.Command, genOpts *cmdOpts.GenerationOpts,
 
 	specialisation := opts.Specialisation
 	if specialisation == "" {
-		defaultSpecialisation, err := activation.FindDefaultSpecialisationFromConfig(s, generationLink)
+		var defaultSpecialisation string
+		defaultSpecialisation, err = activation.FindDefaultSpecialisationFromConfig(s, generationLink)
 		if err != nil {
 			log.Warnf("unable to find default specialisation from config: %v", err)
 		} else {
@@ -133,7 +136,7 @@ func generationRollbackMain(cmd *cobra.Command, genOpts *cmdOpts.GenerationOpts,
 	if !opts.Dry {
 		log.Step("Setting system profile...")
 
-		if err := activation.SetNixProfileGeneration(
+		if err = activation.SetNixProfileGeneration(
 			s,
 			genOpts.ProfileName,
 			uint64(previousGen.Number),
@@ -163,7 +166,7 @@ func generationRollbackMain(cmd *cobra.Command, genOpts *cmdOpts.GenerationOpts,
 			}
 
 			log.Step("Rolling back system profile...")
-			if err := activation.SetNixProfileGeneration(
+			if err = activation.SetNixProfileGeneration(
 				s,
 				genOpts.ProfileName,
 				previousGenNumber,
