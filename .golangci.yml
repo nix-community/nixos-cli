@@ -4,6 +4,7 @@ linters:
     govet:
       enable:
         - printf
+        - shadow
       settings:
         printf:
           funcs:
@@ -12,6 +13,8 @@ linters:
             - (github.com/nix-community/nixos-cli/internal/logger.Logger).Infof
             - (github.com/nix-community/nixos-cli/internal/logger.Logger).Warnf
             - (github.com/nix-community/nixos-cli/internal/logger.Logger).Errorf
+        shadow:
+          strict: true
   exclusions:
     generated: lax
     presets:
