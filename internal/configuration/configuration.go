@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/nix-community/nixos-cli/internal/build"
+	"github.com/nix-community/nixos-cli/internal/cmd/nixopts"
 	"github.com/nix-community/nixos-cli/internal/logger"
 	"github.com/nix-community/nixos-cli/internal/nix"
 	"github.com/nix-community/nixos-cli/internal/settings"
@@ -21,7 +22,7 @@ type SystemBuildOptions struct {
 	// This is needed to determine the proper Nix options to pass
 	// when building, if any were passed through.
 	CmdFlags  *pflag.FlagSet
-	NixOpts   any
+	NixOpts   nixopts.NixOptionsSet
 	Env       map[string]string
 	ExtraArgs []string
 }

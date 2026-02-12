@@ -9,25 +9,31 @@ import (
 )
 
 type nixOptions struct {
-	Quiet          bool              `nixCategory:"build,copy"`
-	PrintBuildLogs bool              `nixCategory:"build"`
-	MaxJobs        int               `nixCategory:"build,copy"`
-	LogFormat      string            `nixCategory:"build"`
-	Builders       []string          `nixCategory:"build"`
-	Options        map[string]string `nixCategory:"build,eval"`
+	nixopts.Quiet
+	nixopts.PrintBuildLogs
+	nixopts.SubstituteOnDestination
+	nixopts.MaxJobs
+	nixopts.LogFormat
+	nixopts.Include
+	nixopts.Option
 }
 
-func createTestCmd() (*cobra.Command, *nixOptions) {
+func (o *nixOptions) Flags() []nixopts.NixOption {
+	return nixopts.CollectFlags(o)
+}
+
+func (o *nixOptions) ArgsForCommand(cmd nixopts.NixCommand) []string {
+	return nixopts.ArgsForOptionsSet(o.Flags(), cmd)
+}
+
+func createTestCmd() (*cobra.Command, nixopts.NixOptionsSet) {
 	opts := nixOptions{}
 
 	cmd := &cobra.Command{}
 
-	nixopts.AddQuietNixOption(cmd, &opts.Quiet)
-	nixopts.AddPrintBuildLogsNixOption(cmd, &opts.PrintBuildLogs)
-	nixopts.AddMaxJobsNixOption(cmd, &opts.MaxJobs)
-	nixopts.AddLogFormatNixOption(cmd, &opts.LogFormat)
-	nixopts.AddBuildersNixOption(cmd, &opts.Builders)
-	nixopts.AddOptionNixOption(cmd, &opts.Options)
+	for _, opt := range opts.Flags() {
+		opt.Bind(cmd)
+	}
 
 	return cmd, &opts
 }
@@ -43,7 +49,7 @@ func TestNixOptionsToArgsList(t *testing.T) {
 		{
 			name:       "All fields zero-valued",
 			passedArgs: []string{},
-			expected:   []string{},
+			expected:   nil,
 		},
 		{
 			name:       "Single boolean field",
@@ -67,8 +73,8 @@ func TestNixOptionsToArgsList(t *testing.T) {
 		},
 		{
 			name:       "Slice field set",
-			passedArgs: []string{"--builders", "builder1", "--builders", "builder2"},
-			expected:   []string{"--builders", "builder1", "--builders", "builder2"},
+			passedArgs: []string{"--include", "include1", "--include", "include2"},
+			expected:   []string{"--include", "include1", "--include", "include2"},
 		},
 		{
 			name:       "Map field set",
@@ -77,8 +83,8 @@ func TestNixOptionsToArgsList(t *testing.T) {
 		},
 		{
 			name:       "Mixed fields set",
-			passedArgs: []string{"--quiet", "--max-jobs", "2", "--log-format", "xml", "--builders", "builder1", "--option", "option1=value1", "--option", "option2=value2"},
-			expected:   []string{"--quiet", "--max-jobs", "2", "--log-format", "xml", "--builders", "builder1", "--option", "option1", "value1", "--option", "option2", "value2"},
+			passedArgs: []string{"--quiet", "--max-jobs", "2", "--log-format", "xml", "--include", "include1", "--option", "option1=value1", "--option", "option2=value2"},
+			expected:   []string{"--include", "include1", "--log-format", "xml", "--max-jobs", "2", "--option", "option1", "value1", "--option", "option2", "value2", "--quiet"},
 		},
 	}
 
@@ -90,7 +96,7 @@ func TestNixOptionsToArgsList(t *testing.T) {
 			cmd.SetArgs(tt.passedArgs)
 			_ = cmd.Execute()
 
-			args := nixopts.NixOptionsToArgsList(cmd.Flags(), opts)
+			args := opts.ArgsForCommand(nixopts.CmdBuild)
 
 			if !reflect.DeepEqual(args, tt.expected) {
 				t.Errorf("NixOptionsToArgsList() = %v, want %v", args, tt.expected)
@@ -99,36 +105,36 @@ func TestNixOptionsToArgsList(t *testing.T) {
 	}
 }
 
-func TestNixOptionsToArgsListByCategory(t *testing.T) {
+func TestNixOptionsToArgsListByCommand(t *testing.T) {
 	tests := []struct {
 		name       string
-		category   string
+		command    nixopts.NixCommand
 		passedArgs []string
 		expected   []string
 	}{
 		{
-			name:       "Build category only includes build-related flags",
-			category:   "build",
-			passedArgs: []string{"--quiet", "--max-jobs", "2", "--log-format", "json", "--builders", "builder1"},
-			expected:   []string{"--quiet", "--max-jobs", "2", "--log-format", "json", "--builders", "builder1"},
+			name:       "Filter build options category",
+			command:    nixopts.CmdBuild,
+			passedArgs: []string{"--quiet", "--max-jobs", "2", "--log-format", "json", "--include", "include1", "--substitute-on-destination"},
+			expected:   []string{"--include", "include1", "--log-format", "json", "--max-jobs", "2", "--quiet"},
 		},
 		{
-			name:       "Eval category only includes eval-related flags",
-			category:   "eval",
-			passedArgs: []string{"--option", "foo=bar", "--quiet"},
-			expected:   []string{"--option", "foo", "bar"},
+			name:       "Filter eval options category",
+			command:    nixopts.CmdEval,
+			passedArgs: []string{"--option", "foo=bar", "--quiet", "--substitute-on-destination"},
+			expected:   []string{"--option", "foo", "bar", "--quiet"},
 		},
 		{
-			name:       "Copy category only includes copy-related flags",
-			category:   "copy",
+			name:       "Filter copy options category",
+			command:    nixopts.CmdCopyClosure,
+			passedArgs: []string{"--quiet", "--max-jobs", "3", "--substitute-on-destination"},
+			expected:   []string{"--max-jobs", "3", "--quiet", "-s"},
+		},
+		{
+			name:       "Category with no matching flags returns nil",
+			command:    "nonexistent",
 			passedArgs: []string{"--quiet", "--max-jobs", "3"},
-			expected:   []string{"--quiet", "--max-jobs", "3"},
-		},
-		{
-			name:       "Category with no matching flags returns empty slice",
-			category:   "lock",
-			passedArgs: []string{"--quiet", "--max-jobs", "3"},
-			expected:   []string{},
+			expected:   nil,
 		},
 	}
 
@@ -138,9 +144,9 @@ func TestNixOptionsToArgsListByCategory(t *testing.T) {
 			cmd.SetArgs(tt.passedArgs)
 			_ = cmd.Execute()
 
-			args := nixopts.NixOptionsToArgsListByCategory(cmd.Flags(), opts, tt.category)
+			args := opts.ArgsForCommand(tt.command)
 			if !reflect.DeepEqual(args, tt.expected) {
-				t.Errorf("NixOptionsToArgsListByCategory(%s) = %v, want %v", tt.category, args, tt.expected)
+				t.Errorf("NixOptionsToArgsListByCommand(%s) = %v, want %v", tt.command, args, tt.expected)
 			}
 		})
 	}

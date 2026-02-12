@@ -150,7 +150,7 @@ func (l *LegacyConfiguration) buildLocalSystem(s *system.LocalSystem, buildType 
 	}
 
 	if opts.NixOpts != nil {
-		argv = append(argv, nixopts.NixOptionsToArgsList(opts.CmdFlags, opts.NixOpts)...)
+		argv = append(argv, opts.NixOpts.ArgsForCommand(nixopts.CmdLegacyBuild)...)
 	}
 
 	if opts.ResultLocation != "" {
@@ -193,12 +193,17 @@ func (l *LegacyConfiguration) buildRemoteSystem(s *system.SSHSystem, buildType B
 
 	localSystem := system.NewLocalSystem(log)
 
-	extraBuildFlags := nixopts.NixOptionsToArgsListByCategory(opts.CmdFlags, opts.NixOpts, "build")
+	var extraInstantiateArgs []string
+	var extraRealiseArgs []string
+	if opts.NixOpts != nil {
+		extraInstantiateArgs = opts.NixOpts.ArgsForCommand(nixopts.CmdInstantiate)
+		extraRealiseArgs = opts.NixOpts.ArgsForCommand(nixopts.CmdStoreRealise)
+	}
 
 	// 1. Determine the drv path.
 	// Equivalent of `nix-instantiate -A "${attr}" ${extraBuildFlags[@]}`
 	instantiateArgv := []string{"nix-instantiate", l.ConfigPathArg(), "-A", l.BuildAttr(buildType.BuildAttr())}
-	instantiateArgv = append(instantiateArgv, extraBuildFlags...)
+	instantiateArgv = append(instantiateArgv, extraInstantiateArgs...)
 
 	var drvPathBuf bytes.Buffer
 	instantiateCmd := system.NewCommand(instantiateArgv[0], instantiateArgv[1:]...)
@@ -225,9 +230,7 @@ func (l *LegacyConfiguration) buildRemoteSystem(s *system.SSHSystem, buildType B
 	// 3. Realise the copied drv on the builder.
 	// $ nix-store -r "$drv" "${buildArgs[@]}"
 	realiseArgv := []string{"nix-store", "-r", drvPath}
-
-	realiseNixOptions := nixopts.NixOptionsToArgsList(opts.CmdFlags, opts.NixOpts)
-	realiseArgv = append(realiseArgv, realiseNixOptions...)
+	realiseArgv = append(realiseArgv, extraRealiseArgs...)
 
 	// Mimic `nixos-rebuild` behavior of using -k option
 	// for all commands except for `switch` and `boot`

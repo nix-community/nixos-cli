@@ -24,11 +24,11 @@ type FlakeRef struct {
 }
 
 func FlakeRefFromString(s string) *FlakeRef {
-	split := strings.Index(s, "#")
+	before, after, ok := strings.Cut(s, "#")
 
 	var uri string
-	if split > -1 {
-		uri = s[:split]
+	if ok {
+		uri = before
 	} else {
 		uri = s
 	}
@@ -40,10 +40,10 @@ func FlakeRefFromString(s string) *FlakeRef {
 		}
 	}
 
-	if split > -1 {
+	if ok {
 		return &FlakeRef{
 			URI:    uri,
-			System: s[split+1:],
+			System: after,
 		}
 	}
 
@@ -143,7 +143,7 @@ func (f *FlakeRef) buildLocalSystem(s *system.LocalSystem, buildType BuildType, 
 	}
 
 	if opts.NixOpts != nil {
-		argv = append(argv, nixopts.NixOptionsToArgsList(opts.CmdFlags, opts.NixOpts)...)
+		argv = append(argv, opts.NixOpts.ArgsForCommand(nixopts.CmdBuild)...)
 	}
 
 	if opts.ExtraArgs != nil {
@@ -175,15 +175,18 @@ func (f *FlakeRef) buildLocalSystem(s *system.LocalSystem, buildType BuildType, 
 }
 
 func (f *FlakeRef) buildRemoteSystem(s *system.SSHSystem, buildType BuildType, opts *SystemBuildOptions) (string, error) {
-	evalArgs := nixopts.NixOptionsToArgsListByCategory(opts.CmdFlags, opts.NixOpts, "lock")
-	buildArgs := nixopts.NixOptionsToArgsListByCategory(opts.CmdFlags, opts.NixOpts, "build")
+	var evalArgs, realiseArgs []string
+	if opts.NixOpts != nil {
+		evalArgs = opts.NixOpts.ArgsForCommand(nixopts.CmdEval)
+		realiseArgs = opts.NixOpts.ArgsForCommand(nixopts.CmdStoreRealise)
+	}
 
-	// --impure must be part of the eval arguments, rather than
-	// the build arguments here, since that is where environment
+	// --impure must be part of the eval arguments, rather than the
+	// realisation arguments here, since that is where environment
 	// variables are accessed.
-	if i := slices.Index(buildArgs, "--impure"); i >= 0 {
+	if i := slices.Index(realiseArgs, "--impure"); i >= 0 {
 		evalArgs = append(evalArgs, "--impure")
-		buildArgs = slices.Delete(buildArgs, i, i+1)
+		realiseArgs = slices.Delete(realiseArgs, i, i+1)
 	}
 
 	log := s.Logger()
@@ -217,7 +220,10 @@ func (f *FlakeRef) buildRemoteSystem(s *system.SSHSystem, buildType BuildType, o
 	// 2. Copy the drv path over to the builder.
 	// $ nix "${flakeFlags[@]}" copy "${copyFlags[@]}" --derivation --to "ssh://$buildHost" "$drv"
 
-	copyFlags := nixopts.NixOptionsToArgsListByCategory(opts.CmdFlags, opts.NixOpts, "copy")
+	var copyFlags []string
+	if opts.NixOpts != nil {
+		copyFlags = opts.NixOpts.ArgsForCommand(nixopts.CmdCopyClosure)
+	}
 
 	if err = system.CopyClosures(localSystem, s, []string{drvPath}, copyFlags...); err != nil {
 		return "", fmt.Errorf("failed to copy drv to build host: %v", err)
@@ -227,7 +233,7 @@ func (f *FlakeRef) buildRemoteSystem(s *system.SSHSystem, buildType BuildType, o
 	// $ nix-store -r "$drv" "${buildArgs[@]}"
 
 	realiseDrvArgv := []string{"nix-store", "-r", drvPath}
-	realiseDrvArgv = append(realiseDrvArgv, buildArgs...)
+	realiseDrvArgv = append(realiseDrvArgv, realiseArgs...)
 
 	if opts.ResultLocation != "" {
 		realiseDrvArgv = append(realiseDrvArgv, "--add-root", opts.ResultLocation)

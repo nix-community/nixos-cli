@@ -68,7 +68,7 @@ func OptionsCompletionFunc(opts *cmdOpts.OptionOpts) cobra.CompletionFunc {
 			return []string{}, cobra.ShellCompDirectiveNoFileComp
 		}
 
-		options, err := loadOptions(log, cfg, opts.NixPathIncludes)
+		options, err := loadOptions(log, cfg, opts.Include)
 		if err != nil {
 			return []string{}, cobra.ShellCompDirectiveNoFileComp
 		}
