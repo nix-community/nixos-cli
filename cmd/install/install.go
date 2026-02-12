@@ -10,8 +10,8 @@ import (
 
 	"github.com/nix-community/nixos-cli/internal/build"
 	"github.com/nix-community/nixos-cli/internal/cmd/nixopts"
-	"github.com/nix-community/nixos-cli/internal/cmd/opts"
-	"github.com/nix-community/nixos-cli/internal/cmd/utils"
+	cmdOpts "github.com/nix-community/nixos-cli/internal/cmd/opts"
+	cmdUtils "github.com/nix-community/nixos-cli/internal/cmd/utils"
 	"github.com/nix-community/nixos-cli/internal/configuration"
 	"github.com/nix-community/nixos-cli/internal/constants"
 	"github.com/nix-community/nixos-cli/internal/logger"
@@ -115,32 +115,32 @@ func InstallCommand() *cobra.Command {
 	cmd.Flags().StringVarP(&opts.SystemClosure, "system", "s", "", "Install system from system closure at `path`")
 	cmd.Flags().BoolVarP(&opts.Verbose, "verbose", "v", false, "Show verbose logging")
 
-	nixopts.AddQuietNixOption(&cmd, &opts.NixOptions.Quiet)
-	nixopts.AddPrintBuildLogsNixOption(&cmd, &opts.NixOptions.PrintBuildLogs)
-	nixopts.AddNoBuildOutputNixOption(&cmd, &opts.NixOptions.NoBuildOutput)
-	nixopts.AddShowTraceNixOption(&cmd, &opts.NixOptions.ShowTrace)
-	nixopts.AddKeepGoingNixOption(&cmd, &opts.NixOptions.KeepGoing)
-	nixopts.AddKeepFailedNixOption(&cmd, &opts.NixOptions.KeepFailed)
-	nixopts.AddFallbackNixOption(&cmd, &opts.NixOptions.Fallback)
-	nixopts.AddRefreshNixOption(&cmd, &opts.NixOptions.Refresh)
-	nixopts.AddRepairNixOption(&cmd, &opts.NixOptions.Repair)
-	nixopts.AddImpureNixOption(&cmd, &opts.NixOptions.Impure)
-	nixopts.AddOfflineNixOption(&cmd, &opts.NixOptions.Offline)
-	nixopts.AddNoNetNixOption(&cmd, &opts.NixOptions.NoNet)
-	nixopts.AddMaxJobsNixOption(&cmd, &opts.NixOptions.MaxJobs)
-	nixopts.AddCoresNixOption(&cmd, &opts.NixOptions.Cores)
-	nixopts.AddLogFormatNixOption(&cmd, &opts.NixOptions.LogFormat)
-	nixopts.AddOptionNixOption(&cmd, &opts.NixOptions.Options)
-	nixopts.AddIncludesNixOption(&cmd, &opts.NixOptions.Includes)
+	opts.NixOptions.Quiet.Bind(&cmd)
+	opts.NixOptions.PrintBuildLogs.Bind(&cmd)
+	opts.NixOptions.NoBuildOutput.Bind(&cmd)
+	opts.NixOptions.ShowTrace.Bind(&cmd)
+	opts.NixOptions.KeepGoing.Bind(&cmd)
+	opts.NixOptions.KeepFailed.Bind(&cmd)
+	opts.NixOptions.Fallback.Bind(&cmd)
+	opts.NixOptions.Refresh.Bind(&cmd)
+	opts.NixOptions.Repair.Bind(&cmd)
+	opts.NixOptions.Impure.Bind(&cmd)
+	opts.NixOptions.Offline.Bind(&cmd)
+	opts.NixOptions.NoNet.Bind(&cmd)
+	opts.NixOptions.MaxJobs.Bind(&cmd)
+	opts.NixOptions.Cores.Bind(&cmd)
+	opts.NixOptions.LogFormat.Bind(&cmd)
+	opts.NixOptions.Option.Bind(&cmd)
+	opts.NixOptions.Include.Bind(&cmd)
 
 	if build.Flake() {
-		nixopts.AddRecreateLockFileNixOption(&cmd, &opts.NixOptions.RecreateLockFile)
-		nixopts.AddNoUpdateLockFileNixOption(&cmd, &opts.NixOptions.NoUpdateLockFile)
-		nixopts.AddNoWriteLockFileNixOption(&cmd, &opts.NixOptions.NoWriteLockFile)
-		nixopts.AddNoUseRegistriesNixOption(&cmd, &opts.NixOptions.NoUseRegistries)
-		nixopts.AddCommitLockFileNixOption(&cmd, &opts.NixOptions.CommitLockFile)
-		nixopts.AddUpdateInputNixOption(&cmd, &opts.NixOptions.UpdateInputs)
-		nixopts.AddOverrideInputNixOption(&cmd, &opts.NixOptions.OverrideInputs)
+		opts.NixOptions.RecreateLockFile.Bind(&cmd)
+		opts.NixOptions.NoUpdateLockFile.Bind(&cmd)
+		opts.NixOptions.NoWriteLockFile.Bind(&cmd)
+		opts.NixOptions.NoUseRegistries.Bind(&cmd)
+		opts.NixOptions.CommitLockFile.Bind(&cmd)
+		opts.NixOptions.UpdateInput.Bind(&cmd)
+		opts.NixOptions.OverrideInput.Bind(&cmd)
 	}
 
 	_ = cmd.RegisterFlagCompletionFunc("channel", cmdUtils.DirCompletions)
@@ -227,7 +227,7 @@ const (
 	defaultExtraSubstituters = "auto?trusted=1"
 )
 
-func copyChannel(cobraCmd *cobra.Command, s system.CommandRunner, mountpoint string, channelDirectory string, buildOptions any) error {
+func copyChannel(s system.CommandRunner, mountpoint string, channelDirectory string, buildOptions nixopts.NixOptionsSet) error {
 	log := s.Logger()
 
 	mountpointChannelDir := filepath.Join(mountpoint, constants.NixChannelDirectory)
@@ -257,7 +257,7 @@ func copyChannel(cobraCmd *cobra.Command, s system.CommandRunner, mountpoint str
 	}
 
 	argv := []string{"nix-env", "--store", mountpoint}
-	argv = append(argv, nixopts.NixOptionsToArgsList(cobraCmd.Flags(), buildOptions)...)
+	argv = append(argv, buildOptions.ArgsForCommand(nixopts.CmdLegacyBuild)...)
 	argv = append(argv, "--extra-substituters", defaultExtraSubstituters)
 	argv = append(argv, "-p", mountpointChannelDir, "--set", channelPath)
 
@@ -439,7 +439,7 @@ func installMain(cmd *cobra.Command, opts *cmdOpts.InstallOpts) error {
 			}
 
 			nixConfig = &configuration.LegacyConfiguration{
-				Includes:        opts.NixOptions.Includes,
+				Includes:        opts.NixOptions.Include,
 				ConfigPath:      configPath,
 				Attribute:       opts.Attr,
 				UseExplicitPath: true,
@@ -469,7 +469,7 @@ func installMain(cmd *cobra.Command, opts *cmdOpts.InstallOpts) error {
 			log.Debugf("using configuration at %s", resolvedLocation)
 
 			nixConfig = &configuration.LegacyConfiguration{
-				Includes:   opts.NixOptions.Includes,
+				Includes:   opts.NixOptions.Include,
 				ConfigPath: resolvedLocation,
 			}
 		}
@@ -479,7 +479,7 @@ func installMain(cmd *cobra.Command, opts *cmdOpts.InstallOpts) error {
 	if !opts.NoChannelCopy {
 		log.Step("Copying channel...")
 
-		err = copyChannel(cmd, s, mountpoint, opts.Channel, opts.NixOptions)
+		err = copyChannel(s, mountpoint, opts.Channel, &opts.NixOptions)
 		if err != nil {
 			return err
 		}
@@ -504,7 +504,7 @@ func installMain(cmd *cobra.Command, opts *cmdOpts.InstallOpts) error {
 
 		systemBuildOptions := configuration.SystemBuildOptions{
 			CmdFlags:  cmd.Flags(),
-			NixOpts:   opts.NixOptions,
+			NixOpts:   &opts.NixOptions,
 			Env:       envMap,
 			ExtraArgs: []string{"--extra-substituters", defaultExtraSubstituters},
 		}

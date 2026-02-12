@@ -8,7 +8,6 @@ import (
 	"slices"
 
 	"github.com/nix-community/nixos-cli/internal/build"
-	"github.com/nix-community/nixos-cli/internal/cmd/nixopts"
 	cmdOpts "github.com/nix-community/nixos-cli/internal/cmd/opts"
 	cmdUtils "github.com/nix-community/nixos-cli/internal/cmd/utils"
 	"github.com/nix-community/nixos-cli/internal/configuration"
@@ -81,7 +80,7 @@ func OptionCommand() *cobra.Command {
 		_ = cmd.RegisterFlagCompletionFunc("file", cmdUtils.FileCompletions("nix"))
 	}
 
-	nixopts.AddIncludesNixOption(&cmd, &opts.NixPathIncludes)
+	opts.Include.Bind(&cmd)
 
 	cmdUtils.SetHelpFlagText(&cmd)
 	cmd.SetHelpTemplate(cmd.HelpTemplate() + `
@@ -124,13 +123,13 @@ func optionMain(cmd *cobra.Command, opts *cmdOpts.OptionOpts) error {
 		}
 
 		nixosConfig = &configuration.LegacyConfiguration{
-			Includes:        opts.NixPathIncludes,
+			Includes:        opts.Include,
 			ConfigPath:      configPath,
 			Attribute:       opts.Attr,
 			UseExplicitPath: true,
 		}
 	} else {
-		c, err := configuration.FindConfiguration(log, cfg, opts.NixPathIncludes)
+		c, err := configuration.FindConfiguration(log, cfg, opts.Include)
 		if err != nil {
 			log.Errorf("failed to find configuration: %v", err)
 			return err

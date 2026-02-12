@@ -2,6 +2,7 @@ package cmdOpts
 
 import (
 	"github.com/nix-community/nixos-cli/internal/activation"
+	"github.com/nix-community/nixos-cli/internal/cmd/nixopts"
 	"github.com/nix-community/nixos-cli/internal/configuration"
 )
 
@@ -50,33 +51,41 @@ type ApplyOpts struct {
 }
 
 type ApplyNixOpts struct {
-	Quiet                   bool              `nixCategory:"build"`
-	PrintBuildLogs          bool              `nixCategory:"build"`
-	NoBuildOutput           bool              `nixCategory:"build"`
-	ShowTrace               bool              `nixCategory:"build"`
-	KeepGoing               bool              `nixCategory:"build,copy"`
-	KeepFailed              bool              `nixCategory:"build,copy"`
-	Fallback                bool              `nixCategory:"build,copy"`
-	Refresh                 bool              `nixCategory:"build,copy"`
-	Repair                  bool              `nixCategory:"build,copy"`
-	Impure                  bool              `nixCategory:"build"`
-	Offline                 bool              `nixCategory:"build"`
-	NoNet                   bool              `nixCategory:"build"`
-	SubstituteOnDestination bool              `nixCategory:"build,copy"`
-	MaxJobs                 int               `nixCategory:"build,copy"`
-	Cores                   int               `nixCategory:"build,copy"`
-	Builders                []string          `nixCategory:"build"`
-	LogFormat               string            `nixCategory:"build,copy"`
-	Includes                []string          `nixCategory:"build"`
-	Options                 map[string]string `nixCategory:"build,copy"`
+	nixopts.Quiet
+	nixopts.PrintBuildLogs
+	nixopts.NoBuildOutput
+	nixopts.ShowTrace
+	nixopts.KeepGoing
+	nixopts.KeepFailed
+	nixopts.Fallback
+	nixopts.Refresh
+	nixopts.Repair
+	nixopts.Impure
+	nixopts.Offline
+	nixopts.NoNet
+	nixopts.SubstituteOnDestination
+	nixopts.MaxJobs
+	nixopts.Cores
+	nixopts.Builders
+	nixopts.LogFormat
+	nixopts.Option
+	nixopts.Include
 
-	RecreateLockFile bool              `nixCategory:"lock"`
-	NoUpdateLockFile bool              `nixCategory:"lock"`
-	NoWriteLockFile  bool              `nixCategory:"lock"`
-	NoUseRegistries  bool              `nixCategory:"lock"`
-	CommitLockFile   bool              `nixCategory:"lock"`
-	UpdateInputs     []string          `nixCategory:"lock"`
-	OverrideInputs   map[string]string `nixCategory:"lock"`
+	nixopts.RecreateLockFile
+	nixopts.NoUpdateLockFile
+	nixopts.NoWriteLockFile
+	nixopts.NoUseRegistries
+	nixopts.CommitLockFile
+	nixopts.UpdateInput
+	nixopts.OverrideInput
+}
+
+func (o *ApplyNixOpts) Flags() []nixopts.NixOption {
+	return nixopts.CollectFlags(o)
+}
+
+func (o *ApplyNixOpts) ArgsForCommand(cmd nixopts.NixCommand) []string {
+	return nixopts.ArgsForOptionsSet(o.Flags(), cmd)
 }
 
 type EnterOpts struct {
@@ -168,36 +177,44 @@ type InstallOpts struct {
 }
 
 type InstallNixOpts struct {
-	Quiet          bool
-	PrintBuildLogs bool
-	NoBuildOutput  bool
-	ShowTrace      bool
-	KeepGoing      bool
-	KeepFailed     bool
-	Fallback       bool
-	Refresh        bool
-	Repair         bool
-	Impure         bool
-	Offline        bool
-	NoNet          bool
-	MaxJobs        int
-	Cores          int
-	LogFormat      string
-	Includes       []string
-	Options        map[string]string
+	nixopts.Quiet
+	nixopts.PrintBuildLogs
+	nixopts.NoBuildOutput
+	nixopts.ShowTrace
+	nixopts.KeepGoing
+	nixopts.KeepFailed
+	nixopts.Fallback
+	nixopts.Refresh
+	nixopts.Repair
+	nixopts.Impure
+	nixopts.Offline
+	nixopts.NoNet
+	nixopts.MaxJobs
+	nixopts.Cores
+	nixopts.LogFormat
+	nixopts.Builders
+	nixopts.Include
+	nixopts.Option
 
-	RecreateLockFile bool
-	NoUpdateLockFile bool
-	NoWriteLockFile  bool
-	NoUseRegistries  bool
-	CommitLockFile   bool
-	UpdateInputs     []string
-	OverrideInputs   map[string]string
+	nixopts.RecreateLockFile
+	nixopts.NoUpdateLockFile
+	nixopts.NoWriteLockFile
+	nixopts.NoUseRegistries
+	nixopts.CommitLockFile
+	nixopts.UpdateInput
+	nixopts.OverrideInput
+}
+
+func (o *InstallNixOpts) Flags() []nixopts.NixOption {
+	return nixopts.CollectFlags(o)
+}
+
+func (o *InstallNixOpts) ArgsForCommand(cmd nixopts.NixCommand) []string {
+	return nixopts.ArgsForOptionsSet(o.Flags(), cmd)
 }
 
 type OptionOpts struct {
 	NonInteractive   bool
-	NixPathIncludes  []string
 	DisplayJson      bool
 	NoUseCache       bool
 	DisplayValueOnly bool
@@ -206,11 +223,14 @@ type OptionOpts struct {
 	FlakeRef         string
 	File             string
 	Attr             string
+
+	Include nixopts.Include
 }
 
 type ReplOpts struct {
-	NixPathIncludes []string
-	FlakeRef        string
-	File            string
-	Attr            string
+	FlakeRef string
+	File     string
+	Attr     string
+
+	Include nixopts.Include
 }

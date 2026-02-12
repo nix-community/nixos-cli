@@ -7,9 +7,8 @@ import (
 	"syscall"
 
 	"github.com/fatih/color"
-	"github.com/nix-community/nixos-cli/internal/cmd/nixopts"
-	"github.com/nix-community/nixos-cli/internal/cmd/opts"
-	"github.com/nix-community/nixos-cli/internal/cmd/utils"
+	cmdOpts "github.com/nix-community/nixos-cli/internal/cmd/opts"
+	cmdUtils "github.com/nix-community/nixos-cli/internal/cmd/utils"
 	"github.com/nix-community/nixos-cli/internal/configuration"
 	"github.com/nix-community/nixos-cli/internal/logger"
 	"github.com/nix-community/nixos-cli/internal/settings"
@@ -66,7 +65,7 @@ func ReplCommand() *cobra.Command {
 
 	cmdUtils.SetHelpFlagText(&cmd)
 
-	nixopts.AddIncludesNixOption(&cmd, &opts.NixPathIncludes)
+	opts.Include.Bind(&cmd)
 
 	if build.Flake() {
 		cmd.SetHelpTemplate(cmd.HelpTemplate() + `
@@ -174,13 +173,13 @@ func replMain(cmd *cobra.Command, opts *cmdOpts.ReplOpts) error {
 		}
 
 		nixosConfig = &configuration.LegacyConfiguration{
-			Includes:        opts.NixPathIncludes,
+			Includes:        opts.Include,
 			ConfigPath:      configPath,
 			Attribute:       opts.Attr,
 			UseExplicitPath: true,
 		}
 	} else {
-		c, err := configuration.FindConfiguration(log, cfg, opts.NixPathIncludes)
+		c, err := configuration.FindConfiguration(log, cfg, opts.Include)
 		if err != nil {
 			log.Errorf("failed to find configuration: %v", err)
 			return err
