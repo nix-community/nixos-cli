@@ -474,10 +474,6 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 			log.Errorf("failed to build configuration: %v", err)
 			return err
 		}
-
-		if opts.NoActivate && opts.NoBoot && !dryBuild {
-			log.Infof("the built configuration is %v", resultLocation)
-		}
 	} else {
 		resultLocation = opts.StorePath
 	}
@@ -518,6 +514,8 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 	case *configuration.SystemBuild:
 		if dryBuild {
 			log.Debugf("this is a dry build, no activation will be performed")
+		} else if opts.NoActivate && opts.NoBoot {
+			log.Infof("the built configuration is %v", resultLocation)
 		}
 
 		if !v.Activate {
