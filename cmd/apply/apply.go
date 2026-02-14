@@ -397,6 +397,8 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 		switch buildType.(type) {
 		case *configuration.SystemBuild:
 			log.Step("Building configuration...")
+		case *configuration.ImageBuild:
+			log.Step("Building image...")
 		case *configuration.VMBuild:
 			log.Step("Building VM...")
 		}
