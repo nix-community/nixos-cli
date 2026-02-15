@@ -249,7 +249,19 @@ func (l *LegacyConfiguration) buildRemoteSystem(s *system.SSHSystem, buildType B
 	realiseDrvCmd.Stdout = &realisedPathBuf
 
 	_, err := s.Run(realiseDrvCmd)
-	return strings.TrimSpace(realisedPathBuf.String()), err
+	if err != nil {
+		return "", err
+	}
+
+	resultLocation := strings.TrimSpace(realisedPathBuf.String())
+	if opts.ResultLocation != "" {
+		resultLocation, err = s.FS().ReadLink(resultLocation)
+		if err != nil {
+			return "", fmt.Errorf("failed to resolve result location: %v", err)
+		}
+	}
+
+	return resultLocation, err
 }
 
 func (l *LegacyConfiguration) BuildSystem(buildType BuildType, opts *SystemBuildOptions) (string, error) {

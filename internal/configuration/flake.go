@@ -245,9 +245,19 @@ func (f *FlakeRef) buildRemoteSystem(s *system.SSHSystem, buildType BuildType, o
 	realiseDrvCmd := system.NewCommand(realiseDrvArgv[0], realiseDrvArgv[1:]...)
 	realiseDrvCmd.Stdout = &realisedPathBuf
 
-	_, err = s.Run(realiseDrvCmd)
+	if _, err = s.Run(realiseDrvCmd); err != nil {
+		return "", err
+	}
 
-	return strings.TrimSpace(realisedPathBuf.String()), err
+	resultLocation := strings.TrimSpace(realisedPathBuf.String())
+	if opts.ResultLocation != "" {
+		resultLocation, err = s.FS().ReadLink(resultLocation)
+		if err != nil {
+			return "", fmt.Errorf("failed to resolve result location: %v", err)
+		}
+	}
+
+	return resultLocation, err
 }
 
 func (f *FlakeRef) BuildSystem(buildType BuildType, opts *SystemBuildOptions) (string, error) {
