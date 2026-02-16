@@ -159,6 +159,10 @@ func (l *LegacyConfiguration) buildLocalSystem(s *system.LocalSystem, buildType 
 		argv = append(argv, "--no-out-link")
 	}
 
+	if opts.DryBuild {
+		argv = append(argv, "--dry-run")
+	}
+
 	if opts.ExtraArgs != nil {
 		argv = append(argv, opts.ExtraArgs...)
 	}
@@ -240,6 +244,10 @@ func (l *LegacyConfiguration) buildRemoteSystem(s *system.SSHSystem, buildType B
 
 	if opts.ResultLocation != "" {
 		realiseArgv = append(realiseArgv, "--add-root", opts.ResultLocation)
+	}
+
+	if opts.DryBuild {
+		realiseArgv = append(realiseArgv, "--dry-run")
 	}
 
 	log.CmdArray(realiseArgv)

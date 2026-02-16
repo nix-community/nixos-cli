@@ -239,6 +239,10 @@ func (f *FlakeRef) buildRemoteSystem(s *system.SSHSystem, buildType BuildType, o
 		realiseDrvArgv = append(realiseDrvArgv, "--add-root", opts.ResultLocation)
 	}
 
+	if opts.DryBuild {
+		realiseDrvArgv = append(realiseDrvArgv, "--dry-run")
+	}
+
 	log.CmdArray(realiseDrvArgv)
 
 	var realisedPathBuf bytes.Buffer
