@@ -17,6 +17,18 @@
 
   tomlFormat = pkgs.formats.toml {};
 in {
+  imports = [
+    (lib.mkRenamedOptionModule
+      ["services" "nixos-cli" "prebuildOptionCache"]
+      ["services" "nixos-cli" "option-cache" "enable"])
+    (lib.mkRenamedOptionModule
+      ["services" "nixos-cli" "useActivationInterface"]
+      ["services" "nixos-cli" "activation-interface" "enable"])
+    (lib.mkRenamedOptionModule
+      ["services" "nixos-cli" "generationTag"]
+      ["services" "nixos-cli" "generation-tag"])
+  ];
+
   options.services.nixos-cli = {
     enable = lib.mkEnableOption "unified NixOS tooling replacement for nixos-* utilities";
 
@@ -47,37 +59,41 @@ in {
         prev;
     };
 
-    useActivationInterface = lib.mkOption {
-      type = types.bool;
-      default = false;
-      example = true;
-      description = ''
-        Use the `nixos activate` interface to switch configurations, instead of the
-        `switch-to-configuration-ng` program that is currently used in `nixpkgs`.
+    activation-interface = {
+      enable = lib.mkOption {
+        type = types.bool;
+        default = false;
+        example = true;
+        description = ''
+          Use the `nixos activate` interface to switch configurations, instead of the
+          `switch-to-configuration-ng` program that is currently used in `nixpkgs`.
 
-        The behavior is mostly the same, but changes can be made that may potentially
-        break behavior from the original on a per-case basis.
+          The behavior is mostly the same, but changes can be made that may potentially
+          break behavior from the original on a per-case basis.
 
-        If this is disabled, users will still be able to use `nixos activate` on their
-        own, but it will serve solely as a shim to run the switch script on a switchable.
-        system.
+          If this is disabled, users will still be able to use `nixos activate` on their
+          own, but it will serve solely as a shim to run the switch script on a switchable.
+          system.
 
-        This activation interface is experimental and subject to change.
-      '';
+          This activation interface is experimental and subject to change.
+        '';
+      };
     };
 
-    generationTag = lib.mkOption {
+    option-cache = {
+      enable = lib.mkOption {
+        type = types.bool;
+        default = config.documentation.nixos.enable;
+        description = "Prebuild JSON cache for `nixos option` command";
+      };
+    };
+
+    generation-tag = lib.mkOption {
       type = types.nullOr types.str;
       default = lib.maybeEnv "NIXOS_GENERATION_TAG" null;
       description = "A description for this generation";
       example = "Sign Git GPG commits by default";
       internal = true;
-    };
-
-    prebuildOptionCache = lib.mkOption {
-      type = types.bool;
-      default = config.documentation.nixos.enable;
-      description = "Prebuild JSON cache for `nixos option` command";
     };
   };
 
@@ -93,8 +109,8 @@ in {
         nixos-version-json = builtins.toJSON {
           nixosVersion = "${nixosCfg.distroName} ${nixosCfg.release} (${nixosCfg.codeName})";
           nixpkgsRevision = nixosCfg.revision;
-          configurationRevision = "${builtins.toString config.system.configurationRevision}";
-          description = cfg.generationTag;
+          configurationRevision = "${toString config.system.configurationRevision}";
+          description = cfg.generation-tag;
         };
       in ''
         cat > "$out/nixos-version.json" << EOF
@@ -117,7 +133,7 @@ in {
         Defaults env_keep += "SSH_AUTH_SOCK"
       '';
     }
-    (lib.mkIf cfg.prebuildOptionCache {
+    (lib.mkIf cfg.option-cache.enable {
       # While there is already an `options.json` that exists in the
       # `config.system.build.manual.optionsJSON` attribute, this is
       # not as full-featured, because it does not contain NixOS options
@@ -132,7 +148,7 @@ in {
           builtins.toJSON optionList;
       };
     })
-    (lib.mkIf cfg.useActivationInterface {
+    (lib.mkIf cfg.activation-interface.enable {
       # This looks confusing, but this only stops the switch-to-configuration-ng
       # program from being used. The system will still be switchable.
       system.switch.enable = lib.mkForce false;
