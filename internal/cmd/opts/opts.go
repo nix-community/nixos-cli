@@ -22,23 +22,25 @@ type AliasesOpts struct {
 }
 
 type ApplyOpts struct {
-	File                  string
-	Attr                  string
 	AlwaysConfirm         bool
+	Attr                  string
 	BuildHost             string
 	BuildImage            string
 	BuildVM               bool
 	BuildVMWithBootloader bool
 	Dry                   bool
+	File                  string
 	FlakeRef              string
 	GenerationTag         string
 	InstallBootloader     bool
+	LocalRoot             bool
 	NoActivate            bool
 	NoBoot                bool
+	NoRollback            bool
 	OutputPath            string
 	ProfileName           string
-	LocalRoot             bool
 	RemoteRoot            bool
+	RollbackTimeout       string
 	Specialisation        string
 	StorePath             string
 	TargetHost            string

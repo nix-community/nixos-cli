@@ -333,6 +333,7 @@ type RunActivationSupervisorOptions struct {
 	Specialisation    string
 	UseRootCommand    bool
 	RootElevator      *system.RootElevator
+	AckTimeout        time.Duration
 
 	PreviousSpecialisation   string
 	RollbackProfileOnFailure bool
@@ -392,6 +393,12 @@ func RunActivationSupervisor(
 	if log.GetLogLevel() == logger.LogLevelDebug {
 		argv = append(argv, "-E", "VERBOSE=1")
 	}
+
+	ackTimeout := int(opts.AckTimeout / time.Second)
+	if ackTimeout < 1 {
+		return fmt.Errorf("acknowledgement timeout must be greater than 1 second")
+	}
+	argv = append(argv, "-E", fmt.Sprintf("ACK_TIMEOUT=%d", ackTimeout))
 
 	argv = append(argv, "/bin/sh", "-c", activationSupervisorScript)
 
