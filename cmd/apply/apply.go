@@ -3,6 +3,7 @@ package apply
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -10,6 +11,7 @@ import (
 	"slices"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/nix-community/nixos-cli/internal/activation"
@@ -25,6 +27,7 @@ import (
 	"github.com/nix-community/nixos-cli/internal/settings"
 	sshUtils "github.com/nix-community/nixos-cli/internal/ssh"
 	"github.com/nix-community/nixos-cli/internal/system"
+	systemdUtils "github.com/nix-community/nixos-cli/internal/systemd"
 	"github.com/nix-community/nixos-cli/internal/utils"
 	"github.com/spf13/cobra"
 )
@@ -105,6 +108,13 @@ func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 				}
 			}
 
+			// Make sure rollback-timeout is a valid systemd.time(7) string
+			if timeout, err := systemdUtils.DurationFromTimeSpan(opts.RollbackTimeout); err != nil {
+				return fmt.Errorf("invalid value for --rollback-timeout: %v", err.Error())
+			} else if timeout < 1*time.Second {
+				return errors.New("--rollback-timeout must be at least 1 second")
+			}
+
 			// Set a special hidden _list value for this
 			// flag in order to list available images and
 			// exit.
@@ -151,6 +161,8 @@ func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 	cmd.Flags().StringVar(&opts.BuildHost, "build-host", "", "Use specified `user@host:port` to perform build")
 	cmd.Flags().StringVar(&opts.TargetHost, "target-host", "", "Deploy to a remote machine at `user@host:port`")
 	cmd.Flags().StringVar(&opts.StorePath, "store-path", "", "Use a pre-built NixOS system store `path` instead of building")
+	cmd.Flags().StringVar(&opts.RollbackTimeout, "rollback-timeout", "30s", "Time `period` to wait for acknowledgement signal before automatic rollback")
+	cmd.Flags().BoolVar(&opts.NoRollback, "no-rollback", false, "Do not attempt rollback after a switch failure")
 
 	opts.NixOptions.Quiet.Bind(&cmd)
 	opts.NixOptions.PrintBuildLogs.Bind(&cmd)
@@ -195,6 +207,7 @@ func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 	cmd.MarkFlagsMutuallyExclusive("vm", "vm-with-bootloader", "image", "store-path")
 	cmd.MarkFlagsMutuallyExclusive("no-activate", "specialisation")
 	cmd.MarkFlagsMutuallyExclusive("eval-only", "store-path")
+	cmd.MarkFlagsMutuallyExclusive("no-rollback", "rollback-timeout")
 
 	helpTemplate := cmd.HelpTemplate()
 	if build.Flake() {
@@ -709,39 +722,26 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 		}
 	}
 
-	// In case switch-to-configuration fails, rollback the profile.
-	// This is to prevent accidental deletion of all working
-	// generations in case the switch-to-configuration script
-	// fails, since the active profile will not be rolled back
-	// automatically.
-	rollbackProfile := false
+	rollbackLocalProfile := func() {
+		if !cfg.AutoRollback {
+			log.Warnf("automatic rollback is disabled, the currently active profile may have unresolved problems")
+			log.Warnf("you are on your own!")
+			return
+		}
 
-	if newGenerationCreated {
-		defer func(rollback *bool) {
-			if !*rollback {
-				return
-			}
+		log.Step("Rolling back system profile...")
 
-			if !cfg.AutoRollback {
-				log.Warnf("automatic rollback is disabled, the currently active profile may have unresolved problems")
-				log.Warnf("you are on your own!")
-				return
-			}
-
-			log.Step("Rolling back system profile...")
-
-			if err = activation.SetNixProfileGeneration(
-				targetHost,
-				opts.ProfileName,
-				previousGenNumber, &activation.SetNixProfileGenerationOptions{
-					RootCommand:    cfg.RootCommand,
-					UseRootCommand: activationUseRoot,
-				},
-			); err != nil {
-				log.Errorf("failed to rollback system profile: %v", err)
-				log.Info("make sure to rollback the system manually before deleting anything!")
-			}
-		}(&rollbackProfile)
+		if rbErr := activation.SetNixProfileGeneration(
+			targetHost,
+			opts.ProfileName,
+			previousGenNumber, &activation.SetNixProfileGenerationOptions{
+				RootCommand:    cfg.RootCommand,
+				UseRootCommand: activationUseRoot,
+			},
+		); rbErr != nil {
+			log.Errorf("failed to rollback system profile: %v", rbErr)
+			log.Info("make sure to rollback the system manually before deleting anything!")
+		}
 	}
 
 	log.Step("Activating...")
@@ -765,17 +765,20 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 		panic("unknown switch to configuration action to take, this is a bug")
 	}
 
-	useActivationSupervisor := shouldUseActivationSupervisor(cfg, targetHost, stcAction)
+	useActivationSupervisor := shouldUseActivationSupervisor(cfg, targetHost, stcAction) && !opts.NoRollback
 
 	if useActivationSupervisor {
+		ackTimeout, _ := systemdUtils.DurationFromTimeSpan(opts.RollbackTimeout)
+		ackTimeout = ackTimeout / time.Second
+
 		// Let the supervisor handle the rollback if it exists.
-		rollbackProfile = false
 		err = activation.RunActivationSupervisor(targetHost, resultLocation, stcAction, &activation.RunActivationSupervisorOptions{
 			ProfileName:       opts.ProfileName,
 			InstallBootloader: opts.InstallBootloader,
 			Specialisation:    specialisation,
 			UseRootCommand:    activationUseRoot,
 			RootCommand:       cfg.RootCommand,
+			AckTimeout:        ackTimeout,
 
 			// TODO: figure out previous specialisation, set it here
 			// so that we can rollback directly to a given specialisation
@@ -798,8 +801,10 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 			RootCommand:       cfg.RootCommand,
 		})
 		if err != nil {
-			rollbackProfile = true
 			log.Errorf("failed to switch to configuration: %v", err)
+			if !opts.NoRollback && newGenerationCreated {
+				rollbackLocalProfile()
+			}
 			return err
 		}
 	}

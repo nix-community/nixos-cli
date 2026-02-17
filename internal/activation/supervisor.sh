@@ -106,11 +106,10 @@ touch "$SWITCH_SUCCESS_PATH"
 
 log "waiting for acknowledgement"
 
-# Poll for the file once a second for 30 seconds; this is a POSIX sh
+# Poll for the file once a second for $ACK_TIMEOUT seconds; this is a POSIX sh
 # substitute for `inotifywait` to avoid introducing additional dependencies.
-# TODO: make this timeout configurable
 i=0
-while [ "$i" -lt 30 ]; do
+while [ "$i" -lt "$ACK_TIMEOUT" ]; do
 	if [ -f "$ACK_TRIGGER_PATH" ]; then
 		log "acknowledgement received; activation is now complete"
 		exit 0

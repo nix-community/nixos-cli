@@ -175,9 +175,12 @@ var SettingsDocs = map[string]SettingsDocEntry{
 			" or upgrading the root user's Nix channels.",
 	},
 	"auto_rollback": {
-		Short: "Automatically rollback profile on activation failure",
+		Short: "Automatically rollback system on activation failure or lack of remote acknowledgement",
 		Long: "Enables automatic rollback of a NixOS system profile when an activation command fails. This can be " +
-			"disabled when a reboot or some other circumstance is needed for successful activation",
+			"disabled when a reboot or some other circumstance is needed for successful activation. " +
+			"In the case of remote activations, this will also run the previous switch-to-configuration if an " +
+			"acknowledgement from the invoking system is not received, in order to re-establish a connection " +
+			"for further troubleshooting.",
 	},
 	"color": {
 		Short: "Enable colored output",
