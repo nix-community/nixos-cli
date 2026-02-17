@@ -2,7 +2,9 @@ package system
 
 import (
 	"io"
+	"maps"
 	"os"
+	"slices"
 
 	"github.com/nix-community/nixos-cli/internal/logger"
 )
@@ -20,6 +22,9 @@ type Command struct {
 	Stdout io.Writer
 	Stderr io.Writer
 	Env    map[string]string
+
+	RootElevationCmd      string
+	RootElevationCmdFlags []string
 }
 
 func NewCommand(name string, args ...string) *Command {
@@ -37,14 +42,29 @@ func (c *Command) SetEnv(key string, value string) {
 	c.Env[key] = value
 }
 
-func (c *Command) RunAsRoot(rootCmd string) *Command {
-	if rootCmd == "" {
-		return c
-	}
-
-	newArgs := append([]string{c.Name}, c.Args...)
-	c.Name = rootCmd
-	c.Args = newArgs
-
+func (c *Command) AsRoot(rootCmd string, rootCmdFlags ...string) *Command {
+	c.RootElevationCmd = rootCmd
+	c.RootElevationCmdFlags = rootCmdFlags
 	return c
+}
+
+func (c *Command) Clone() *Command {
+	args := slices.Clone(c.Args)
+
+	env := make(map[string]string, len(c.Env))
+	maps.Copy(env, c.Env)
+
+	rootElevationCmdFlags := slices.Clone(c.RootElevationCmdFlags)
+
+	return &Command{
+		Name:   c.Name,
+		Args:   args,
+		Stdin:  c.Stdin,
+		Stdout: c.Stdout,
+		Stderr: c.Stderr,
+		Env:    env,
+
+		RootElevationCmd:      c.RootElevationCmd,
+		RootElevationCmdFlags: rootElevationCmdFlags,
+	}
 }

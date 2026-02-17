@@ -120,7 +120,7 @@ func AddNewNixProfile(s system.System, profile string, closure string, opts *Add
 
 	cmd := system.NewCommand(argv[0], argv[1:]...)
 	if opts.UseRootCommand {
-		cmd.RunAsRoot(opts.RootCommand)
+		cmd.AsRoot(opts.RootCommand)
 	}
 
 	_, err := s.Run(cmd)
@@ -148,7 +148,7 @@ func SetNixProfileGeneration(s system.System, profile string, genNumber uint64, 
 
 	cmd := system.NewCommand(argv[0], argv[1:]...)
 	if opts.UseRootCommand {
-		cmd.RunAsRoot(opts.RootCommand)
+		cmd.AsRoot(opts.RootCommand)
 	}
 
 	_, err := s.Run(cmd)
@@ -251,7 +251,7 @@ func SwitchToConfiguration(s system.CommandRunner, generationLocation string, ac
 
 	cmd := system.NewCommand(argv[0], argv[1:]...)
 	if opts.UseRootCommand {
-		cmd.RunAsRoot(opts.RootCommand)
+		cmd.AsRoot(opts.RootCommand)
 	}
 
 	if opts.InstallBootloader {
