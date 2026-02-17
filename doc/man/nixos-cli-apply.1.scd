@@ -193,6 +193,14 @@ global *--config* flag as such:
 	Skip registering the generation as a boot entry. Useful for testing a NixOS
 	system configuration, or for build-only runs.
 
+*--no-rollback*
+	Disable magic rollback mode when performing a remote switch, or disable
+	rolling back the current system profile if a local switch fails.
+
+	Useful when a machine is expected to lose the ability to receive an
+	acknowledgement, or when a switch-to-configuration invocation is expected
+	to fail.
+
 *-o*, *--output* <PATH>
 	Symlink the result of the build to the given *PATH*.
 
@@ -222,6 +230,18 @@ global *--config* flag as such:
 	password twice if NOPASSWD is not set for that user.
 
 	The escalation command used is defined by the setting _root_command_.
+
+*--rollback-timeout* <PERIOD>
+	The period of time to wait for the invoking machine to send an
+	acknowledgement signal before automatically rolling back the configuration.
+
+	*PERIOD* is a *systemd.time(7)*-formatted time span, such as *10s*. For more
+	information, see the *systemd.time(7)* man page.
+
+	Must be at least 1 second in length or more.
+
+	This is only applicable to remote activations with magic rollback mode
+	enabled.
 
 *-s*, *--specialisation* <NAME>
 	Activate a specialisation *NAME* from the available specialisations.
