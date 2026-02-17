@@ -198,7 +198,7 @@ func (s *SSHSystem) EnsureRemoteRootPassword(rootCmd string) error {
 }
 
 func (s *SSHSystem) testRemoteRoot(rootCmd string) error {
-	cmd := NewCommand("true").RunAsRoot(rootCmd)
+	cmd := NewCommand("true").AsRoot(rootCmd)
 
 	_, err := s.Run(cmd)
 	return err
@@ -343,7 +343,7 @@ func (s *SSHSystem) Run(cmd *Command) (int, error) {
 		}
 	}()
 
-	if isRootCommand(cmd.Name) {
+	if cmd.RootElevationCmd != "" {
 		// Pass `sudo` passwords from `stdin` if they are present.
 		// This requires the `-S` flag.
 		//
@@ -354,9 +354,12 @@ func (s *SSHSystem) Run(cmd *Command) (int, error) {
 		// never need something like that here.
 		//
 		// As such, we're replacing the entire stdin with this password.
-		if cmd.Name == "sudo" && s.password != nil {
-			cmd.Args = append([]string{"-S", "-p", ""}, cmd.Args...)
-			pw := append(s.password, '\n')
+		if cmd.RootElevationCmd == "sudo" && s.password != nil {
+			// Make a copy of the command struct to add the root elevation flags to
+			cmd = cmd.Clone()
+			cmd.RootElevationCmdFlags = append(cmd.RootElevationCmdFlags, "-S", "-p", "")
+			pw := append([]byte{}, s.password...)
+			pw = append(pw, '\n')
 			session.Stdin = bytes.NewReader(pw)
 		} else if isTerminal(cmd.Stdin) {
 			session.Stdin = cmd.Stdin
@@ -387,8 +390,7 @@ func (s *SSHSystem) Run(cmd *Command) (int, error) {
 		}
 	}
 
-	argv := append([]string{cmd.Name}, cmd.Args...)
-	fullCmd, err := buildSafeShellWrapper(argv, cmd.Env)
+	fullCmd, err := buildSafeShellWrapper(cmd)
 	if err != nil {
 		return 0, err
 	}
@@ -503,13 +505,9 @@ var envVarNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 // AcceptEnv settings existing on the SSH system.
 //
 // Creates a string with the contents:
-// `sh -c 'export KEY='val'; export KEY2='val2'; set -- 'arg0' 'arg1'; exec "$@"'`
-func buildSafeShellWrapper(argv []string, env map[string]string) (string, error) {
-	if len(argv) == 0 {
-		return "", errors.New("argv must contain at least one element")
-	}
-
-	for k, v := range env {
+// `[root_command] sh -c 'export KEY='val'; export KEY2='val2'; set -- 'arg0' 'arg1'; exec "$@"'`
+func buildSafeShellWrapper(cmd *Command) (string, error) {
+	for k, v := range cmd.Env {
 		if !envVarNamePattern.MatchString(k) {
 			return "", errors.New("invalid env var name: " + k)
 		}
@@ -517,22 +515,22 @@ func buildSafeShellWrapper(argv []string, env map[string]string) (string, error)
 			return "", errors.New("NUL (0x00) bytes are not allowed in env values or args")
 		}
 	}
-	for _, a := range argv {
+	for _, a := range cmd.Args {
 		if strings.IndexByte(a, 0) != -1 {
 			return "", errors.New("NUL (0x00) bytes are not allowed in env values or args")
 		}
 	}
 
 	// deterministic ordering for env exports
-	keys := make([]string, 0, len(env))
-	for k := range env {
+	keys := make([]string, 0, len(cmd.Env))
+	for k := range cmd.Env {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
 
 	var b strings.Builder
 	for _, k := range keys {
-		q := utils.Quote(env[k])
+		q := utils.Quote(cmd.Env[k])
 		b.WriteString("export ")
 		b.WriteString(k)
 		b.WriteByte('=')
@@ -541,16 +539,28 @@ func buildSafeShellWrapper(argv []string, env map[string]string) (string, error)
 	}
 
 	// set positional parameters
-	b.WriteString("set --")
-	for _, a := range argv {
+	b.WriteString("set -- ")
+	b.WriteString(utils.Quote(cmd.Name))
+	b.WriteByte(' ')
+	for _, a := range cmd.Args {
 		q := utils.Quote(a)
 		b.WriteByte(' ')
 		b.WriteString(q)
 	}
 	b.WriteString("; exec \"$@\"")
 
-	snippet := b.String()
-	return fmt.Sprintf("sh -c %v", utils.Quote(snippet)), nil
+	wrappedCmdScript := b.String()
+
+	var wrappedCmdStr string
+	if cmd.RootElevationCmd != "" {
+		argv := append([]string{cmd.RootElevationCmd}, cmd.RootElevationCmdFlags...)
+		argv = append(argv, "sh", "-c", wrappedCmdScript)
+		wrappedCmdStr = shlex.Join(argv)
+	} else {
+		wrappedCmdStr = shlex.Join([]string{"sh", "-c", wrappedCmdScript})
+	}
+
+	return wrappedCmdStr, nil
 }
 
 func (s *SSHSystem) IsNixOS() bool {
@@ -627,13 +637,4 @@ func isTerminal(r io.Reader) bool {
 
 	fd := file.Fd()
 	return term.IsTerminal(int(fd))
-}
-
-func isRootCommand(cmd string) bool {
-	switch cmd {
-	case "sudo", "doas":
-		return true
-	default:
-		return false
-	}
 }

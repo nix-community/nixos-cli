@@ -28,7 +28,18 @@ func (l *LocalSystem) FS() Filesystem {
 }
 
 func (l *LocalSystem) Run(cmd *Command) (int, error) {
-	command := exec.Command(cmd.Name, cmd.Args...)
+	var commandName string
+	var args []string
+
+	if cmd.RootElevationCmd != "" {
+		commandName = cmd.RootElevationCmd
+		args = append([]string{cmd.Name}, cmd.Args...)
+	} else {
+		commandName = cmd.Name
+		args = cmd.Args
+	}
+
+	command := exec.Command(commandName, args...)
 
 	command.Stdout = cmd.Stdout
 	command.Stderr = cmd.Stderr

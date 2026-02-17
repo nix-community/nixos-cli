@@ -716,7 +716,7 @@ func upgradeChannels(s system.CommandRunner, opts *upgradeChannelsOptions) error
 
 	cmd := system.NewCommand(argv[0], argv[1:]...)
 	if opts.UseRootCommand {
-		cmd.RunAsRoot(opts.RootCommand)
+		cmd.AsRoot(opts.RootCommand)
 	}
 	_, err := s.Run(cmd)
 	return err
