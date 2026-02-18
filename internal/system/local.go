@@ -29,33 +29,48 @@ func (l *LocalSystem) FS() Filesystem {
 }
 
 func (l *LocalSystem) Run(cmd *Command) (int, error) {
-	var commandName string
 	var args []string
 
+	var err error
+
 	if cmd.RootElevationCmd != "" {
-		commandName = cmd.RootElevationCmd
-		args = append([]string{cmd.Name}, cmd.Args...)
+		// If environment variables are specified,
+		// use the shell wrapper to set them inline
+		// to bypass root elevation environment
+		// variable sanitizing.
+		if len(cmd.Env) > 0 {
+			args, err = cmd.BuildShellWrapper()
+			if err != nil {
+				return 0, err
+			}
+		} else {
+			args = cmd.BuildArgs()
+		}
 	} else {
-		commandName = cmd.Name
-		args = cmd.Args
+		args = cmd.BuildArgs()
 	}
 
 	if len(args) == 0 {
 		return 0, fmt.Errorf("command has empty argument list")
 	}
 
-	command := exec.Command(commandName, args...)
+	command := exec.Command(args[0], args[1:]...)
 
 	command.Stdout = cmd.Stdout
 	command.Stderr = cmd.Stderr
 	command.Stdin = cmd.Stdin
 	command.Env = os.Environ()
 
-	for key, value := range cmd.Env {
-		command.Env = append(command.Env, key+"="+value)
+	// If RootElevationCmd is set, then these variables are
+	// handled by the wrapper. Otherwise, set them directly
+	// for the process.
+	if cmd.RootElevationCmd == "" {
+		for key, value := range cmd.Env {
+			command.Env = append(command.Env, key+"="+value)
+		}
 	}
 
-	if err := command.Start(); err != nil {
+	if err = command.Start(); err != nil {
 		return 0, err
 	}
 
@@ -69,14 +84,14 @@ func (l *LocalSystem) Run(cmd *Command) (int, error) {
 	go func() {
 		for sig := range sigs {
 			if command.Process != nil {
-				if err := command.Process.Signal(sig); err != nil {
-					l.logger.Warnf("failed to forward signal '%v': %v", sig, err)
+				if signalErr := command.Process.Signal(sig); signalErr != nil {
+					l.logger.Warnf("failed to forward signal '%v': %v", sig, signalErr)
 				}
 			}
 		}
 	}()
 
-	err := command.Wait()
+	err = command.Wait()
 
 	if exitErr, ok := err.(*exec.ExitError); ok {
 		type exitStatusImpl interface{ ExitStatus() int }

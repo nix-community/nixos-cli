@@ -5,6 +5,7 @@ import (
 	"io"
 	"maps"
 	"os"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -72,6 +73,8 @@ func (c *Command) Clone() *Command {
 		RootElevationCmdFlags: rootElevationCmdFlags,
 	}
 }
+
+var envVarNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 // Build a safe `sh -c` wrapper that can support setting
 // environment variables for a process inline.
@@ -155,4 +158,24 @@ func (c *Command) BuildShellWrapper() ([]string, error) {
 	argv = append(argv, "sh", "-c", wrappedCmdScript)
 
 	return argv, nil
+}
+
+// Build an arguments array, suitable for passing to exec.Command
+// or other argument string slice parameters.
+//
+// This does not set environment variables; use BuildShellWrapper()
+// for that or use cmd.Env directly at the call site for System.Run()
+// implementations.
+func (c *Command) BuildArgs() []string {
+	var argv []string
+
+	if c.RootElevationCmd != "" {
+		argv = append(argv, c.RootElevationCmd)
+		argv = append(argv, c.RootElevationCmdFlags...)
+	}
+
+	argv = append(argv, c.Name)
+	argv = append(argv, c.Args...)
+
+	return argv
 }

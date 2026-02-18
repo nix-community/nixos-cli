@@ -10,7 +10,6 @@ import (
 	"os/signal"
 	"os/user"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 	"syscall"
@@ -388,9 +387,16 @@ func (s *SSHSystem) Run(cmd *Command) (int, error) {
 		}
 	}
 
-	wrappedCmd, err := cmd.BuildShellWrapper()
-	if err != nil {
-		return 0, err
+	var cmdStr string
+	if len(cmd.Env) > 0 {
+		var args []string
+		args, err = cmd.BuildShellWrapper()
+		if err != nil {
+			return 0, err
+		}
+		cmdStr = shlex.Join(args)
+	} else {
+		cmdStr = shlex.Join(cmd.BuildArgs())
 	}
 
 	session.Stdout = cmd.Stdout
@@ -414,7 +420,7 @@ func (s *SSHSystem) Run(cmd *Command) (int, error) {
 		}
 	}()
 
-	err = session.Run(shlex.Join(wrappedCmd))
+	err = session.Run(cmdStr)
 	if err == nil {
 		return 0, nil
 	}
@@ -495,8 +501,6 @@ func requestRootPasswordPTY(session *ssh.Session, stdin io.Reader) (func(), erro
 		_ = term.Restore(fd, oldState)
 	}, nil
 }
-
-var envVarNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 func (s *SSHSystem) IsNixOS() bool {
 	_, err := s.sftp.Stat("/etc/NIXOS")
