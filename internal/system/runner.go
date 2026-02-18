@@ -44,6 +44,10 @@ func NewCommand(name string, args ...string) *Command {
 }
 
 func (c *Command) SetEnv(key string, value string) {
+	if c.Env == nil {
+		c.Env = make(map[string]string)
+	}
+
 	c.Env[key] = value
 }
 
@@ -178,4 +182,21 @@ func (c *Command) BuildArgs() []string {
 	argv = append(argv, c.Args...)
 
 	return argv
+}
+
+// Inherit the passed environment variables' values explicitly
+// into the command's env map.
+//
+// Useful when passing variables over `sudo` or SSH environment
+// variable sanitation barriers.
+func (c *Command) InheritEnv(vars ...string) {
+	if c.Env == nil {
+		c.Env = make(map[string]string)
+	}
+
+	for _, name := range vars {
+		if value, set := os.LookupEnv(name); set {
+			c.Env[name] = value
+		}
+	}
 }
