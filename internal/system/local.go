@@ -2,6 +2,7 @@ package system
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -37,6 +38,10 @@ func (l *LocalSystem) Run(cmd *Command) (int, error) {
 	} else {
 		commandName = cmd.Name
 		args = cmd.Args
+	}
+
+	if len(args) == 0 {
+		return 0, fmt.Errorf("command has empty argument list")
 	}
 
 	command := exec.Command(commandName, args...)
