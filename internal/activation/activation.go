@@ -259,6 +259,9 @@ func SwitchToConfiguration(s system.CommandRunner, generationLocation string, ac
 	}
 
 	cmd.SetEnv("NIXOS_CLI_ATTEMPTING_ACTIVATION", "1")
+
+	cmd.InheritEnv("NIXOS_NO_CHECK")
+
 	_, err := s.Run(cmd)
 	return err
 }
