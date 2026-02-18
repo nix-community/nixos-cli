@@ -11,7 +11,6 @@ import (
 	"os/user"
 	"path/filepath"
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -22,7 +21,6 @@ import (
 	"github.com/nix-community/nixos-cli/internal/logger"
 	"github.com/nix-community/nixos-cli/internal/settings"
 	sshUtils "github.com/nix-community/nixos-cli/internal/ssh"
-	"github.com/nix-community/nixos-cli/internal/utils"
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
@@ -390,7 +388,7 @@ func (s *SSHSystem) Run(cmd *Command) (int, error) {
 		}
 	}
 
-	fullCmd, err := buildSafeShellWrapper(cmd)
+	wrappedCmd, err := cmd.BuildShellWrapper()
 	if err != nil {
 		return 0, err
 	}
@@ -416,7 +414,7 @@ func (s *SSHSystem) Run(cmd *Command) (int, error) {
 		}
 	}()
 
-	err = session.Run(fullCmd)
+	err = session.Run(shlex.Join(wrappedCmd))
 	if err == nil {
 		return 0, nil
 	}
@@ -499,69 +497,6 @@ func requestRootPasswordPTY(session *ssh.Session, stdin io.Reader) (func(), erro
 }
 
 var envVarNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
-
-// Build a safe `sh -c` invocation that can support setting
-// environment variables for a process, even without the proper
-// AcceptEnv settings existing on the SSH system.
-//
-// Creates a string with the contents:
-// `[root_command] sh -c 'export KEY='val'; export KEY2='val2'; set -- 'arg0' 'arg1'; exec "$@"'`
-func buildSafeShellWrapper(cmd *Command) (string, error) {
-	for k, v := range cmd.Env {
-		if !envVarNamePattern.MatchString(k) {
-			return "", errors.New("invalid env var name: " + k)
-		}
-		if strings.IndexByte(v, 0) != -1 {
-			return "", errors.New("NUL (0x00) bytes are not allowed in env values or args")
-		}
-	}
-	for _, a := range cmd.Args {
-		if strings.IndexByte(a, 0) != -1 {
-			return "", errors.New("NUL (0x00) bytes are not allowed in env values or args")
-		}
-	}
-
-	// deterministic ordering for env exports
-	keys := make([]string, 0, len(cmd.Env))
-	for k := range cmd.Env {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-
-	var b strings.Builder
-	for _, k := range keys {
-		q := utils.Quote(cmd.Env[k])
-		b.WriteString("export ")
-		b.WriteString(k)
-		b.WriteByte('=')
-		b.WriteString(q)
-		b.WriteString("; ")
-	}
-
-	// set positional parameters
-	b.WriteString("set -- ")
-	b.WriteString(utils.Quote(cmd.Name))
-	b.WriteByte(' ')
-	for _, a := range cmd.Args {
-		q := utils.Quote(a)
-		b.WriteByte(' ')
-		b.WriteString(q)
-	}
-	b.WriteString("; exec \"$@\"")
-
-	wrappedCmdScript := b.String()
-
-	var wrappedCmdStr string
-	if cmd.RootElevationCmd != "" {
-		argv := append([]string{cmd.RootElevationCmd}, cmd.RootElevationCmdFlags...)
-		argv = append(argv, "sh", "-c", wrappedCmdScript)
-		wrappedCmdStr = shlex.Join(argv)
-	} else {
-		wrappedCmdStr = shlex.Join([]string{"sh", "-c", wrappedCmdScript})
-	}
-
-	return wrappedCmdStr, nil
-}
 
 func (s *SSHSystem) IsNixOS() bool {
 	_, err := s.sftp.Stat("/etc/NIXOS")
