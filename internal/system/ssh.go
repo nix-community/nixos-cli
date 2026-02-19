@@ -115,8 +115,8 @@ func NewSSHSystem(localSystem *LocalSystem, host string, log logger.Logger, cfg 
 		}
 		return result
 	}
-	knownHostsFileUser := filepath.Join(os.Getenv("HOME"), ".ssh", "known_hosts")
-	knownHostsFilesBase := []string{"/etc/ssh/ssh_known_hosts", knownHostsFileUser}
+	knownHostsFileUser := filepath.Join(os.Getenv("HOME"), sshUtils.UserKnownHostsFile)
+	knownHostsFilesBase := []string{sshUtils.SystemKnownHostsFile, knownHostsFileUser}
 	knownHostsFiles := getKnownHostsFiles(knownHostsFilesBase, log.Debugf)
 	knownHostsFiles = append(knownHostsFiles, getKnownHostsFiles(cfg.SSH.KnownHostsFiles, log.Warnf)...)
 	knownHostsKeyCallback, err := knownhosts.New(knownHostsFiles...)
