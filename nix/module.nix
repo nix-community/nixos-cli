@@ -88,6 +88,32 @@ in {
       };
     };
 
+    preserve-env = lib.mkOption {
+      type = with lib.types; listOf str;
+      default = [
+        "NIXOS_CLI_CONFIG"
+        "NIXOS_CLI_DEBUG_MODE"
+        "NIXOS_CLI_DISABLE_STEPS"
+        "NIXOS_CLI_SUPPRESS_NO_SETTINGS_WARNING"
+        "NIXOS_CONFIG"
+        "NIXOS_GENERATION_TAG"
+        "SSH_AUTH_SOCK"
+      ];
+      description = ''
+        Environment variables to persist through root elevation command invocations
+        on this host.
+
+        Supports automatically configuring `sudo` environment rules only.
+
+        If you need more flexible definitions for these rules, consider using
+        `options.services.nixos-cli.preserve-env.default` as a reference list
+        of default variables that should be preserved across this boundary.
+
+        It is recommended to use this option for any extra environment variables to
+        preserve if `apply.reexec_as_root` is set in `nixos-cli`'s settings.
+      '';
+    };
+
     generation-tag = lib.mkOption {
       type = types.nullOr types.str;
       default = lib.maybeEnv "NIXOS_GENERATION_TAG" null;
@@ -117,22 +143,15 @@ in {
         ${nixos-version-json}
         EOF
       '';
-
-      # FIXME: should this be configurable? Not all users would want to preserve
-      # SSH_AUTH_SOCK, for example.
-      security.sudo.extraConfig = ''
-        # Preserve NIXOS_CONFIG and NIXOS_CLI_CONFIG in sudo invocations of
-        # `nixos apply`. This is required in order to keep ownership across
-        # automatic re-exec as root.
-        Defaults env_keep += "NIXOS_CONFIG"
-        Defaults env_keep += "NIXOS_GENERATION_TAG"
-        Defaults env_keep += "NIXOS_CLI_CONFIG"
-        Defaults env_keep += "NIXOS_CLI_DISABLE_STEPS"
-        Defaults env_keep += "NIXOS_CLI_DEBUG_MODE"
-        Defaults env_keep += "NIXOS_CLI_SUPPRESS_NO_SETTINGS_WARNING"
-        Defaults env_keep += "SSH_AUTH_SOCK"
-      '';
     }
+    (lib.mkIf (builtins.length cfg.preserve-env > 0) {
+      security.sudo.extraConfig = let
+        envKeepLine = var: ''Defaults env_keep += "${var}"'';
+        configLines = map envKeepLine cfg.preserve-env;
+      in ''
+        ${lib.concatStringsSep "\n" configLines}
+      '';
+    })
     (lib.mkIf cfg.option-cache.enable {
       # While there is already an `options.json` that exists in the
       # `config.system.build.manual.optionsJSON` attribute, this is
