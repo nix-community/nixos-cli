@@ -16,6 +16,31 @@
   inherit (lib) types;
 
   tomlFormat = pkgs.formats.toml {};
+
+  # Remove an attribute at a given attribute set path.
+  # Useful for excluding options.
+  # Taken from https://git.sr.ht/~watersucks/optnix
+  removeNestedAttrs = paths: set: lib.foldl' (s: p: removeAtPath (parsePath p) s) set paths;
+
+  parsePath = pathStr: lib.splitString "." pathStr;
+
+  removeAtPath = path: set:
+    if path == []
+    then set
+    else let
+      key = builtins.head path;
+      rest = builtins.tail path;
+      sub = set.${key} or null;
+    in
+      if rest == []
+      then removeAttrs set [key]
+      else if builtins.isAttrs sub
+      then
+        set
+        // {
+          ${key} = removeAtPath rest sub;
+        }
+      else set;
 in {
   imports = [
     (lib.mkRenamedOptionModule
@@ -72,7 +97,7 @@ in {
           break behavior from the original on a per-case basis.
 
           If this is disabled, users will still be able to use `nixos activate` on their
-          own, but it will serve solely as a shim to run the switch script on a switchable.
+          own, but it will serve solely as a shim to run the switch script on a switchable
           system.
 
           This activation interface is experimental and subject to change.
@@ -85,6 +110,28 @@ in {
         type = types.bool;
         default = config.documentation.nixos.enable;
         description = "Prebuild JSON cache for `nixos option` command";
+      };
+
+      exclude = lib.mkOption {
+        type = with lib.types; listOf str;
+        example = [
+          "sops"
+          "programs.optnix"
+          "boot.loader.grub.zfsSupport"
+        ];
+        default = [];
+        description = ''
+          Exclude these options or option paths from being included in the
+          pre-generated option cache.
+
+          This is a recursive action; excluding a path of "services.openssh",
+          for example, means ALL options underneath that attribute set path
+          of `services.openssh` will be excluded.
+
+          This is useful for skipping over options that do not evaluate
+          properly, either due to upstream errors or some other unforeseen
+          evaluation error.
+        '';
       };
     };
 
@@ -183,10 +230,14 @@ in {
       # is able to be disabled.
       environment.etc."nixos-cli/options-cache.json" = {
         text = let
-          optionList' = lib.optionAttrSetToDocList options;
-          optionList = builtins.filter (v: v.visible && !v.internal) optionList';
+          excludedOptionPaths = cfg.option-cache.exclude;
+          options' = removeNestedAttrs excludedOptionPaths options;
+
+          rawOptionsDocList = lib.optionAttrSetToDocList options';
+
+          optionList = builtins.filter (v: v.visible && !v.internal) rawOptionsDocList;
         in
-          builtins.toJSON optionList;
+          builtins.unsafeDiscardStringContext (builtins.toJSON optionList);
       };
     })
     (lib.mkIf cfg.activation-interface.enable {
