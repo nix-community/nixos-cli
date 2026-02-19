@@ -190,6 +190,8 @@ func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 
 	_ = cmd.RegisterFlagCompletionFunc("profile-name", generation.CompleteProfileFlag)
 	_ = cmd.RegisterFlagCompletionFunc("specialisation", generation.CompleteSpecialisationFlagFromConfig(opts.FlakeRef, opts.NixOptions.Include))
+	_ = cmd.RegisterFlagCompletionFunc("build-host", sshUtils.CompleteHost)
+	_ = cmd.RegisterFlagCompletionFunc("target-host", sshUtils.CompleteHost)
 	_ = cmd.RegisterFlagCompletionFunc("store-path", cmdUtils.DirCompletions)
 
 	cmd.MarkFlagsMutuallyExclusive("dry", "output")

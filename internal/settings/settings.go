@@ -76,8 +76,9 @@ type RootCommandSettings struct {
 }
 
 type SSHSettings struct {
-	KnownHostsFiles []string `koanf:"known_hosts_files"`
-	PrivateKeyCmd   []string `koanf:"private_key_cmd"`
+	HostsFileCompletion bool     `koanf:"hosts_file_completion"`
+	KnownHostsFiles     []string `koanf:"known_hosts_files"`
+	PrivateKeyCmd       []string `koanf:"private_key_cmd"`
 }
 
 type ConfirmationPromptBehavior string
@@ -325,6 +326,10 @@ This requires the 'nix-command' experimental feature to be enabled in the Nix co
 	"ssh": {
 		Short: "Settings for SSH",
 	},
+	"ssh.hosts_file_completion": {
+		Short: "Use hosts file for SSH host completion",
+		Long:  "Whether to use the hosts file (/etc/hosts) for SSH host completion.",
+	},
 	"ssh.known_hosts_files": {
 		Short: "List of paths to known hosts files",
 		Long:  "List of paths to known hosts files. `/etc/ssh/ssh_known_hosts` and `$HOME/.ssh/known_hosts` are always included.",
@@ -397,7 +402,9 @@ func NewSettings() *Settings {
 			Command:        "sudo",
 			PasswordMethod: PasswordInputMethodStdin,
 		},
-		SSH:               SSHSettings{},
+		SSH: SSHSettings{
+			HostsFileCompletion: true,
+		},
 		UseDefaultAliases: true,
 	}
 }
