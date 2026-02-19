@@ -11,6 +11,8 @@ require (
 	github.com/djherbis/times v1.6.0
 	github.com/fatih/color v1.18.0
 	github.com/go-git/go-git/v5 v5.17.0
+	github.com/kevinburke/hostsfile v0.0.0-20260118185439-952e8e07babf
+	github.com/kevinburke/ssh_config v1.6.0
 	github.com/knadh/koanf/parsers/toml/v2 v2.2.0
 	github.com/knadh/koanf/providers/file v1.2.0
 	github.com/knadh/koanf/providers/rawbytes v1.0.0
@@ -72,7 +74,6 @@ require (
 	github.com/gorilla/css v1.0.1 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
-	github.com/kevinburke/ssh_config v1.6.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/knadh/koanf/maps v0.1.2 // indirect
 	github.com/kr/fs v0.1.0 // indirect
@@ -94,4 +95,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/coreos/go-systemd/v22 v22.6.0 => github.com/water-sucks/go-systemd/v22 v22.0.0-20251014195852-fe9dbfc225a6
+replace (
+	github.com/coreos/go-systemd/v22 v22.6.0 => github.com/water-sucks/go-systemd/v22 v22.0.0-20251014195852-fe9dbfc225a6
+	github.com/kevinburke/ssh_config => github.com/Sporif/ssh_config v0.0.0-20260302152114-f6becd265884
+)
