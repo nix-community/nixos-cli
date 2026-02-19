@@ -178,11 +178,11 @@ func knownHostsCallback(log logger.Logger, extraKnownHosts []string) (ssh.HostKe
 
 	// By default, use /etc/ssh/ssh_known_hosts and $HOME/.ssh/known_hosts.
 	// These usually exist on most systems.
-	defaultKnownHosts := []string{"/etc/ssh/ssh_known_hosts"}
+	defaultKnownHosts := []string{sshUtils.SystemKnownHostsFile}
 
 	var knownHostsUserFile string
 	if homeDir, err := os.UserHomeDir(); err == nil {
-		knownHostsUserFile = filepath.Join(homeDir, ".ssh", "known_hosts")
+		knownHostsUserFile = filepath.Join(homeDir, sshUtils.UserKnownHostsFile)
 		defaultKnownHosts = append(defaultKnownHosts, knownHostsUserFile)
 	}
 
