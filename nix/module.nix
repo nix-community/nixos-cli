@@ -103,10 +103,12 @@ in {
         Environment variables to persist through root elevation command invocations
         on this host.
 
-        Supports automatically configuring `sudo` environment rules only.
+        Supports automatically configuring `sudo` and `doas` environment rules only.
+        `sudo` rules are configured as defaults, while `doas` environment variable
+        rules are configured for the `:wheel` group only.
 
         If you need more flexible definitions for these rules, consider using
-        `options.services.nixos-cli.preserve-env.default` as a reference list
+        the default value of `services.nixos-cli.preserve-env` as a reference list
         of default variables that should be preserved across this boundary.
 
         It is recommended to use this option for any extra environment variables to
@@ -151,6 +153,26 @@ in {
       in ''
         ${lib.concatStringsSep "\n" configLines}
       '';
+
+      security.doas.extraRules = let
+        isDefaultList = cfg.preserve-env == options.services.nixos-cli.preserve-env.default;
+
+        # Remove SSH_AUTH_SOCK from the default list if it equals the
+        # defaults, since SSH_AUTH_SOCK is present and kept by the default
+        # doas rule set.
+        # That way, people will not be confused if they set -SSH_AUTH_SOCK
+        # in their own doas config and see it added here again when they
+        # never configured the option explicitly.
+        preserveEnvList =
+          if isDefaultList
+          then (builtins.filter (var: var != "SSH_AUTH_SOCK") cfg.preserve-env)
+          else cfg.preserve-env;
+      in [
+        {
+          groups = ["wheel"];
+          setEnv = preserveEnvList;
+        }
+      ];
     })
     (lib.mkIf cfg.option-cache.enable {
       # While there is already an `options.json` that exists in the
