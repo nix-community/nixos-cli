@@ -8,6 +8,7 @@ import (
 
 	"github.com/nix-community/nixos-cli/internal/cmd/opts"
 	"github.com/nix-community/nixos-cli/internal/generation"
+	systemdUtils "github.com/nix-community/nixos-cli/internal/systemd"
 )
 
 func TestResolveGenerationsToDelete(t *testing.T) {
@@ -61,7 +62,7 @@ func TestResolveGenerationsToDelete(t *testing.T) {
 		{
 			name: "Older than specified duration",
 			opts: &cmdOpts.GenerationDeleteOpts{
-				OlderThan: "24h",
+				OlderThan: systemdUtils.SystemdDuration(24 * time.Hour),
 			},
 			expect: []uint64{1, 2},
 		},
