@@ -81,17 +81,6 @@ _`nix eval .#nixosConfigurations.$HOSTNAME.config.system.build.toplevel`_
 Many other behaviors for _nixos-rebuild_ are in the *nixos generation*
 command tree. See *nixos-cli-generation(1)* for details.
 
-## Rollback
-
-In rare cases, automatic rollback is performed on the system profile when
-activation fails.
-
-In order to disable this behavior for known working configurations (such as when
-reboot is required for a successful activation or daemon restart), use the
-global *--config* flag as such:
-
-	*nixos --config auto_rollback=false apply [options]*
-
 # ARGUMENTS
 
 *FLAKE-REF*
@@ -238,7 +227,9 @@ global *--config* flag as such:
 	*PERIOD* is a *systemd.time(7)*-formatted time span, such as *10s*. For more
 	information, see the *systemd.time(7)* man page.
 
-	Must be at least 1 second in length or more.
+	Must be at least 1 second in length.
+
+	Default: (specified in _rollback.timeout_, usually 30s)
 
 	This is only applicable to remote activations with magic rollback mode
 	enabled.
@@ -339,7 +330,7 @@ global *--config* flag as such:
 *-h*, *--help*
 	Show the help message for this command.
 
-# NIX OPTIONS
+## NIX OPTIONS
 
 *nixos apply* accepts some Nix options and passes them through to their relevant
 Nix invocations.
@@ -382,6 +373,50 @@ The following options are supported on flake-enabled CLIs:
 *--override-input* is specified slightly differently; for *nixos-cli* to pass it
 through properly, pass the input name and value as a single argument separated
 by an equals sign, rather than as two arguments in the actual Nix CLI.
+
+# ACTIVATION
+
+Activation happens in one of two ways depending on the target host the NixOS
+configuration is deployed to.
+
+If the target host is the local system, then activation simply consists of
+running the NixOS system closure's _switch-to-configuration_ script and ensuring
+it is successful. _switch-to-configuration_ could either be the stock one
+shipped with NixOS, or could possibly be an instance of _nixos activate_ if
+using the activation interface; see *nixos-cli-activate(1)* for more information.
+
+If local system activation fails, then the selected system profile (usually
+called _system_ unless *--profile-name* is passed) is automatically
+rolled back if it was changed. This ensures that a faulty NixOS system does not
+remain the selected generation in the system profile, since this would result
+in an unbootable system with no rollback capabilities if garbage collection was
+run at that point.
+
+However, if the target is a remote host accessed over SSH, then the default
+mode will run the _switch-to-configuration_ script on the target system, and
+will then wait for an acknowledgement signal from the invoking machine. This
+ensures that a connection from the invoking machine to the target is still
+available for further troubleshooting. If no
+acknowledgement signal is received within the configured time frame, then the
+target system automatically rolls back the configuration and runs the previous
+closure's _switch-to-configuration_ in order to re-establish the previously
+available SSH connection.
+
+Internally, this autonomous remote rollback process is referred to as a *magic
+rollback*, and is controlled by a transient _systemd_ unit that runs a shell
+script that controls this lifecycle. This shell script is internally called the
+*remote activation supervisor*.
+
+This *magic rollback* is similar in design to other NixOS deployment tools like
+_deploy-rs_, and takes heavy inspiration from them.
+
+In order to disable all rollback behavior for known working configurations 
+(such as when reboot is required for a successful activation or daemon restart,
+or when the SSH service/Internet will be modified/disabled on a remote system),
+use the *--no-rollback* flag or disable the _rollback.enable_ setting like
+this:
+
+	*nixos --config rollback.enable=false apply [options]*
 
 # SEE ALSO
 
