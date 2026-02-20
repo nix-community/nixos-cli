@@ -104,10 +104,10 @@ Do not set directly unless running this in development.
 	recursing when a user invokes it directly.
 
 *NIXOS_CLI_DEBUG_MODE*
-	Show some extra log messages and otherwise other useful things during
+	Show some extra log messages and other useful diagnostic output during
 	development or debugging. Usually only useful during development,
-	but can be helpful when debugging other issues that are too verbose
-	to hide behind a flag.
+	but can be helpful when diagnosing issues whose verbosity is too high
+	to enable behind a dedicated flag by default.
 
 *\_\_NIXOS_SWITCH_TO_CONFIGURATION_PARENT_EXE*
 	Set to prevent user activation invocations from infinitely recursing.
