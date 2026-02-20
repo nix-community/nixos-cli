@@ -8,22 +8,20 @@ import (
 
 func TestValidateConfig(t *testing.T) {
 	t.Run("incorrect config fails", func(t *testing.T) {
-		cfg := &settings.Settings{
-			Aliases: map[string][]string{
-				"":                     {"value1"},
-				"-bad":                 {"value2"},
-				"has space":            {"value3"},
-				"validalias":           {"value4"},
-				"validalias-noentries": {},
-			},
-			Option: settings.OptionSettings{
-				MinScore: 1,
-			},
+		cfg := settings.NewSettings()
+		cfg.Aliases = map[string][]string{
+			"":                     {"value1"},
+			"-bad":                 {"value2"},
+			"has space":            {"value3"},
+			"validalias":           {"value4"},
+			"validalias-noentries": {},
 		}
+		cfg.Option.MinScore = 1
+		cfg.Rollback.Timeout = 0
 
 		errs := cfg.Validate()
-		if len(errs) != 4 {
-			t.Errorf("expected 4 errors, got %d", len(errs))
+		if len(errs) != 5 {
+			t.Errorf("expected 5 errors, got %d", len(errs))
 		}
 
 		if len(cfg.Aliases) != 1 {
@@ -32,14 +30,11 @@ func TestValidateConfig(t *testing.T) {
 	})
 
 	t.Run("valid config passes", func(t *testing.T) {
-		cfg := &settings.Settings{
-			Aliases: map[string][]string{
-				"validalias": {"value1", "value2"},
-			},
-			Option: settings.OptionSettings{
-				MinScore: 2,
-			},
+		cfg := settings.NewSettings()
+		cfg.Aliases = map[string][]string{
+			"validalias": {"value1", "value2"},
 		}
+		cfg.Option.MinScore = 2
 
 		errs := cfg.Validate()
 		if errs != nil {

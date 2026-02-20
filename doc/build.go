@@ -10,8 +10,10 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/nix-community/nixos-cli/internal/settings"
+	systemdUtils "github.com/nix-community/nixos-cli/internal/systemd"
 	"github.com/spf13/cobra"
 	"snare.dev/optnix/option"
 )
@@ -306,6 +308,12 @@ func formatValue(v reflect.Value) string {
 	if !v.IsValid() {
 		return "n/a"
 	}
+
+	switch v.Interface().(type) {
+	case systemdUtils.SystemdDuration:
+		return time.Duration(v.Interface().(systemdUtils.SystemdDuration)).String()
+	}
+
 	switch v.Kind() {
 	case reflect.String:
 		if v.String() == "" {

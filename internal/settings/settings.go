@@ -6,26 +6,29 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/knadh/koanf/parsers/toml/v2"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/providers/rawbytes"
 	"github.com/knadh/koanf/v2"
+	systemdUtils "github.com/nix-community/nixos-cli/internal/systemd"
 )
 
 type Settings struct {
 	Aliases        map[string][]string  `koanf:"aliases" noset:"true"`
 	Apply          ApplySettings        `koanf:"apply"`
 	AutoRollback   bool                 `koanf:"auto_rollback"`
-	Confirmation   ConfirmationSettings `koanf:"confirmation"`
-	UseColor       bool                 `koanf:"color"`
 	ConfigLocation string               `koanf:"config_location"`
+	Confirmation   ConfirmationSettings `koanf:"confirmation"`
 	Enter          EnterSettings        `koanf:"enter"`
 	Init           InitSettings         `koanf:"init"`
 	NoConfirm      bool                 `koanf:"no_confirm"`
 	Option         OptionSettings       `koanf:"option"`
-	SSH            SSHSettings          `koanf:"ssh"`
+	Rollback       RollbackSettings     `koanf:"rollback"`
 	RootCommand    string               `koanf:"root_command"`
+	SSH            SSHSettings          `koanf:"ssh"`
+	UseColor       bool                 `koanf:"color"`
 	UseNvd         bool                 `koanf:"use_nvd"`
 }
 
@@ -59,6 +62,11 @@ type OptionSettings struct {
 	MinScore     int64 `koanf:"min_score"`
 	Prettify     bool  `koanf:"prettify"`
 	DebounceTime int64 `koanf:"debounce_time"`
+}
+
+type RollbackSettings struct {
+	Enable  bool                         `koanf:"enable"`
+	Timeout systemdUtils.SystemdDuration `koanf:"timeout"`
 }
 
 type SSHSettings struct {
@@ -109,6 +117,7 @@ rollback = ["generation", "rollback"]
 	sshPrivateKeyCmdExample = "```\n" + `[ssh]
 private_key_cmd = ["sh", "-c", "rbw get $NIXOS_CLI_SSH_HOST"]
 ` + "```\n"
+	rollbackTimeoutDefaultValue = systemdUtils.SystemdDuration(30 * time.Second)
 )
 
 var SettingsDocs = map[string]DescriptionEntry{
@@ -150,7 +159,7 @@ var SettingsDocs = map[string]DescriptionEntry{
 			"disabled when a reboot or some other circumstance is needed for successful activation. " +
 			"In the case of remote activations, this will also run the previous switch-to-configuration if an " +
 			"acknowledgement from the invoking system is not received, in order to re-establish a connection " +
-			"for further troubleshooting.",
+			"for further troubleshooting.\n" + bolded(deprecatedDocString) + "\nSet `rollback.enable` to `true` instead.",
 	},
 	"color": {
 		Short: "Enable colored output",
@@ -213,6 +222,24 @@ var SettingsDocs = map[string]DescriptionEntry{
 		Short: "Debounce time for searching options using the UI, in milliseconds",
 		Long:  "Controls how often search results are recomputed when typing in the options UI, in milliseconds.",
 	},
+	"rollback": {
+		Short: "Settings for automatic rollback upon failure",
+	},
+	"rollback.enable": {
+		Short: "Automatically rollback system on activation failure or lack of remote acknowledgement",
+		Long: `Enable automatic/"magic" rollback of a NixOS system profile when an activation command fails. This can be ` +
+			"disabled when a reboot or some other circumstance is needed for successful activation. " +
+			"In the case of remote activations, this will also run the previous switch-to-configuration if an " +
+			"acknowledgement from the invoking system is not received, in order to re-establish a connection " +
+			"for further troubleshooting.",
+	},
+	"rollback.timeout": {
+		Short: "Period of time to wait for an acknowledgement from the machine invoking an activation",
+		Long: "The period of time to wait for the invoking machine to send back an acknowledgement machine to " +
+			"the destination machine after a successful activation has been performed before performing a rollback. " +
+			`This only applies to remote/"magic" rollback mode for remote activation of NixOS systems. ` +
+			"The timeout is specified as a `systemd.time(7)`-formatted time span",
+	},
 	"ssh": {
 		Short: "Settings for ssh",
 	},
@@ -239,7 +266,6 @@ var SettingsDocs = map[string]DescriptionEntry{
 
 func NewSettings() *Settings {
 	return &Settings{
-		AutoRollback:   true,
 		UseColor:       true,
 		ConfigLocation: "/etc/nixos",
 		Confirmation: ConfirmationSettings{
@@ -256,6 +282,10 @@ func NewSettings() *Settings {
 			MinScore:     1,
 			Prettify:     true,
 			DebounceTime: 25,
+		},
+		Rollback: RollbackSettings{
+			Enable:  true,
+			Timeout: rollbackTimeoutDefaultValue,
 		},
 		SSH: SSHSettings{},
 	}
@@ -329,6 +359,23 @@ func (cfg *Settings) Validate() SettingsErrors {
 			Message: deprecatedDocString + "\nhint: set `confirmation.always` to `true` instead.",
 		})
 		cfg.Confirmation.Always = true
+	}
+
+	if cfg.AutoRollback {
+		errs = append(errs, SettingsError{
+			Field:   "auto_rollback",
+			Message: deprecatedDocString + "\nhint: set `rollback.enable` to `true` instead.",
+		})
+		cfg.Confirmation.Always = true
+	}
+
+	if cfg.Rollback.Timeout.Duration() < 1*time.Second {
+		errs = append(errs, SettingsError{
+			Field:   "rollback.timeout",
+			Message: fmt.Sprintf("rollback.timeout must be at least 1 second long; using default (%s)", rollbackTimeoutDefaultValue.Duration().String()),
+		})
+
+		cfg.Rollback.Timeout = rollbackTimeoutDefaultValue
 	}
 
 	if len(errs) > 0 {

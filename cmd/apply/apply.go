@@ -24,15 +24,12 @@ import (
 	"github.com/nix-community/nixos-cli/internal/nix"
 	"github.com/nix-community/nixos-cli/internal/settings"
 	"github.com/nix-community/nixos-cli/internal/system"
-	systemdUtils "github.com/nix-community/nixos-cli/internal/systemd"
 	"github.com/nix-community/nixos-cli/internal/utils"
 	"github.com/spf13/cobra"
 )
 
 func ApplyCommand(cfg *settings.Settings) *cobra.Command {
-	opts := cmdOpts.ApplyOpts{
-		RollbackTimeout: systemdUtils.SystemdDuration(30 * time.Second),
-	}
+	opts := cmdOpts.ApplyOpts{}
 
 	var usage string
 	if build.Flake() {
@@ -652,7 +649,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 	}
 
 	rollbackLocalProfile := func() {
-		if !cfg.AutoRollback {
+		if !cfg.Rollback.Enable {
 			log.Warnf("automatic rollback is disabled, the currently active profile may have unresolved problems")
 			log.Warnf("you are on your own!")
 			return
@@ -697,7 +694,10 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 	useActivationSupervisor := shouldUseActivationSupervisor(cfg, targetHost, stcAction) && !opts.NoRollback
 
 	if useActivationSupervisor {
-		ackTimeout := opts.RollbackTimeout.Duration() / time.Second
+		ackTimeout := opts.RollbackTimeout
+		if ackTimeout == 0 {
+			ackTimeout = cfg.Rollback.Timeout
+		}
 
 		// Let the supervisor handle the rollback if it exists.
 		err = activation.RunActivationSupervisor(targetHost, resultLocation, stcAction, &activation.RunActivationSupervisorOptions{
@@ -706,7 +706,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 			Specialisation:    specialisation,
 			UseRootCommand:    activationUseRoot,
 			RootCommand:       cfg.RootCommand,
-			AckTimeout:        ackTimeout,
+			AckTimeout:        ackTimeout.Duration(),
 
 			// TODO: figure out previous specialisation, set it here
 			// so that we can rollback directly to a given specialisation
@@ -909,7 +909,7 @@ func getImageName(
 }
 
 func shouldUseActivationSupervisor(cfg *settings.Settings, host system.System, action activation.SwitchToConfigurationAction) bool {
-	if !cfg.AutoRollback || !host.IsRemote() {
+	if !cfg.Rollback.Enable || !host.IsRemote() {
 		return false
 	}
 
