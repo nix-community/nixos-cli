@@ -417,8 +417,8 @@ func RunActivationSupervisor(
 
 	activationComplete := make(chan error, 1)
 	go func() {
-		_, err := s.Run(cmd)
-		activationComplete <- err
+		_, activationErr := s.Run(cmd)
+		activationComplete <- activationErr
 	}()
 
 	successTriggerCheckTimer := time.NewTicker(500 * time.Millisecond)
