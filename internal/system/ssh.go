@@ -20,6 +20,7 @@ import (
 	"github.com/nix-community/nixos-cli/internal/logger"
 	"github.com/nix-community/nixos-cli/internal/settings"
 	sshUtils "github.com/nix-community/nixos-cli/internal/ssh"
+	"github.com/nix-community/nixos-cli/internal/utils"
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
@@ -422,15 +423,16 @@ func (s *SSHSystem) Run(cmd *Command) (int, error) {
 	}
 
 	var cmdStr string
+
 	if len(cmd.Env) > 0 {
 		var args []string
 		args, err = cmd.BuildShellWrapper()
 		if err != nil {
 			return 0, err
 		}
-		cmdStr = shlex.Join(args)
+		cmdStr = quoteAndJoin(args)
 	} else {
-		cmdStr = shlex.Join(cmd.BuildArgs())
+		cmdStr = quoteAndJoin(cmd.BuildArgs())
 	}
 
 	session.Stdout = cmd.Stdout
@@ -464,6 +466,16 @@ func (s *SSHSystem) Run(cmd *Command) (int, error) {
 	}
 
 	return 0, err
+}
+
+// A minimal args join function that supports passing through
+// multi-line inputs properly to `sh` invocations.
+func quoteAndJoin(args []string) string {
+	quoted := make([]string, 0, len(args))
+	for _, v := range args {
+		quoted = append(quoted, utils.Quote(v))
+	}
+	return strings.Join(quoted, " ")
 }
 
 func osSignalToSSHSignal(s os.Signal) ssh.Signal {
