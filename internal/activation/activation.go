@@ -396,7 +396,7 @@ func RunActivationSupervisor(
 
 	ackTimeout := int(opts.AckTimeout / time.Second)
 	if ackTimeout < 1 {
-		return fmt.Errorf("acknowledgement timeout must be greater than 1 second")
+		return fmt.Errorf("acknowledgement timeout must be at least 1 second")
 	}
 	argv = append(argv, "-E", fmt.Sprintf("ACK_TIMEOUT=%d", ackTimeout))
 
