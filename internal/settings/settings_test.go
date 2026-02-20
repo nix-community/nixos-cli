@@ -16,10 +16,12 @@ func TestValidateConfig(t *testing.T) {
 			"validalias":           {"value4"},
 			"validalias-noentries": {},
 		}
+		cfg.Option.MinScore = 1
+		cfg.Rollback.Timeout = 0
 
 		errs := cfg.Validate()
-		if len(errs) != 4 {
-			t.Errorf("expected 4 errors, got %d", len(errs))
+		if len(errs) != 5 {
+			t.Errorf("expected 5 errors, got %d", len(errs))
 		}
 
 		if len(cfg.Aliases) != 1 {

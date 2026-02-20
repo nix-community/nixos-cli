@@ -77,10 +77,6 @@ func mainCommand() (*cobra.Command, error) {
 		cfg = settings.NewSettings()
 	}
 
-	for _, err := range cfg.Validate() {
-		log.Warn(err.Error())
-	}
-
 	cmdCtx = settings.WithConfig(cmdCtx, cfg)
 
 	cmd := cobra.Command{

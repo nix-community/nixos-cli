@@ -7,11 +7,13 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/knadh/koanf/parsers/toml/v2"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/providers/rawbytes"
 	"github.com/knadh/koanf/v2"
+	systemdUtils "github.com/nix-community/nixos-cli/internal/systemd"
 )
 
 type Settings struct {
@@ -27,10 +29,13 @@ type Settings struct {
 	Option            OptionSettings       `koanf:"option"`
 	Root              RootCommandSettings  `koanf:"root"`
 	RootCommand       string               `koanf:"root_command"`
+	Rollback          RollbackSettings     `koanf:"rollback"`
 	SSH               SSHSettings          `koanf:"ssh"`
 	UseColor          bool                 `koanf:"color"`
 	UseDefaultAliases bool                 `koanf:"use_default_aliases"`
 	UseNvd            bool                 `koanf:"use_nvd"`
+
+	setDeprecatedFields map[string]struct{}
 }
 
 type ApplySettings struct {
@@ -69,6 +74,11 @@ type OptionSettings struct {
 	MinScore     int64 `koanf:"min_score"`
 	Prettify     bool  `koanf:"prettify"`
 	DebounceTime int64 `koanf:"debounce_time"`
+}
+
+type RollbackSettings struct {
+	Enable  bool                         `koanf:"enable"`
+	Timeout systemdUtils.SystemdDuration `koanf:"timeout"`
 }
 
 type RootCommandSettings struct {
@@ -212,6 +222,7 @@ const (
 	DeprecatedDocString = "This setting has been deprecated, and will be removed in a future release."
 
 	confirmationInputPossibleValues = "Possible values are `default-no` (treat as a no input), `default-yes` (treat as a yes input), or `retry` (try again)."
+	rollbackTimeoutDefaultValue     = systemdUtils.SystemdDuration(30 * time.Second)
 )
 
 var DefaultAliases = map[string][]string{
@@ -274,6 +285,7 @@ var SettingsDocs = map[string]SettingsDocEntry{
 			"In the case of remote activations, this will also run the previous switch-to-configuration if an " +
 			"acknowledgement from the invoking system is not received, in order to re-establish a connection " +
 			"for further troubleshooting.",
+		Deprecated: "Remove this field; rollback is now configured via `rollback.enable` (defaults to `true`).",
 	},
 	"color": {
 		Short: "Enable colored output",
@@ -366,6 +378,24 @@ This requires the 'nix-command' experimental feature to be enabled in the Nix co
 		Short: "Debounce time for searching options using the UI, in milliseconds",
 		Long:  "Controls how often search results are recomputed when typing in the options UI, in milliseconds.",
 	},
+	"rollback": {
+		Short: "Settings for automatic rollback upon failure",
+	},
+	"rollback.enable": {
+		Short: "Automatically rollback system on activation failure or lack of remote acknowledgement",
+		Long: `Enable automatic/"magic" rollback of a NixOS system profile when an activation command fails. This can be ` +
+			"disabled when a reboot or some other circumstance is needed for successful activation. " +
+			"In the case of remote activations, this will also run the previous switch-to-configuration if an " +
+			"acknowledgement from the invoking system is not received, in order to re-establish a connection " +
+			"for further troubleshooting.",
+	},
+	"rollback.timeout": {
+		Short: "Period of time to wait for an acknowledgement from the machine invoking an activation",
+		Long: "The period of time to wait for the invoking machine to send back an acknowledgement to " +
+			"the destination machine after a successful activation has been performed before performing a rollback. " +
+			`This only applies to remote/"magic" rollback mode for when remote activation of NixOS systems fails to be ` +
+			"acknowledged. The timeout is specified as a `systemd.time(7)`-formatted time span, and must be at least 1 second.",
+	},
 	"ssh": {
 		Short: "Settings for SSH",
 	},
@@ -429,7 +459,7 @@ This requires the 'nix-command' experimental feature to be enabled in the Nix co
 func NewSettings() *Settings {
 	return &Settings{
 		Aliases:        make(map[string][]string),
-		AutoRollback:   true,
+		AutoRollback:   false,
 		UseColor:       true,
 		ConfigLocation: "/etc/nixos",
 		Confirmation: ConfirmationSettings{
@@ -449,6 +479,10 @@ func NewSettings() *Settings {
 			Prettify:     true,
 			DebounceTime: 25,
 		},
+		Rollback: RollbackSettings{
+			Enable:  true,
+			Timeout: rollbackTimeoutDefaultValue,
+		},
 		Root: RootCommandSettings{
 			Command:        "sudo",
 			PasswordMethod: PasswordInputMethodStdin,
@@ -458,6 +492,8 @@ func NewSettings() *Settings {
 			HostKeyVerification: HostKeyVerificationAsk,
 		},
 		UseDefaultAliases: true,
+
+		setDeprecatedFields: make(map[string]struct{}),
 	}
 }
 
@@ -468,14 +504,7 @@ func ParseSettings(location string) (*Settings, error) {
 		return nil, err
 	}
 
-	cfg := NewSettings()
-
-	err := k.Unmarshal("", cfg)
-	if err != nil {
-		return nil, err
-	}
-
-	return cfg, nil
+	return parse(k)
 }
 
 func ParseSettingsFromString(input string) (*Settings, error) {
@@ -485,11 +514,21 @@ func ParseSettingsFromString(input string) (*Settings, error) {
 		return nil, err
 	}
 
+	return parse(k)
+}
+
+func parse(k *koanf.Koanf) (*Settings, error) {
 	cfg := NewSettings()
 
 	err := k.Unmarshal("", cfg)
 	if err != nil {
 		return nil, err
+	}
+
+	for key, field := range SettingsDocs {
+		if k.Exists(key) && field.Deprecated != "" {
+			cfg.setDeprecatedFields[key] = struct{}{}
+		}
 	}
 
 	return cfg, nil
@@ -566,6 +605,29 @@ func (cfg *Settings) Validate() SettingsErrors {
 		}
 	}
 
+	if cfg.AutoRollback {
+		errs = append(errs, DeprecatedSettingError{
+			Field:       "auto_rollback",
+			Alternative: "set `rollback.enable` to `true` instead",
+		})
+		cfg.Rollback.Enable = true
+	} else if _, exists := cfg.setDeprecatedFields["auto_rollback"]; exists {
+		errs = append(errs, DeprecatedSettingError{
+			Field:       "auto_rollback",
+			Alternative: "set `rollback.enable` to `false` instead",
+		})
+		cfg.Rollback.Enable = false
+	}
+
+	if cfg.Rollback.Timeout.Duration() < time.Second {
+		errs = append(errs, SettingsError{
+			Field:   "rollback.timeout",
+			Message: fmt.Sprintf("rollback.timeout must be at least 1 second long; using default (%s)", rollbackTimeoutDefaultValue.Duration().String()),
+		})
+
+		cfg.Rollback.Timeout = rollbackTimeoutDefaultValue
+	}
+
 	if len(errs) > 0 {
 		return errs
 	}
@@ -609,6 +671,7 @@ func (cfg *Settings) SetValue(key string, value string) error {
 					if err := unmarshaler.UnmarshalText([]byte(value)); err != nil {
 						return err
 					}
+					cfg.checkIfDeprecated(key)
 					return nil
 				}
 			}
@@ -638,11 +701,18 @@ func (cfg *Settings) SetValue(key string, value string) error {
 				return SettingsError{Field: field, Message: "unsupported field type"}
 			}
 
+			cfg.checkIfDeprecated(key)
 			return nil
 		}
 	}
 
 	return nil
+}
+
+func (cfg *Settings) checkIfDeprecated(key string) {
+	if doc, ok := SettingsDocs[key]; ok && doc.Deprecated != "" {
+		cfg.setDeprecatedFields[key] = struct{}{}
+	}
 }
 
 func isSettable(value *reflect.Value) bool {
