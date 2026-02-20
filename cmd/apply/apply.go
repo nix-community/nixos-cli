@@ -33,7 +33,9 @@ import (
 )
 
 func ApplyCommand(cfg *settings.Settings) *cobra.Command {
-	opts := cmdOpts.ApplyOpts{}
+	opts := cmdOpts.ApplyOpts{
+		RollbackTimeout: systemdUtils.SystemdDuration(30 * time.Second),
+	}
 
 	var usage string
 	if build.Flake() {
@@ -108,11 +110,10 @@ func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 				}
 			}
 
-			// Make sure rollback-timeout is a valid systemd.time(7) string
-			if timeout, err := systemdUtils.DurationFromTimeSpan(opts.RollbackTimeout); err != nil {
-				return fmt.Errorf("invalid value for --rollback-timeout: %v", err.Error())
-			} else if timeout < 1*time.Second {
-				return errors.New("--rollback-timeout must be at least 1 second")
+			if cmd.Flags().Changed("rollback-timeout") {
+				if opts.RollbackTimeout.Duration() < 1*time.Second {
+					return errors.New("--rollback-timeout must be at least 1 second")
+				}
 			}
 
 			// Set a special hidden _list value for this
@@ -161,7 +162,7 @@ func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 	cmd.Flags().StringVar(&opts.BuildHost, "build-host", "", "Use specified `user@host:port` to perform build")
 	cmd.Flags().StringVar(&opts.TargetHost, "target-host", "", "Deploy to a remote machine at `user@host:port`")
 	cmd.Flags().StringVar(&opts.StorePath, "store-path", "", "Use a pre-built NixOS system store `path` instead of building")
-	cmd.Flags().StringVar(&opts.RollbackTimeout, "rollback-timeout", "30s", "Time `period` to wait for acknowledgement signal before automatic rollback")
+	cmd.Flags().Var(&opts.RollbackTimeout, "rollback-timeout", "Time `period` to wait for acknowledgement signal before automatic rollback")
 	cmd.Flags().BoolVar(&opts.NoRollback, "no-rollback", false, "Do not attempt rollback after a switch failure")
 
 	opts.NixOptions.Quiet.Bind(&cmd)
@@ -198,6 +199,8 @@ func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 		cmd.Flags().BoolVar(&opts.UpgradeChannels, "upgrade", false, "Upgrade the root user`s 'nixos' channel")
 		cmd.Flags().BoolVar(&opts.UpgradeAllChannels, "upgrade-all", false, "Upgrade all the root user's channels")
 	}
+
+	cmdUtils.RemoveDefaultValueDesc(&cmd, "rollback-timeout")
 
 	_ = cmd.RegisterFlagCompletionFunc("profile-name", generation.CompleteProfileFlag)
 	_ = cmd.RegisterFlagCompletionFunc("specialisation", generation.CompleteSpecialisationFlagFromConfig(opts.FlakeRef, opts.NixOptions.Include))
@@ -768,8 +771,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 	useActivationSupervisor := shouldUseActivationSupervisor(cfg, targetHost, stcAction) && !opts.NoRollback
 
 	if useActivationSupervisor {
-		ackTimeout, _ := systemdUtils.DurationFromTimeSpan(opts.RollbackTimeout)
-		ackTimeout = ackTimeout / time.Second
+		ackTimeout := opts.RollbackTimeout.Duration() / time.Second
 
 		// Let the supervisor handle the rollback if it exists.
 		err = activation.RunActivationSupervisor(targetHost, resultLocation, stcAction, &activation.RunActivationSupervisorOptions{
