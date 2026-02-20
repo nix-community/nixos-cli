@@ -104,8 +104,10 @@ func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 				}
 			}
 
-			if opts.RollbackTimeout.Duration() < 1*time.Second {
-				return errors.New("--rollback-timeout must be greater than 1 second")
+			if cmd.Flags().Changed("rollback-timeout") {
+				if opts.RollbackTimeout.Duration() < time.Second {
+					return errors.New("--rollback-timeout must be greater than 1 second")
+				}
 			}
 
 			// Set a special hidden _list value for this
