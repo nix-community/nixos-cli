@@ -408,7 +408,7 @@ func RunActivationSupervisor(
 
 	cmd := system.NewCommand(argv[0], argv[1:]...)
 	if opts.UseRootCommand {
-		cmd.RunAsRoot(opts.RootCommand)
+		cmd.AsRoot(opts.RootCommand)
 	}
 
 	activationComplete := make(chan error, 1)
