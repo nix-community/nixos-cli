@@ -92,14 +92,16 @@ func (c *ConfirmationPromptBehavior) UnmarshalText(text []byte) error {
 }
 
 type DescriptionEntry struct {
-	Short   string
-	Long    string
-	Example any
+	Short      string
+	Long       string
+	Example    any
+	Deprecated string
 }
 
 const (
+	DeprecatedDocString = "This setting has been deprecated, and will be removed in a future release."
+
 	confirmationInputPossibleValues = "Possible values are `default-no` (treat as a no input), `default-yes` (treat as a yes input), or `retry` (try again)."
-	deprecatedDocString             = "This setting has been deprecated, and will be removed in a future release."
 )
 
 var SettingsDocs = map[string]DescriptionEntry{
@@ -172,7 +174,7 @@ var SettingsDocs = map[string]DescriptionEntry{
 		Short: "Settings for `enter` command",
 	},
 	"enter.mount_resolv_conf": {
-		Short: "Bind-mount host 'resolv.conf' inside chroot for internet accesss",
+		Short: "Bind-mount host 'resolv.conf' inside chroot for internet access",
 		Long:  "Ensures internet access by mounting the host's /etc/resolv.conf into the chroot environment.",
 	},
 	"init": {
@@ -195,9 +197,9 @@ var SettingsDocs = map[string]DescriptionEntry{
 		Long:  "Specifies the desktop environment configuration to inject during initialization.",
 	},
 	"no_confirm": {
-		Short: "Disable interactive confirmation input",
-		Long: "Disables prompts that ask for user confirmation, useful for automation.\n" + bolded(deprecatedDocString) +
-			"\nSet `confirmation.always` to `true` instead.",
+		Short:      "Disable interactive confirmation input",
+		Long:       "Disables prompts that ask for user confirmation; useful for scripts and other automation.",
+		Deprecated: "Set `confirmation.always` to `true` instead.",
 	},
 	"option": {
 		Short: "Settings for `option` command",
@@ -215,7 +217,7 @@ var SettingsDocs = map[string]DescriptionEntry{
 		Long:  "Controls how often search results are recomputed when typing in the options UI, in milliseconds.",
 	},
 	"ssh": {
-		Short: "Settings for ssh",
+		Short: "Settings for SSH",
 	},
 	"ssh.known_hosts_files": {
 		Short: "List of paths to known hosts files",
@@ -226,7 +228,9 @@ var SettingsDocs = map[string]DescriptionEntry{
 		Long: "Specifies the command to run to obtain the private key for SSH connections." +
 			" The command receives the host and user as the environment variables $NIXOS_CLI_SSH_HOST" +
 			" and $NIXOS_CLI_SSH_USER respectively, and should output a single private key to standard output.",
-		Example: []string{"sh", "-c", "rbw get $NIXOS_CLI_SSH_HOST"},
+		Example: map[string][]string{
+			"ssh": {"sh", "-c", "rbw get $NIXOS_CLI_SSH_HOST"},
+		},
 	},
 	"root_command": {
 		Short: "Command to use to promote process to root",
@@ -302,7 +306,7 @@ var hasWhitespaceRegex = regexp.MustCompile(`\s`)
 // Validate the configuration and remove any erroneous values.
 // A list of detected errors is returned, if any exist.
 func (cfg *Settings) Validate() SettingsErrors {
-	errs := []SettingsError{}
+	errs := []error{}
 
 	// First, validate the aliases. Any alias has to adhere to the following rules:
 	// 1. Alias names cannot be empty.
@@ -326,9 +330,9 @@ func (cfg *Settings) Validate() SettingsErrors {
 	}
 
 	if cfg.NoConfirm {
-		errs = append(errs, SettingsError{
-			Field:   "no_confirm",
-			Message: deprecatedDocString + "\nhint: set `confirmation.always` to `true` instead.",
+		errs = append(errs, DeprecatedSettingError{
+			Field:       "no_confirm",
+			Alternative: "set `confirmation.always` to `true` instead",
 		})
 		cfg.Confirmation.Always = true
 	}
@@ -410,11 +414,4 @@ func isSettable(value *reflect.Value) bool {
 	}
 
 	return false
-}
-
-// A naive way to bold a given input.
-//
-// Does not escape contents, so use wisely.
-func bolded(input string) string {
-	return fmt.Sprintf("**%s**", input)
 }

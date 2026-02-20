@@ -198,7 +198,7 @@ func formatOptionMarkdown(opt option.NixosOption, rev string) string {
 type SettingsFormatter interface {
 	WriteHeader(sb *strings.Builder, title string, level int)
 	WriteSectionDescription(sb *strings.Builder, desc string)
-	WriteItem(sb *strings.Builder, key string, desc string, exampleValue any, defaultValue any)
+	WriteItem(sb *strings.Builder, key string, desc string, exampleValue any, defaultValue any, deprecated string)
 }
 
 type MarkdownSettingsFormatter struct{}
@@ -235,7 +235,7 @@ func indent(text string, spaces int) string {
 	return b.String()
 }
 
-func (f MarkdownSettingsFormatter) WriteItem(sb *strings.Builder, key string, desc string, exampleValue any, defaultValue any) {
+func (f MarkdownSettingsFormatter) WriteItem(sb *strings.Builder, key string, desc string, exampleValue any, defaultValue any, deprecated string) {
 	fmt.Fprintf(sb, "- **%s**\n\n  %s\n\n", key, desc)
 
 	if exampleValue != nil {
@@ -265,6 +265,10 @@ func (f MarkdownSettingsFormatter) WriteItem(sb *strings.Builder, key string, de
 			fmt.Fprintf(sb, "  **Default:** `%s`\n\n", defaultTomlStr)
 		}
 	}
+
+	if deprecated != "" {
+		fmt.Fprintf(sb, "  **%s**\n\n  %s\n\n", settings.DeprecatedDocString, deprecated)
+	}
 }
 
 type ManpageSettingsFormatter struct{}
@@ -283,12 +287,9 @@ func (f ManpageSettingsFormatter) WriteItem(
 	desc string,
 	exampleValue any,
 	defaultValue any,
+	deprecated string,
 ) {
 	fmt.Fprintf(sb, "\n*%s*\n\n%s\n\n", key, desc)
-
-	if defaultValue == nil {
-		return
-	}
 
 	if exampleValue != nil {
 		exampleToml, err := toml.Marshal(exampleValue)
@@ -310,22 +311,28 @@ func (f ManpageSettingsFormatter) WriteItem(
 		}
 	}
 
-	defaultToml, err := toml.Marshal(defaultValue)
-	if err != nil {
-		panic(fmt.Sprintf("failed to marshal TOML default: %v", err))
-	}
-	if defaultTomlStr := strings.TrimSpace(string(defaultToml)); defaultTomlStr != "" {
-		sb.WriteString("Default: ")
-
-		if strings.Contains(defaultTomlStr, "\n") {
-			sb.WriteString("\n\n```\n")
-			sb.WriteString(defaultTomlStr)
-			sb.WriteString("\n```\n\n")
-		} else {
-			// Inline for scalars
-			sb.WriteString(defaultTomlStr)
-			sb.WriteString("\n\n")
+	if defaultValue != nil {
+		defaultToml, err := toml.Marshal(defaultValue)
+		if err != nil {
+			panic(fmt.Sprintf("failed to marshal TOML default: %v", err))
 		}
+		if defaultTomlStr := strings.TrimSpace(string(defaultToml)); defaultTomlStr != "" {
+			sb.WriteString("Default: ")
+
+			if strings.Contains(defaultTomlStr, "\n") {
+				sb.WriteString("\n\n```\n")
+				sb.WriteString(defaultTomlStr)
+				sb.WriteString("\n```\n\n")
+			} else {
+				// Inline for scalars
+				sb.WriteString(defaultTomlStr)
+				sb.WriteString("\n\n")
+			}
+		}
+	}
+
+	if deprecated != "" {
+		fmt.Fprintf(sb, "\n*%s*\n\n%s\n", settings.DeprecatedDocString, deprecated)
 	}
 }
 
@@ -348,6 +355,7 @@ func writeSettingsDoc(
 		desc         string
 		exampleValue any
 		defaultValue any
+		deprecated   string
 	}
 
 	var generalItems []configKey
@@ -378,8 +386,7 @@ func writeSettingsDoc(
 			if desc == "" {
 				desc = descriptions.Short
 			}
-
-			generalItems = append(generalItems, configKey{fullKey, desc, descriptions.Example, defaultVal})
+			generalItems = append(generalItems, configKey{fullKey, desc, descriptions.Example, defaultVal, descriptions.Deprecated})
 		}
 	}
 
@@ -393,7 +400,7 @@ func writeSettingsDoc(
 		})
 
 		for _, item := range generalItems {
-			formatter.WriteItem(sb, item.key, item.desc, item.exampleValue, item.defaultValue)
+			formatter.WriteItem(sb, item.key, item.desc, item.exampleValue, item.defaultValue, item.deprecated)
 		}
 	}
 
