@@ -225,7 +225,7 @@ func (ManpageSettingsFormatter) WriteSectionDescription(sb *strings.Builder, des
 }
 
 func (f ManpageSettingsFormatter) WriteItem(sb *strings.Builder, key, desc, defaultValue string) {
-	fmt.Fprintf(sb, "\n*%s*\n\n%s\n\nDefault: _%s_\n", key, desc, defaultValue)
+	fmt.Fprintf(sb, "\n*%s*\n\n%s\n\nDefault: %s\n", key, desc, defaultValue)
 }
 
 func writeSettingsDoc(
@@ -316,11 +316,22 @@ func formatValue(v reflect.Value) string {
 		return fmt.Sprintf("%t", v.Bool())
 	case reflect.Int, reflect.Int64:
 		return fmt.Sprintf("%d", v.Int())
-	case reflect.Map, reflect.Slice:
+	case reflect.Map:
 		if v.Len() == 0 {
-			return "[]"
+			return "{}"
 		}
-		return "(multiple entries)"
+		var entries []string
+		for _, key := range v.MapKeys() {
+			value := v.MapIndex(key)
+			entries = append(entries, fmt.Sprintf("%v = %v", key.Interface(), formatValue(value)))
+		}
+		return fmt.Sprintf("\n```\n%s\n```\n", strings.Join(entries, "\n"))
+	case reflect.Slice:
+		var elements []string
+		for i := 0; i < v.Len(); i++ {
+			elements = append(elements, formatValue(v.Index(i)))
+		}
+		return fmt.Sprintf("[%s]", strings.Join(elements, ", "))
 	default:
 		return fmt.Sprintf("%v", v.Interface())
 	}
