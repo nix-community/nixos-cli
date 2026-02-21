@@ -34,13 +34,15 @@
         ...
       }: {
         packages = {
-          default = self'.packages.nixos;
+          default = self'.packages.nixos-cli;
 
-          nixos = pkgs.callPackage ./nix/package.nix {
+          nixos-cli = pkgs.callPackage ./nix/package.nix {
             revision = self.rev or self.dirtyRev or "unknown";
           };
+          nixos = lib.warn "the 'nixos' package has been renamed to 'nixos-cli'" self'.packages.nixos-cli;
 
-          nixosLegacy = self'.packages.nixos.override {flake = false;};
+          nixos-cli-legacy = self'.packages.nixos-cli.override {flake = false;};
+          nixosLegacy = lib.warn "the 'nixosLegacy' package has been renamed to 'nixos-cli-legacy'" self'.packages.nixos-cli-legacy;
         };
 
         devShells = let
