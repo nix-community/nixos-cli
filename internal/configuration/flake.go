@@ -232,7 +232,7 @@ func (f *FlakeRef) buildRemoteSystem(s *system.SSHSystem, buildType BuildType, o
 	// 3. Realise the copied drv on the builder.
 	// $ nix-store -r "$drv" "${buildArgs[@]}"
 
-	realiseDrvArgv := []string{"nix-store", "-r", drvPath}
+	realiseDrvArgv := []string{"nix-store", "--no-gc-warning", "-r", drvPath}
 	realiseDrvArgv = append(realiseDrvArgv, realiseArgs...)
 
 	if opts.ResultLocation != "" {

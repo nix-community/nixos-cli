@@ -206,7 +206,7 @@ func (l *LegacyConfiguration) buildRemoteSystem(s *system.SSHSystem, buildType B
 
 	// 1. Determine the drv path.
 	// Equivalent of `nix-instantiate -A "${attr}" ${extraBuildFlags[@]}`
-	instantiateArgv := []string{"nix-instantiate", l.ConfigPathArg(), "-A", l.BuildAttr(buildType.BuildAttr())}
+	instantiateArgv := []string{"nix-instantiate", "--no-gc-warning", l.ConfigPathArg(), "-A", l.BuildAttr(buildType.BuildAttr())}
 	instantiateArgv = append(instantiateArgv, extraInstantiateArgs...)
 
 	var drvPathBuf bytes.Buffer
@@ -233,7 +233,7 @@ func (l *LegacyConfiguration) buildRemoteSystem(s *system.SSHSystem, buildType B
 
 	// 3. Realise the copied drv on the builder.
 	// $ nix-store -r "$drv" "${buildArgs[@]}"
-	realiseArgv := []string{"nix-store", "-r", drvPath}
+	realiseArgv := []string{"nix-store", "--no-gc-warning", "-r", drvPath}
 	realiseArgv = append(realiseArgv, extraRealiseArgs...)
 
 	// Mimic `nixos-rebuild` behavior of using -k option
