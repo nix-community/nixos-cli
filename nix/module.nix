@@ -64,8 +64,8 @@ in {
       type = types.package;
       default =
         if useFlakePkg
-        then self.packages.${system}.nixos
-        else self.packages.${system}.nixosLegacy;
+        then self.packages.${system}.nixos-cli
+        else self.packages.${system}.nixos-cli-legacy;
       description = "Package to use for nixos-cli";
     };
 

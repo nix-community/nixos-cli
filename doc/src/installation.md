@@ -22,7 +22,7 @@ NixOS has quite a large ecosystem of tools, and can be quite the moving target
 in terms of features, so `nixos-unstable` and the current stable release are the
 only actively supported releases.
 
-## Adding To Configuration
+## Adding to Configuration
 
 Use the following sections depending on whether or not your systems are
 configured with flakes or legacy-style configurations.
@@ -97,7 +97,7 @@ in {
 }
 ```
 
-NOTE: By default, importing like this will use the `nixosLegacy` package by
+NOTE: By default, importing like this will use the `nixos-cli-legacy` package by
 default, so there is no need to specify the `programs.nixos-cli.package`
 attribute manually in this setup unless overriding something.
 
@@ -157,10 +157,10 @@ Use `nix develop` (flake-enabled package by default):
 $ nix shell github:nix-community/nixos-cli
 ```
 
-Alternative using legacy-style `nix-shell` and the `nixosLegacy` package:
+Alternative using legacy-style `nix-shell` and the `nixos-cli-legacy` package:
 
 ```sh
-$ nix-shell -E 'with import (fetchTarball "https://github.com/nix-community/nixos-cli/archive/refs/heads/main.tar.gz") {}; nixosLegacy'
+$ nix-shell -E 'with import (fetchTarball "https://github.com/nix-community/nixos-cli/archive/refs/heads/main.tar.gz") {}; nixos-cli-legacy'
 ```
 
 ## Rebuild
