@@ -57,7 +57,7 @@ Then, enable the module.
 { config, pkgs, ... }:
 
 {
-  services.nixos-cli = {
+  programs.nixos-cli = {
     enable = true;
     config = {
       # Whatever settings desired.
@@ -67,7 +67,7 @@ Then, enable the module.
 ```
 
 The default package is flake-enabled in this setup, so the
-`services.nixos-cli.package` option does not need to be specified.
+`programs.nixos-cli.package` option does not need to be specified.
 
 ### Legacy
 
@@ -86,7 +86,7 @@ in {
     nixos-cli.module
   ];
 
-  services.nixos-cli = {
+  programs.nixos-cli = {
     enable = true;
     config = {
       # Other configuration for nixos-cli
@@ -98,7 +98,7 @@ in {
 ```
 
 NOTE: By default, importing like this will use the `nixosLegacy` package by
-default, so there is no need to specify the `services.nixos-cli.package`
+default, so there is no need to specify the `programs.nixos-cli.package`
 attribute manually in this setup unless overriding something.
 
 ## Cache
