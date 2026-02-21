@@ -2,8 +2,10 @@ package settings
 
 import (
 	"fmt"
+	"maps"
 	"reflect"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -14,19 +16,20 @@ import (
 )
 
 type Settings struct {
-	Aliases        map[string][]string  `koanf:"aliases" noset:"true"`
-	Apply          ApplySettings        `koanf:"apply"`
-	AutoRollback   bool                 `koanf:"auto_rollback"`
-	Confirmation   ConfirmationSettings `koanf:"confirmation"`
-	UseColor       bool                 `koanf:"color"`
-	ConfigLocation string               `koanf:"config_location"`
-	Enter          EnterSettings        `koanf:"enter"`
-	Init           InitSettings         `koanf:"init"`
-	NoConfirm      bool                 `koanf:"no_confirm"`
-	Option         OptionSettings       `koanf:"option"`
-	SSH            SSHSettings          `koanf:"ssh"`
-	RootCommand    string               `koanf:"root_command"`
-	UseNvd         bool                 `koanf:"use_nvd"`
+	Aliases           map[string][]string  `koanf:"aliases" noset:"true"`
+	Apply             ApplySettings        `koanf:"apply"`
+	AutoRollback      bool                 `koanf:"auto_rollback"`
+	Confirmation      ConfirmationSettings `koanf:"confirmation"`
+	UseColor          bool                 `koanf:"color"`
+	ConfigLocation    string               `koanf:"config_location"`
+	Enter             EnterSettings        `koanf:"enter"`
+	Init              InitSettings         `koanf:"init"`
+	NoConfirm         bool                 `koanf:"no_confirm"`
+	Option            OptionSettings       `koanf:"option"`
+	SSH               SSHSettings          `koanf:"ssh"`
+	RootCommand       string               `koanf:"root_command"`
+	UseDefaultAliases bool                 `koanf:"use_default_aliases"`
+	UseNvd            bool                 `koanf:"use_nvd"`
 }
 
 type ApplySettings struct {
@@ -103,6 +106,19 @@ const (
 
 	confirmationInputPossibleValues = "Possible values are `default-no` (treat as a no input), `default-yes` (treat as a yes input), or `retry` (try again)."
 )
+
+var DefaultAliases = map[string][]string{
+	"switch":                   []string{"apply"},
+	"boot":                     []string{"apply", "--no-activate"},
+	"test":                     []string{"apply", "--no-boot"},
+	"build":                    []string{"apply", "--no-activate", "--no-boot", "--output", "./result"},
+	"build-image":              []string{"apply", "--no-activate", "--no-boot", "--output", "./result", "--image"},
+	"build-vm":                 []string{"apply", "--no-activate", "--no-boot", "--output", "./result", "--vm"},
+	"build-vm-with-bootloader": []string{"apply", "--no-activate", "--no-boot", "--output", "./result", "--vm-with-bootloader"},
+	"dry-build":                []string{"apply", "--no-activate", "--no-boot", "--dry"},
+	"dry-activate":             []string{"apply", "--dry"},
+	"list-generations":         []string{"generation", "list", "--table"},
+}
 
 var SettingsDocs = map[string]DescriptionEntry{
 	"aliases": {
@@ -236,6 +252,11 @@ var SettingsDocs = map[string]DescriptionEntry{
 		Short: "Command to use to promote process to root",
 		Long:  "Specifies which command to use for privilege escalation (e.g., sudo or doas).",
 	},
+	"use_default_aliases": {
+		Short: "Enables default aliases",
+		Long: "Enables the following default aliases: \n\n```\n" + formatStringSliceMap(DefaultAliases) + "```" +
+			"\n\nEach alias can be overriden using the `aliases` setting.",
+	},
 	"use_nvd": {
 		Short: "Use 'nvd' instead of `nix store diff-closures`",
 		Long:  "Use the better-looking `nvd` diffing tool when comparing configurations instead of `nix store diff-closures`.",
@@ -263,7 +284,8 @@ func NewSettings() *Settings {
 			Prettify:     true,
 			DebounceTime: 25,
 		},
-		SSH: SSHSettings{},
+		SSH:               SSHSettings{},
+		UseDefaultAliases: true,
 	}
 }
 
@@ -414,4 +436,11 @@ func isSettable(value *reflect.Value) bool {
 	}
 
 	return false
+}
+
+func formatStringSliceMap(m map[string][]string) (result string) {
+	for _, key := range slices.Sorted(maps.Keys(m)) {
+		result += fmt.Sprintf("%s = [%s]\n", key, strings.Join(m[key], ", "))
+	}
+	return result
 }

@@ -168,14 +168,8 @@ Check `nixos-cli-env(5)` for a full list of available variables.
 ## Aliases
 
 Aliases can be used to make shortcuts for `nixos-cli` commands. Check the
-[settings](./settings.md) section for an example.
-
-A list of common aliases that people can configure:
-
-- `nixos genlist` :: `nixos generation list`
-- `nixos switch` :: `nixos generation switch`
-- `nixos testcfg` :: `nixos apply --no-boot --no-activate`
-- `nixos build` :: `nixos apply --no-boot --no-activate --output ./result`
+[settings](./settings.md) section for an example. Aliases for commonly used
+commands are enabled by default through the `use_default_aliases` setting.
 
 **NOTE**: Currently, aliases to compose multiple CLI commands or to invoke shell
 commands are not supported. If this is important to you, please file a feature
