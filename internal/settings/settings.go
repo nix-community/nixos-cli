@@ -235,7 +235,20 @@ var SettingsDocs = map[string]DescriptionEntry{
 }
 
 func NewSettings() *Settings {
+	aliases := make(map[string][]string)
+	aliases["switch"] = []string{"apply"}
+	aliases["boot"] = []string{"apply", "--no-activate"}
+	aliases["test"] = []string{"apply", "--no-boot"}
+	aliases["build"] = []string{"apply", "--no-activate", "--no-boot", "--output", "./result"}
+	aliases["build-image"] = []string{"apply", "--no-activate", "--no-boot", "--output", "./result", "--image"}
+	aliases["build-vm"] = []string{"apply", "--no-activate", "--no-boot", "--output", "./result", "--vm"}
+	aliases["build-vm-with-bootloader"] = []string{"apply", "--no-activate", "--no-boot", "--output", "./result", "--vm-with-bootloader"}
+	aliases["dry-build"] = []string{"apply", "--no-activate", "--no-boot", "--dry"}
+	aliases["dry-activate"] = []string{"apply", "--dry"}
+	aliases["list-generations"] = []string{"generation", "list", "--table"}
+
 	return &Settings{
+		Aliases:        aliases,
 		AutoRollback:   true,
 		UseColor:       true,
 		ConfigLocation: "/etc/nixos",
