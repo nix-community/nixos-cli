@@ -156,6 +156,16 @@ func mainCommand() (*cobra.Command, error) {
 			log.Warnf("failed to add alias '%v': %v", alias, err.Error())
 		}
 	}
+	if cfg.UseDefaultAliases {
+		for alias, resolved := range settings.DefaultAliases {
+			if _, present := cfg.Aliases[alias]; !present {
+				err = addAliasCmd(&cmd, alias, resolved)
+				if err != nil {
+					log.Warnf("failed to add default alias '%v': %v", alias, err.Error())
+				}
+			}
+		}
+	}
 
 	carapace.Gen(cmd.Root())
 
