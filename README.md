@@ -84,7 +84,7 @@ with the following Makefile rules:
 `make gen-site` generates two files:
 
 - Documentation for all available settings in `config.toml`
-- Module documentation for `services.nixos-cli`, built using
+- Module documentation for `programs.nixos-cli`, built using
   [`optnix`](https://github.com/water-sucks/optnix)
 
 The rest of the site documentation files are located in [doc/man](./doc/src).

@@ -94,9 +94,9 @@ automatically escalates to `root` using the command defined in the
 user that has the `NOPASSWD` `sudo` rule.
 
 In order to access remote machines, it is recommended to use SSH keys managed by
-an SSH agent, or to provide a key via the `ssh.private_key_cmd` setting. Password
-access is supported, but not recommended, and can be buggy. If you find any issues,
-report them on the issue tracker.
+an SSH agent, or to provide a key via the `ssh.private_key_cmd` setting.
+Password access is supported, but not recommended, and can be buggy. If you find
+any issues, report them on the issue tracker.
 
 ### `nixos-enter`
 
@@ -142,12 +142,11 @@ Cool, right?
 
 By default, `nixos option` uses this TUI.
 
-To use normal, non-interactive output for a specific option, add the `-n`
-switch.
+To use normal, noninteractive output for a specific option, add the `-n` switch.
 
 However, there is one caveat: generating the option index is an intensive
-operation; this can be precomputed on every configuration change using the
-`services.nixos-cli.prebuildOptionCache` if desired.
+operation; this can be precomputed on every configuration change by setting
+`programs.nixos-cli.option-cache.enable = true`, if desired.
 
 ## Environment Variables
 

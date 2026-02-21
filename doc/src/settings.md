@@ -16,7 +16,7 @@ $ nixos --config apply.imply_impure_with_tag=false apply
 ```
 
 The preferred way to create this settings file is through the provided Nix
-module that generates the TOML using the `services.nixos-cli.config` option.
+module that generates the TOML using the `programs.nixos-cli.config` option.
 Refer to the [module documentation](./module.md) for other available options.
 
 ## Available Settings

@@ -104,7 +104,7 @@ func generateModuleDoc(filename string, rev string) error {
 
 	var options []option.NixosOption
 	for _, o := range fullOptionSrc {
-		if !strings.HasPrefix(o.Name, "services.nixos-cli") {
+		if !strings.HasPrefix(o.Name, "programs.nixos-cli") {
 			continue
 		}
 
