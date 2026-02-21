@@ -8,7 +8,7 @@
   lib,
   ...
 }: let
-  cfg = config.services.nixos-cli;
+  cfg = config.programs.nixos-cli;
   nixosCfg = config.system.nixos;
 
   inherit (pkgs.stdenv.hostPlatform) system;
@@ -44,17 +44,20 @@
 in {
   imports = [
     (lib.mkRenamedOptionModule
-      ["services" "nixos-cli" "prebuildOptionCache"]
-      ["services" "nixos-cli" "option-cache" "enable"])
+      ["services" "nixos-cli"]
+      ["programs" "nixos-cli"])
     (lib.mkRenamedOptionModule
-      ["services" "nixos-cli" "useActivationInterface"]
-      ["services" "nixos-cli" "activation-interface" "enable"])
+      ["programs" "nixos-cli" "prebuildOptionCache"]
+      ["programs" "nixos-cli" "option-cache" "enable"])
     (lib.mkRenamedOptionModule
-      ["services" "nixos-cli" "generationTag"]
-      ["services" "nixos-cli" "generation-tag"])
+      ["programs" "nixos-cli" "useActivationInterface"]
+      ["programs" "nixos-cli" "activation-interface" "enable"])
+    (lib.mkRenamedOptionModule
+      ["programs" "nixos-cli" "generationTag"]
+      ["programs" "nixos-cli" "generation-tag"])
   ];
 
-  options.services.nixos-cli = {
+  options.programs.nixos-cli = {
     enable = lib.mkEnableOption "unified NixOS tooling replacement for nixos-* utilities";
 
     package = lib.mkOption {
@@ -155,7 +158,7 @@ in {
         rules are configured for the `:wheel` group only.
 
         If you need more flexible definitions for these rules, consider using
-        the default value of `services.nixos-cli.preserve-env` as a reference list
+        the default value of `programs.nixos-cli.preserve-env` as a reference list
         of default variables that should be preserved across this boundary.
 
         It is recommended to use this option for any extra environment variables to
@@ -202,7 +205,7 @@ in {
       '';
 
       security.doas.extraRules = let
-        isDefaultList = cfg.preserve-env == options.services.nixos-cli.preserve-env.default;
+        isDefaultList = cfg.preserve-env == options.programs.nixos-cli.preserve-env.default;
 
         # Remove SSH_AUTH_SOCK from the default list if it equals the
         # defaults, since SSH_AUTH_SOCK is present and kept by the default
