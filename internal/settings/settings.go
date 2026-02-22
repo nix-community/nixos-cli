@@ -92,29 +92,25 @@ func (c *ConfirmationPromptBehavior) UnmarshalText(text []byte) error {
 }
 
 type DescriptionEntry struct {
-	Short string
-	Long  string
+	Short   string
+	Long    string
+	Example any
 }
 
 const (
-	aliasExample = "```\n" + `[aliases]
-genlist = ["generation", "list"]
-switch = ["generation", "switch"]
-rollback = ["generation", "rollback"]
-` + "```\n"
-
 	confirmationInputPossibleValues = "Possible values are `default-no` (treat as a no input), `default-yes` (treat as a yes input), or `retry` (try again)."
 	deprecatedDocString             = "This setting has been deprecated, and will be removed in a future release."
-
-	sshPrivateKeyCmdExample = "```\n" + `[ssh]
-private_key_cmd = ["sh", "-c", "rbw get $NIXOS_CLI_SSH_HOST"]
-` + "```\n"
 )
 
 var SettingsDocs = map[string]DescriptionEntry{
 	"aliases": {
 		Short: "Shortcuts for long commands",
-		Long:  "Defines alternative aliases for long commands to improve user ergonomics.\nExample:\n" + aliasExample,
+		Long:  "Defines alternative aliases for long commands to improve user ergonomics.",
+		Example: map[string][]string{
+			"genlist":  {"generation", "list"},
+			"switch":   {"generation", "switch"},
+			"rollback": {"generation", "rollback"},
+		},
 	},
 	"apply": {
 		Short: "Settings for `apply` command",
@@ -229,8 +225,8 @@ var SettingsDocs = map[string]DescriptionEntry{
 		Short: "Command to run to obtain SSH private key",
 		Long: "Specifies the command to run to obtain the private key for SSH connections." +
 			" The command receives the host and user as the environment variables $NIXOS_CLI_SSH_HOST" +
-			" and $NIXOS_CLI_SSH_USER respectively, and should output a single private key to standard output." +
-			"\nExample:\n" + sshPrivateKeyCmdExample,
+			" and $NIXOS_CLI_SSH_USER respectively, and should output a single private key to standard output.",
+		Example: []string{"sh", "-c", "rbw get $NIXOS_CLI_SSH_HOST"},
 	},
 	"root_command": {
 		Short: "Command to use to promote process to root",
