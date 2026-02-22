@@ -198,7 +198,7 @@ func formatOptionMarkdown(opt option.NixosOption, rev string) string {
 type SettingsFormatter interface {
 	WriteHeader(sb *strings.Builder, title string, level int)
 	WriteSectionDescription(sb *strings.Builder, desc string)
-	WriteItem(sb *strings.Builder, key string, desc string, defaultValue any)
+	WriteItem(sb *strings.Builder, key string, desc string, exampleValue any, defaultValue any)
 }
 
 type MarkdownSettingsFormatter struct{}
@@ -211,21 +211,58 @@ func (MarkdownSettingsFormatter) WriteSectionDescription(sb *strings.Builder, de
 	sb.WriteString(desc + "\n\n")
 }
 
-func (f MarkdownSettingsFormatter) WriteItem(sb *strings.Builder, key string, desc string, defaultValue any) {
-	var tomlStr string
-	if defaultValue != nil {
-		var buf bytes.Buffer
-		_ = toml.NewEncoder(&buf).Encode(defaultValue)
-		tomlStr = strings.TrimSpace(buf.String())
+func indent(text string, spaces int) string {
+	if spaces <= 0 || len(text) == 0 {
+		return text
 	}
 
+	var b strings.Builder
+	prefix := strings.Repeat(" ", spaces)
+
+	for {
+		i := strings.IndexByte(text, '\n')
+		if i == -1 {
+			b.WriteString(prefix)
+			b.WriteString(text)
+			break
+		}
+
+		b.WriteString(prefix)
+		b.WriteString(text[:i+1])
+		text = text[i+1:]
+	}
+
+	return b.String()
+}
+
+func (f MarkdownSettingsFormatter) WriteItem(sb *strings.Builder, key string, desc string, exampleValue any, defaultValue any) {
 	fmt.Fprintf(sb, "- **%s**\n\n  %s\n\n", key, desc)
 
-	if tomlStr != "" {
-		if strings.Contains(tomlStr, "\n") {
-			fmt.Fprintf(sb, "  **Default:**\n\n  ```toml\n%s\n  ```\n\n", tomlStr)
+	if exampleValue != nil {
+		exampleToml, err := toml.Marshal(exampleValue)
+		if err != nil {
+			panic(fmt.Sprintf("failed to marshal TOML value: %v", err))
+		}
+		exampleTomlStr := strings.TrimSpace(string(exampleToml))
+
+		if strings.Contains(exampleTomlStr, "\n") {
+			fmt.Fprintf(sb, "  **Example:**\n    ```toml\n%s\n    ```\n\n", indent(exampleTomlStr, 4))
 		} else {
-			fmt.Fprintf(sb, "  **Default:** `%s`\n\n", tomlStr)
+			fmt.Fprintf(sb, "  **Example:** `%s`\n\n", exampleTomlStr)
+		}
+	}
+
+	if defaultValue != nil {
+		defaultToml, err := toml.Marshal(defaultValue)
+		if err != nil {
+			panic(fmt.Sprintf("failed to marshal TOML value: %v", err))
+		}
+		defaultTomlStr := strings.TrimSpace(string(defaultToml))
+
+		if strings.Contains(defaultTomlStr, "\n") {
+			fmt.Fprintf(sb, "  **Default:**\n    ```toml\n%s\n    ```\n\n", indent(defaultTomlStr, 4))
+		} else {
+			fmt.Fprintf(sb, "  **Default:** `%s`\n\n", defaultTomlStr)
 		}
 	}
 }
@@ -244,6 +281,7 @@ func (f ManpageSettingsFormatter) WriteItem(
 	sb *strings.Builder,
 	key string,
 	desc string,
+	exampleValue any,
 	defaultValue any,
 ) {
 	fmt.Fprintf(sb, "\n*%s*\n\n%s\n\n", key, desc)
@@ -252,23 +290,42 @@ func (f ManpageSettingsFormatter) WriteItem(
 		return
 	}
 
-	var buf bytes.Buffer
-	_ = toml.NewEncoder(&buf).Encode(defaultValue)
-	tomlStr := strings.TrimSpace(buf.String())
-	if tomlStr == "" {
-		return
+	if exampleValue != nil {
+		exampleToml, err := toml.Marshal(exampleValue)
+		if err != nil {
+			panic(fmt.Sprintf("failed to marshal TOML example: %v", err))
+		}
+		if exampleTomlStr := strings.TrimSpace(string(exampleToml)); exampleTomlStr != "" {
+			sb.WriteString("Example: ")
+
+			if strings.Contains(exampleTomlStr, "\n") {
+				sb.WriteString("\n\n```\n")
+				sb.WriteString(exampleTomlStr)
+				sb.WriteString("\n```\n\n")
+			} else {
+				// Inline for scalars
+				sb.WriteString(exampleTomlStr)
+				sb.WriteString("\n\n")
+			}
+		}
 	}
 
-	sb.WriteString("Default: ")
+	defaultToml, err := toml.Marshal(defaultValue)
+	if err != nil {
+		panic(fmt.Sprintf("failed to marshal TOML default: %v", err))
+	}
+	if defaultTomlStr := strings.TrimSpace(string(defaultToml)); defaultTomlStr != "" {
+		sb.WriteString("Default: ")
 
-	if strings.Contains(tomlStr, "\n") {
-		sb.WriteString("\n\n```\n")
-		sb.WriteString(tomlStr)
-		sb.WriteString("\n```\n\n")
-	} else {
-		// Inline for scalars
-		sb.WriteString(tomlStr)
-		sb.WriteString("\n\n")
+		if strings.Contains(defaultTomlStr, "\n") {
+			sb.WriteString("\n\n```\n")
+			sb.WriteString(defaultTomlStr)
+			sb.WriteString("\n```\n\n")
+		} else {
+			// Inline for scalars
+			sb.WriteString(defaultTomlStr)
+			sb.WriteString("\n\n")
+		}
 	}
 }
 
@@ -289,6 +346,7 @@ func writeSettingsDoc(
 	type configKey struct {
 		key          string
 		desc         string
+		exampleValue any
 		defaultValue any
 	}
 
@@ -321,7 +379,7 @@ func writeSettingsDoc(
 				desc = descriptions.Short
 			}
 
-			generalItems = append(generalItems, configKey{fullKey, desc, defaultVal})
+			generalItems = append(generalItems, configKey{fullKey, desc, descriptions.Example, defaultVal})
 		}
 	}
 
@@ -335,7 +393,7 @@ func writeSettingsDoc(
 		})
 
 		for _, item := range generalItems {
-			formatter.WriteItem(sb, item.key, item.desc, item.defaultValue)
+			formatter.WriteItem(sb, item.key, item.desc, item.exampleValue, item.defaultValue)
 		}
 	}
 
