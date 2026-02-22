@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/nix-community/nixos-cli/internal/settings"
+	"github.com/pelletier/go-toml/v2"
 	"github.com/spf13/cobra"
 	"snare.dev/optnix/option"
 )
@@ -197,7 +198,7 @@ func formatOptionMarkdown(opt option.NixosOption, rev string) string {
 type SettingsFormatter interface {
 	WriteHeader(sb *strings.Builder, title string, level int)
 	WriteSectionDescription(sb *strings.Builder, desc string)
-	WriteItem(sb *strings.Builder, key string, desc string, defaultValue string)
+	WriteItem(sb *strings.Builder, key string, desc string, defaultValue any)
 }
 
 type MarkdownSettingsFormatter struct{}
@@ -210,8 +211,23 @@ func (MarkdownSettingsFormatter) WriteSectionDescription(sb *strings.Builder, de
 	sb.WriteString(desc + "\n\n")
 }
 
-func (f MarkdownSettingsFormatter) WriteItem(sb *strings.Builder, key, desc, defaultValue string) {
-	fmt.Fprintf(sb, "- **%s**\n\n  %s\n\n  **Default**: `%s`\n\n", key, desc, defaultValue)
+func (f MarkdownSettingsFormatter) WriteItem(sb *strings.Builder, key string, desc string, defaultValue any) {
+	var tomlStr string
+	if defaultValue != nil {
+		var buf bytes.Buffer
+		_ = toml.NewEncoder(&buf).Encode(defaultValue)
+		tomlStr = strings.TrimSpace(buf.String())
+	}
+
+	fmt.Fprintf(sb, "- **%s**\n\n  %s\n\n", key, desc)
+
+	if tomlStr != "" {
+		if strings.Contains(tomlStr, "\n") {
+			fmt.Fprintf(sb, "  **Default:**\n\n  ```toml\n%s\n  ```\n\n", tomlStr)
+		} else {
+			fmt.Fprintf(sb, "  **Default:** `%s`\n\n", tomlStr)
+		}
+	}
 }
 
 type ManpageSettingsFormatter struct{}
@@ -224,8 +240,36 @@ func (ManpageSettingsFormatter) WriteSectionDescription(sb *strings.Builder, des
 	sb.WriteString(desc + "\n\n")
 }
 
-func (f ManpageSettingsFormatter) WriteItem(sb *strings.Builder, key, desc, defaultValue string) {
-	fmt.Fprintf(sb, "\n*%s*\n\n%s\n\nDefault: _%s_\n", key, desc, defaultValue)
+func (f ManpageSettingsFormatter) WriteItem(
+	sb *strings.Builder,
+	key string,
+	desc string,
+	defaultValue any,
+) {
+	fmt.Fprintf(sb, "\n*%s*\n\n%s\n\n", key, desc)
+
+	if defaultValue == nil {
+		return
+	}
+
+	var buf bytes.Buffer
+	_ = toml.NewEncoder(&buf).Encode(defaultValue)
+	tomlStr := strings.TrimSpace(buf.String())
+	if tomlStr == "" {
+		return
+	}
+
+	sb.WriteString("Default: ")
+
+	if strings.Contains(tomlStr, "\n") {
+		sb.WriteString("\n\n```\n")
+		sb.WriteString(tomlStr)
+		sb.WriteString("\n```\n\n")
+	} else {
+		// Inline for scalars
+		sb.WriteString(tomlStr)
+		sb.WriteString("\n\n")
+	}
 }
 
 func writeSettingsDoc(
@@ -245,7 +289,7 @@ func writeSettingsDoc(
 	type configKey struct {
 		key          string
 		desc         string
-		defaultValue string
+		defaultValue any
 	}
 
 	var generalItems []configKey
@@ -265,7 +309,8 @@ func writeSettingsDoc(
 		if field.Type.Kind() == reflect.Struct {
 			nestedFields = append(nestedFields, nestedField{field, fieldVal, fullKey})
 		} else {
-			defaultVal := formatValue(fieldVal)
+			defaultVal := fieldVal.Interface()
+
 			descriptions := settings.SettingsDocs[fullKey]
 			desc := descriptions.Long
 			if desc == "" {
@@ -299,30 +344,6 @@ func writeSettingsDoc(
 		formatter.WriteHeader(sb, entry.fullKey, depth)
 		formatter.WriteSectionDescription(sb, desc)
 		writeSettingsDoc(entry.field.Type, entry.fieldVal, entry.fullKey+".", sb, depth+1, formatter)
-	}
-}
-
-func formatValue(v reflect.Value) string {
-	if !v.IsValid() {
-		return "n/a"
-	}
-	switch v.Kind() {
-	case reflect.String:
-		if v.String() == "" {
-			return `""`
-		}
-		return fmt.Sprintf(`"%s"`, v.String())
-	case reflect.Bool:
-		return fmt.Sprintf("%t", v.Bool())
-	case reflect.Int, reflect.Int64:
-		return fmt.Sprintf("%d", v.Int())
-	case reflect.Map, reflect.Slice:
-		if v.Len() == 0 {
-			return "[]"
-		}
-		return "(multiple entries)"
-	default:
-		return fmt.Sprintf("%v", v.Interface())
 	}
 }
 
