@@ -55,6 +55,9 @@ in {
     (lib.mkRenamedOptionModule
       ["programs" "nixos-cli" "generationTag"]
       ["programs" "nixos-cli" "generation-tag"])
+    (lib.mkRenamedOptionModule
+      ["programs" "nixos-cli" "config"]
+      ["programs" "nixos-cli" "settings"])
   ];
 
   options.programs.nixos-cli = {
@@ -69,10 +72,10 @@ in {
       description = "Package to use for nixos-cli";
     };
 
-    config = lib.mkOption {
+    settings = lib.mkOption {
       type = tomlFormat.type;
       default = {};
-      description = "Configuration for nixos-cli, in TOML format";
+      description = "Configuration written to /etc/nixos-cli/config.toml";
       apply = prev: let
         # Inherit this from the old nixos-generate-config attrs. Easy to deal with, for now.
         desktopConfig = lib.concatStringsSep "\n" config.system.nixos-generate-config.desktopConfiguration;
@@ -180,7 +183,7 @@ in {
       environment.systemPackages = [cfg.package];
 
       environment.etc."nixos-cli/config.toml".source =
-        tomlFormat.generate "nixos-cli-config.toml" cfg.config;
+        tomlFormat.generate "nixos-cli-config.toml" cfg.settings;
 
       # Hijack system builder commands to insert a `nixos-version.json` file at the root.
       system.systemBuilderCommands = let
