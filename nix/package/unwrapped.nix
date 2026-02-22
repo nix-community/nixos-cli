@@ -8,19 +8,19 @@
   flake ? true,
 }:
 buildGoModule (finalAttrs: {
-  pname = "nixos-cli";
+  pname = "nixos-cli-unwrapped";
   version = "0.15.0-dev";
 
   src = lib.fileset.toSource {
-    root = ../.;
+    root = ../../.;
     fileset = lib.fileset.unions [
-      ../go.mod
-      ../go.sum
-      ../Makefile
-      ../main.go
-      ../cmd
-      ../doc
-      ../internal
+      ../../go.mod
+      ../../go.sum
+      ../../Makefile
+      ../../main.go
+      ../../cmd
+      ../../doc
+      ../../internal
     ];
   };
 
