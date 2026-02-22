@@ -39,7 +39,7 @@ All dependencies for this project are neatly provided in a Nix shell. Run
 into this Nix shell on changing to this directory.
 
 In order to build both packages at the same time, run
-`nix build .#{nixos,nixosLegacy}`.
+`nix build .#{nixos-cli,nixos-cli-legacy}`.
 
 Legacy-style `nix-build` and `nix-shell` can also be used; this uses
 `flake-compat` under the hood.
@@ -84,7 +84,7 @@ with the following Makefile rules:
 `make gen-site` generates two files:
 
 - Documentation for all available settings in `config.toml`
-- Module documentation for `services.nixos-cli`, built using
+- Module documentation for `programs.nixos-cli`, built using
   [`optnix`](https://github.com/water-sucks/optnix)
 
 The rest of the site documentation files are located in [doc/man](./doc/src).
