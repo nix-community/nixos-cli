@@ -125,7 +125,7 @@ var SettingsDocs = map[string]DescriptionEntry{
 	},
 	"apply.specialisation": {
 		Short: "Name of specialisation to use by default when activating",
-		Long:  "Specifies which systemd specialisation to use when activating a configuration with 'apply'.",
+		Long:  "Specifies which specialisation to use when activating a configuration with 'apply'.",
 	},
 	"apply.use_nom": {
 		Short: "Use 'nix-output-monitor' as an alternative 'nix build' frontend",
@@ -182,6 +182,14 @@ var SettingsDocs = map[string]DescriptionEntry{
 	"init": {
 		Short: "Settings for `init` command",
 	},
+	"init.extra_attrs": {
+		Short: "Extra attributes to add to the generated configuration",
+		Long:  "Extra attributes to add to the generated configuration.nix file. Usually configured indirectly through the NixOS module.",
+	},
+	"init.extra_config": {
+		Short: "Extra Nix code to add to the generated configuration",
+		Long:  "Extra Nix code to add to the generated configuration.nix verbatim. Usually configured indirectly through the NixOS module.",
+	},
 	"init.xserver_enabled": {
 		Short: "Generate options to enable X11 display server",
 		Long:  "Controls whether X11-related services and packages are configured by default during init.",
@@ -236,6 +244,7 @@ var SettingsDocs = map[string]DescriptionEntry{
 
 func NewSettings() *Settings {
 	return &Settings{
+		Aliases:        make(map[string][]string),
 		AutoRollback:   true,
 		UseColor:       true,
 		ConfigLocation: "/etc/nixos",
