@@ -62,6 +62,27 @@ func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 				}
 			}
 
+			if opts.EvalOnly {
+				if opts.NoActivate {
+					return fmt.Errorf("--eval-only and --no-activate are mutually exclusive")
+				}
+				if opts.NoBoot {
+					return fmt.Errorf("--eval-only and --no-boot are mutually exclusive")
+				}
+				if opts.InstallBootloader {
+					return fmt.Errorf("--eval-only and --install-bootloader are mutually exclusive")
+				}
+				if opts.StorePath != "" {
+					return fmt.Errorf("--eval-only and --store-path are mutually exclusive")
+				}
+				if opts.BuildVM || opts.BuildVMWithBootloader {
+					return fmt.Errorf("--eval-only and --vm/--vm-with-bootloader are mutually exclusive")
+				}
+				if opts.BuildImage != "" {
+					return fmt.Errorf("--eval-only and --image are mutually exclusive")
+				}
+			}
+
 			if opts.NoActivate && opts.NoBoot {
 				if opts.InstallBootloader {
 					return fmt.Errorf("--install-bootloader requires activation, remove --no-activate and/or --no-boot to use this option")
@@ -137,6 +158,7 @@ func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 	cmd.Flags().StringVarP(&opts.ProfileName, "profile-name", "p", "system", "Store generations using the profile `name`")
 	cmd.Flags().StringVarP(&opts.Specialisation, "specialisation", "s", "", "Activate the specialisation with `name`")
 	cmd.Flags().StringVarP(&opts.GenerationTag, "tag", "t", "", "Tag this generation with a `description`")
+	cmd.Flags().BoolVar(&opts.EvalOnly, "eval-only", false, "Only evaluate the configuration without building or activating")
 	cmd.Flags().BoolVar(&opts.UseNom, "use-nom", false, "Use 'nix-output-monitor' to build configuration")
 	cmd.Flags().BoolVarP(&opts.Verbose, "verbose", "v", opts.Verbose, "Show verbose logging")
 	cmd.Flags().BoolVar(&opts.BuildVM, "vm", false, "Build a NixOS VM script")
@@ -350,6 +372,23 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 		}
 
 		nixConfig.SetBuilder(buildHost)
+
+		if opts.EvalOnly {
+			log.Step("Evaluating configuration...")
+
+			evalOptions := &configuration.SystemEvalOptions{
+				CmdFlags: cmd.Flags(),
+				NixOpts:  &opts.NixOptions,
+			}
+
+			if err := nixConfig.EvalSystem(evalOptions); err != nil {
+				log.Errorf("failed to evaluate configuration: %v", err)
+				return err
+			}
+
+			log.Info("evaluation successful")
+			return nil
+		}
 
 		if !build.Flake() && (opts.UpgradeChannels || opts.UpgradeAllChannels) {
 			log.Step("Upgrading channels...")

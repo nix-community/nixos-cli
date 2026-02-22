@@ -44,6 +44,7 @@ type ApplyOpts struct {
 	TargetHost            string
 	UpgradeAllChannels    bool
 	UpgradeChannels       bool
+	EvalOnly              bool
 	UseNom                bool
 	Verbose               bool
 

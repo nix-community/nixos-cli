@@ -74,6 +74,14 @@ _nixos-rebuild dry-build_
 
 	*nixos apply --dry --no-activate --no-boot*
 
+_`nix eval .#nixosConfigurations.$HOSTNAME.config.system.build.toplevel`_
+
+	*nixos apply --eval-only*
+
+	or using the default alias:
+
+	*nixos eval*
+
 Many other behaviors for _nixos-rebuild_ are in the *nixos generation*
 command tree. See *nixos-cli-generation(1)* for details.
 
@@ -157,6 +165,22 @@ global *--config* flag as such:
 	is assumed.
 
 	The list of changes is not guaranteed to be complete for dry activations.
+
+*--eval-only*
+	Only evaluate the configuration without building or activating it. This is
+	useful for checking that a NixOS configuration evaluates successfully
+	without spending time on a full build.
+
+	This is equivalent to running something like
+	_nix eval .#nixosConfigurations.$HOSTNAME.config.system.build.toplevel_
+	for flake-based configurations.
+
+	A default alias *eval* is provided, so *nixos eval* can be used as a
+	shorthand for *nixos apply --eval-only*.
+
+	Mutually exclusive with *--no-activate*, *--no-boot*,
+	*--install-bootloader*, *--store-path*, *--vm[-with-bootloader]*,
+	and *--image*.
 
 *-i*, *--image* <VARIANT>
 	Build a disk-image variant, pre-configured for the given platform/provider.
