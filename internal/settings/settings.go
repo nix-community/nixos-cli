@@ -131,6 +131,7 @@ var DefaultAliases = map[string][]string{
 	"build-vm-with-bootloader": {"apply", "--no-activate", "--no-boot", "--output", "./result", "--vm-with-bootloader"},
 	"dry-build":                {"apply", "--no-activate", "--no-boot", "--dry"},
 	"dry-activate":             {"apply", "--dry"},
+	"eval":                     {"apply", "--eval-only"},
 	"list-generations":         {"generation", "list", "--table"},
 }
 

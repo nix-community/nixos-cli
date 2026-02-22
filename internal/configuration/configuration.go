@@ -27,9 +27,17 @@ type SystemBuildOptions struct {
 	ExtraArgs []string
 }
 
+type SystemEvalOptions struct {
+	// Command-line flags that were passed for the command context.
+	CmdFlags *pflag.FlagSet
+	NixOpts  nixopts.NixOptionsSet
+	Env      map[string]string
+}
+
 type Configuration interface {
 	SetBuilder(builder system.CommandRunner)
 	EvalAttribute(attr string) (*string, error)
+	EvalSystem(opts *SystemEvalOptions) error
 	BuildSystem(buildType BuildType, opts *SystemBuildOptions) (string, error)
 }
 

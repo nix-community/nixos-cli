@@ -122,6 +122,26 @@ func (f *FlakeRef) EvalAttribute(attr string) (*string, error) {
 	return &value, nil
 }
 
+func (f *FlakeRef) EvalSystem(opts *SystemEvalOptions) error {
+	systemAttribute := f.BuildAttr("toplevel")
+
+	argv := []string{"nix", "eval", systemAttribute}
+
+	if opts.NixOpts != nil {
+		argv = append(argv, opts.NixOpts.ArgsForCommand(nixopts.CmdEval)...)
+	}
+
+	cmd := exec.Command(argv[0], argv[1:]...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	for k, v := range opts.Env {
+		cmd.Env = append(os.Environ(), fmt.Sprintf("%s=%s", k, v))
+	}
+
+	return cmd.Run()
+}
+
 func (f *FlakeRef) buildLocalSystem(s *system.LocalSystem, buildType BuildType, opts *SystemBuildOptions) (string, error) {
 	nixCommand := "nix"
 	if opts.UseNom {
