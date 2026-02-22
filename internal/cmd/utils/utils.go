@@ -66,3 +66,14 @@ func AlignedOptions(options map[string]string) string {
 
 	return result
 }
+
+// Remove the default value string for a given flag, if it exists.
+// This is useful for disabling zero value defaults in command
+// flag descriptions.
+func RemoveDefaultValueDesc(cmd *cobra.Command, flags ...string) {
+	for _, flag := range flags {
+		if f := cmd.Flags().Lookup(flag); f != nil {
+			f.DefValue = ""
+		}
+	}
+}

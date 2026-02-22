@@ -21,7 +21,6 @@ import (
 	"github.com/nix-community/nixos-cli/internal/logger"
 	"github.com/nix-community/nixos-cli/internal/settings"
 	"github.com/nix-community/nixos-cli/internal/system"
-	"github.com/nix-community/nixos-cli/internal/systemd"
 	"github.com/nix-community/nixos-cli/internal/utils"
 )
 
@@ -40,13 +39,6 @@ func GenerationDeleteCommand(genOpts *cmdOpts.GenerationOpts) *cobra.Command {
 				}
 				opts.Remove = append(opts.Remove, uint(value))
 			}
-			if cmd.Flags().Changed("older-than") {
-				// Make sure older-than is a valid systemd.time(7) string
-				if _, err := systemdUtils.DurationFromTimeSpan(opts.OlderThan); err != nil {
-					return fmt.Errorf("invalid value for --older-than: %v", err.Error())
-				}
-			}
-
 			if _, err := regexp.Compile(opts.Pattern); err != nil {
 				return fmt.Errorf("invalid pattern: %v", err)
 			}
@@ -63,7 +55,7 @@ func GenerationDeleteCommand(genOpts *cmdOpts.GenerationOpts) *cobra.Command {
 				if opts.LowerBound != 0 {
 					log.Warn("--all was specified, ignoring --from")
 				}
-				if opts.OlderThan != "" {
+				if opts.OlderThan > 0 {
 					log.Warn("--all was specified, ignoring --older-than")
 				}
 				if opts.UpperBound != 0 {
@@ -74,7 +66,7 @@ func GenerationDeleteCommand(genOpts *cmdOpts.GenerationOpts) *cobra.Command {
 				}
 			}
 
-			if !opts.All && opts.LowerBound == 0 && opts.UpperBound == 0 && len(opts.Remove) == 0 && opts.OlderThan == "" && len(opts.Keep) == 0 && opts.MinimumToKeep == 0 && opts.Pattern == "" {
+			if !opts.All && opts.LowerBound == 0 && opts.UpperBound == 0 && len(opts.Remove) == 0 && opts.OlderThan == 0 && len(opts.Keep) == 0 && opts.MinimumToKeep == 0 && opts.Pattern == "" {
 				return fmt.Errorf("no generations or deletion parameters were given")
 			}
 
@@ -101,8 +93,7 @@ func GenerationDeleteCommand(genOpts *cmdOpts.GenerationOpts) *cobra.Command {
 	cmd.Flags().Uint64VarP(&opts.LowerBound, "from", "f", 0, "Delete all generations after `gen`, inclusive")
 	cmd.Flags().Uint64VarP(&opts.UpperBound, "to", "t", 0, "Delete all generations until `gen`, inclusive")
 	cmd.Flags().Uint64VarP(&opts.MinimumToKeep, "min", "m", 0, "Keep a minimum of `num` generations")
-	cmd.Flags().StringVarP(&opts.OlderThan, "older-than", "o", "", "Delete all generations older than `period`")
-	// TODO: add -p shorthand if possible
+	cmd.Flags().VarP(&opts.OlderThan, "older-than", "o", "Delete all generations older than `period`")
 	cmd.Flags().StringVar(&opts.Pattern, "pattern", "", "Delete all generations matching `regex`")
 	cmd.Flags().UintSliceVarP(&opts.Keep, "keep", "k", nil, "Always keep this `gen`, can be specified many times")
 	cmd.Flags().BoolVarP(&opts.Verbose, "verbose", "v", false, "Show verbose logging")
@@ -111,6 +102,8 @@ func GenerationDeleteCommand(genOpts *cmdOpts.GenerationOpts) *cobra.Command {
 	_ = cmd.RegisterFlagCompletionFunc("from", generation.CompleteGenerationNumberFlag(&genOpts.ProfileName))
 	_ = cmd.RegisterFlagCompletionFunc("to", generation.CompleteGenerationNumberFlag(&genOpts.ProfileName))
 	_ = cmd.RegisterFlagCompletionFunc("keep", generation.CompleteGenerationNumberFlag(&genOpts.ProfileName))
+
+	cmdUtils.RemoveDefaultValueDesc(&cmd, "keep", "older-than")
 
 	cmdUtils.SetHelpFlagText(&cmd)
 	cmd.SetHelpTemplate(cmd.HelpTemplate() + `

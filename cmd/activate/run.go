@@ -32,8 +32,6 @@ import (
 )
 
 const (
-	ACTIVATION_LOCKFILE = "/run/nixos/switch-to-configuration.lock"
-
 	DRY_RESTART_BY_ACTIVATION_LIST_FILE = "/run/nixos/dry-activation-restart-list"
 	DRY_RELOAD_BY_ACTIVATION_LIST_FILE  = "/run/nixos/dry-activation-reload-list"
 	RELOAD_BY_ACTIVATION_LIST_FILE      = "/run/nixos/activation-reload-list"
@@ -101,13 +99,13 @@ func getRequiredVars() (*RequiredVars, error) {
 }
 
 func execInSwitchContext(
-	s system.CommandRunner,
+	s system.System,
 	log logger.Logger,
 	action activation.SwitchToConfigurationAction,
 	specialisation string,
 ) error {
 	if specialisation != "" {
-		specialisations, err := generation.CollectSpecialisations(constants.CurrentSystem)
+		specialisations, err := generation.CollectSpecialisations(s, constants.CurrentSystem)
 		if err != nil {
 			log.Warnf("unable to access specialisations: %v", err)
 		}
@@ -312,6 +310,28 @@ func waitForSystemdToSettle(systemd *systemdDbus.Conn, idleTimeout time.Duration
 	}
 }
 
+// Acquire a process-level lock.
+//
+// Returns a function that releases the lock, or an error if
+// something went wrong when locking the file.
+func acquireLock(log logger.Logger) (func(), error) {
+	lockfile, err := os.OpenFile(activation.ACTIVATION_LOCKFILE, os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		log.Errorf("failed to create activation lockfile %s: %s", activation.ACTIVATION_LOCKFILE, err)
+		return nil, err
+	}
+
+	if err = unix.Flock(int(lockfile.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
+		log.Errorf("failed to lock %s; is another activation process running?", activation.ACTIVATION_LOCKFILE)
+		lockfile.Close()
+		return nil, err
+	}
+
+	return func() {
+		_ = lockfile.Close()
+	}, nil
+}
+
 func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 	log := logger.FromContext(cmd.Context())
 	s := system.NewLocalSystem(log)
@@ -363,25 +383,16 @@ func activateMain(cmd *cobra.Command, opts *cmdOpts.ActivateOpts) error {
 		return err
 	}
 
-	err = os.MkdirAll("/run/nixos", 0o755)
-	if err != nil {
-		log.Errorf("failed to create /run/nixos: %s", err)
+	if err = activation.EnsureActivationDirectoryExists(); err != nil {
+		log.Error(err)
 		return err
 	}
 
-	lockfile, err := os.OpenFile(ACTIVATION_LOCKFILE, os.O_CREATE|os.O_RDWR, 0o600)
+	releaseLock, err := acquireLock(log)
 	if err != nil {
-		log.Errorf("failed to create activation lockfile %s: %s", ACTIVATION_LOCKFILE, err)
 		return err
 	}
-	defer func() { _ = lockfile.Close() }()
-
-	if err = unix.Flock(int(lockfile.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
-		log.Errorf("failed to lock %s", ACTIVATION_LOCKFILE)
-		log.Info("is another activation process running?")
-		return err
-	}
-	defer func() { _ = unix.Flock(int(lockfile.Fd()), unix.LOCK_UN) }()
+	defer releaseLock()
 
 	var syslogLogger *logger.SyslogLogger
 	if syslogLogger, err = logger.NewSyslogLogger("nixos-cli-activate"); err == nil {

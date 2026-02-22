@@ -8,4 +8,5 @@ const (
 	NixOSMarker               = "/etc/NIXOS"
 	NixChannelDirectory       = NixProfileDirectory + "/per-user/root/channels"
 	NixOSVersionFile          = "nixos-version"
+	NixOSActivationDirectory  = "/run/nixos"
 )

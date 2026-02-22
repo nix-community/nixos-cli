@@ -20,6 +20,7 @@ import (
 	"github.com/nix-community/nixos-cli/internal/logger"
 	"github.com/nix-community/nixos-cli/internal/settings"
 	sshUtils "github.com/nix-community/nixos-cli/internal/ssh"
+	"github.com/nix-community/nixos-cli/internal/utils"
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
@@ -28,16 +29,23 @@ import (
 )
 
 type SSHSystem struct {
-	conn       net.Conn
-	client     *ssh.Client
-	sftp       *sftp.Client
-	user       string
-	address    string
-	port       int
-	password   []byte
+	agentConn net.Conn
+	client    *ssh.Client
+	sftp      *sftp.Client
+
+	user    string
+	address string
+	port    int
+
+	password []byte
+
+	authMethods     []ssh.AuthMethod
+	hostKeyCallback ssh.HostKeyCallback
+
 	keyFile    *TempFile
 	nixSSHOpts []string
-	logger     logger.Logger
+
+	logger logger.Logger
 }
 
 func NewSSHSystem(localSystem *LocalSystem, host string, log logger.Logger, cfg *settings.Settings) (*SSHSystem, error) {
@@ -92,12 +100,12 @@ func NewSSHSystem(localSystem *LocalSystem, host string, log logger.Logger, cfg 
 		}
 	}
 
-	var conn net.Conn
+	var agentConn net.Conn
 	if sock := os.Getenv("SSH_AUTH_SOCK"); sock != "" {
 		dialer := net.Dialer{Timeout: 2 * time.Second}
-		conn, err = dialer.Dial("unix", sock)
+		agentConn, err = dialer.Dial("unix", sock)
 		if err == nil {
-			agentClient := agent.NewClient(conn)
+			agentClient := agent.NewClient(agentConn)
 			auth = append(auth, ssh.PublicKeysCallback(agentClient.Signers))
 		} else {
 			log.Warnf("failed to connect to SSH agent: %v", err)
@@ -154,16 +162,18 @@ func NewSSHSystem(localSystem *LocalSystem, host string, log logger.Logger, cfg 
 	}
 
 	s := &SSHSystem{
-		conn:       conn,
-		client:     client,
-		sftp:       sftpClient,
-		user:       username,
-		address:    address,
-		port:       port,
-		password:   password,
-		keyFile:    keyFile,
-		nixSSHOpts: nixSSHOpts,
-		logger:     log,
+		agentConn:       agentConn,
+		client:          client,
+		sftp:            sftpClient,
+		user:            username,
+		address:         address,
+		port:            port,
+		password:        password,
+		authMethods:     auth,
+		hostKeyCallback: hostKeyCallback,
+		keyFile:         keyFile,
+		nixSSHOpts:      nixSSHOpts,
+		logger:          log,
 	}
 
 	return s, nil
@@ -190,6 +200,31 @@ func (s *SSHSystem) EnsureRemoteRootPassword(rootCmd string) error {
 	if err = s.testRemoteRoot(rootCmd); err != nil {
 		return fmt.Errorf("failed to verify %s password: %s", rootCmd, err)
 	}
+
+	return nil
+}
+
+func (s *SSHSystem) Reconnect() error {
+	_ = s.sftp.Close()
+	_ = s.client.Close()
+
+	client, err := ssh.Dial("tcp", net.JoinHostPort(s.address, strconv.Itoa(s.port)), &ssh.ClientConfig{
+		User:            s.user,
+		Auth:            s.authMethods,
+		HostKeyCallback: s.hostKeyCallback,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to reconnect to %s: %w", s.Address(), err)
+	}
+
+	sftpClient, err := sftp.NewClient(client)
+	if err != nil {
+		_ = client.Close()
+		return fmt.Errorf("failed to re-instantiate SFTP client: %w", err)
+	}
+
+	s.client = client
+	s.sftp = sftpClient
 
 	return nil
 }
@@ -388,15 +423,16 @@ func (s *SSHSystem) Run(cmd *Command) (int, error) {
 	}
 
 	var cmdStr string
+
 	if len(cmd.Env) > 0 {
 		var args []string
 		args, err = cmd.BuildShellWrapper()
 		if err != nil {
 			return 0, err
 		}
-		cmdStr = shlex.Join(args)
+		cmdStr = quoteAndJoin(args)
 	} else {
-		cmdStr = shlex.Join(cmd.BuildArgs())
+		cmdStr = quoteAndJoin(cmd.BuildArgs())
 	}
 
 	session.Stdout = cmd.Stdout
@@ -430,6 +466,16 @@ func (s *SSHSystem) Run(cmd *Command) (int, error) {
 	}
 
 	return 0, err
+}
+
+// A minimal args join function that supports passing through
+// multi-line inputs properly to `sh` invocations.
+func quoteAndJoin(args []string) string {
+	quoted := make([]string, 0, len(args))
+	for _, v := range args {
+		quoted = append(quoted, utils.Quote(v))
+	}
+	return strings.Join(quoted, " ")
 }
 
 func osSignalToSSHSignal(s os.Signal) ssh.Signal {
@@ -563,8 +609,8 @@ func (s *SSHSystem) Close() {
 		_ = s.keyFile.Remove()
 	}
 
-	if s.conn != nil {
-		_ = s.conn.Close()
+	if s.agentConn != nil {
+		_ = s.agentConn.Close()
 	}
 }
 

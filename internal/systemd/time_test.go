@@ -41,7 +41,8 @@ func TestDurationFromTimeSpan(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.span, func(t *testing.T) {
-			actual, err := DurationFromTimeSpan(tt.span)
+			d, err := DurationFromTimeSpan(tt.span)
+			actual := d.Duration()
 
 			if (err != nil) != tt.expectErr {
 				t.Errorf("DurationFromTimeSpan(%q) error = %v, expectErr %v", tt.span, err, tt.expectErr)

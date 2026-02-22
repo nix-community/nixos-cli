@@ -10,8 +10,10 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/nix-community/nixos-cli/internal/settings"
+	systemdUtils "github.com/nix-community/nixos-cli/internal/systemd"
 	"github.com/spf13/cobra"
 	"snare.dev/optnix/option"
 )
@@ -197,7 +199,7 @@ func formatOptionMarkdown(opt option.NixosOption, rev string) string {
 type SettingsFormatter interface {
 	WriteHeader(sb *strings.Builder, title string, level int)
 	WriteSectionDescription(sb *strings.Builder, desc string)
-	WriteItem(sb *strings.Builder, key string, desc string, defaultValue string)
+	WriteItem(sb *strings.Builder, key string, desc string, defaultValue string, deprecated string)
 }
 
 type MarkdownSettingsFormatter struct{}
@@ -210,8 +212,12 @@ func (MarkdownSettingsFormatter) WriteSectionDescription(sb *strings.Builder, de
 	sb.WriteString(desc + "\n\n")
 }
 
-func (f MarkdownSettingsFormatter) WriteItem(sb *strings.Builder, key, desc, defaultValue string) {
+func (f MarkdownSettingsFormatter) WriteItem(sb *strings.Builder, key, desc, defaultValue string, deprecated string) {
 	fmt.Fprintf(sb, "- **%s**\n\n  %s\n\n  **Default**: `%s`\n\n", key, desc, defaultValue)
+
+	if deprecated != "" {
+		fmt.Fprintf(sb, "  **%s**\n\n  %s\n\n", settings.DeprecatedDocString, deprecated)
+	}
 }
 
 type ManpageSettingsFormatter struct{}
@@ -224,8 +230,12 @@ func (ManpageSettingsFormatter) WriteSectionDescription(sb *strings.Builder, des
 	sb.WriteString(desc + "\n\n")
 }
 
-func (f ManpageSettingsFormatter) WriteItem(sb *strings.Builder, key, desc, defaultValue string) {
+func (f ManpageSettingsFormatter) WriteItem(sb *strings.Builder, key, desc, defaultValue string, deprecated string) {
 	fmt.Fprintf(sb, "\n*%s*\n\n%s\n\nDefault: _%s_\n", key, desc, defaultValue)
+
+	if deprecated != "" {
+		fmt.Fprintf(sb, "\n*%s*\n\n%s\n", settings.DeprecatedDocString, deprecated)
+	}
 }
 
 func writeSettingsDoc(
@@ -246,6 +256,7 @@ func writeSettingsDoc(
 		key          string
 		desc         string
 		defaultValue string
+		deprecated   string
 	}
 
 	var generalItems []configKey
@@ -271,7 +282,8 @@ func writeSettingsDoc(
 			if desc == "" {
 				desc = descriptions.Short
 			}
-			generalItems = append(generalItems, configKey{fullKey, desc, defaultVal})
+			deprecated := descriptions.Deprecated
+			generalItems = append(generalItems, configKey{fullKey, desc, defaultVal, deprecated})
 		}
 	}
 
@@ -285,7 +297,7 @@ func writeSettingsDoc(
 		})
 
 		for _, item := range generalItems {
-			formatter.WriteItem(sb, item.key, item.desc, item.defaultValue)
+			formatter.WriteItem(sb, item.key, item.desc, item.defaultValue, item.deprecated)
 		}
 	}
 
@@ -306,6 +318,12 @@ func formatValue(v reflect.Value) string {
 	if !v.IsValid() {
 		return "n/a"
 	}
+
+	switch v.Interface().(type) {
+	case systemdUtils.SystemdDuration:
+		return time.Duration(v.Interface().(systemdUtils.SystemdDuration)).String()
+	}
+
 	switch v.Kind() {
 	case reflect.String:
 		if v.String() == "" {

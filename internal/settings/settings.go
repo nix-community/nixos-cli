@@ -6,26 +6,29 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/knadh/koanf/parsers/toml/v2"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/providers/rawbytes"
 	"github.com/knadh/koanf/v2"
+	systemdUtils "github.com/nix-community/nixos-cli/internal/systemd"
 )
 
 type Settings struct {
 	Aliases        map[string][]string  `koanf:"aliases" noset:"true"`
 	Apply          ApplySettings        `koanf:"apply"`
 	AutoRollback   bool                 `koanf:"auto_rollback"`
-	Confirmation   ConfirmationSettings `koanf:"confirmation"`
-	UseColor       bool                 `koanf:"color"`
 	ConfigLocation string               `koanf:"config_location"`
+	Confirmation   ConfirmationSettings `koanf:"confirmation"`
 	Enter          EnterSettings        `koanf:"enter"`
 	Init           InitSettings         `koanf:"init"`
 	NoConfirm      bool                 `koanf:"no_confirm"`
 	Option         OptionSettings       `koanf:"option"`
-	SSH            SSHSettings          `koanf:"ssh"`
+	Rollback       RollbackSettings     `koanf:"rollback"`
 	RootCommand    string               `koanf:"root_command"`
+	SSH            SSHSettings          `koanf:"ssh"`
+	UseColor       bool                 `koanf:"color"`
 	UseNvd         bool                 `koanf:"use_nvd"`
 }
 
@@ -61,6 +64,11 @@ type OptionSettings struct {
 	DebounceTime int64 `koanf:"debounce_time"`
 }
 
+type RollbackSettings struct {
+	Enable  bool                         `koanf:"enable"`
+	Timeout systemdUtils.SystemdDuration `koanf:"timeout"`
+}
+
 type SSHSettings struct {
 	KnownHostsFiles []string `koanf:"known_hosts_files"`
 	PrivateKeyCmd   []string `koanf:"private_key_cmd"`
@@ -92,11 +100,14 @@ func (c *ConfirmationPromptBehavior) UnmarshalText(text []byte) error {
 }
 
 type DescriptionEntry struct {
-	Short string
-	Long  string
+	Short      string
+	Long       string
+	Deprecated string
 }
 
 const (
+	DeprecatedDocString = "This setting has been deprecated, and will be removed in a future release."
+
 	aliasExample = "```\n" + `[aliases]
 genlist = ["generation", "list"]
 switch = ["generation", "switch"]
@@ -104,11 +115,11 @@ rollback = ["generation", "rollback"]
 ` + "```\n"
 
 	confirmationInputPossibleValues = "Possible values are `default-no` (treat as a no input), `default-yes` (treat as a yes input), or `retry` (try again)."
-	deprecatedDocString             = "This setting has been deprecated, and will be removed in a future release."
 
 	sshPrivateKeyCmdExample = "```\n" + `[ssh]
 private_key_cmd = ["sh", "-c", "rbw get $NIXOS_CLI_SSH_HOST"]
 ` + "```\n"
+	rollbackTimeoutDefaultValue = systemdUtils.SystemdDuration(30 * time.Second)
 )
 
 var SettingsDocs = map[string]DescriptionEntry{
@@ -145,9 +156,13 @@ var SettingsDocs = map[string]DescriptionEntry{
 			" or upgrading the root user's Nix channels.",
 	},
 	"auto_rollback": {
-		Short: "Automatically rollback profile on activation failure",
+		Short: "Automatically rollback system on activation failure or lack of remote acknowledgement",
 		Long: "Enables automatic rollback of a NixOS system profile when an activation command fails. This can be " +
-			"disabled when a reboot or some other circumstance is needed for successful activation",
+			"disabled when a reboot or some other circumstance is needed for successful activation. " +
+			"In the case of remote activations, this will also run the previous switch-to-configuration if an " +
+			"acknowledgement from the invoking system is not received, in order to re-establish a connection " +
+			"for further troubleshooting.",
+		Deprecated: "Set `rollback.enable` to `true` instead.",
 	},
 	"color": {
 		Short: "Enable colored output",
@@ -191,9 +206,9 @@ var SettingsDocs = map[string]DescriptionEntry{
 		Long:  "Specifies the desktop environment configuration to inject during initialization.",
 	},
 	"no_confirm": {
-		Short: "Disable interactive confirmation input",
-		Long: "Disables prompts that ask for user confirmation, useful for automation.\n" + bolded(deprecatedDocString) +
-			"\nSet `confirmation.always` to `true` instead.",
+		Short:      "Disable interactive confirmation input",
+		Long:       "Disables prompts that ask for user confirmation; useful for scripts and other automation.",
+		Deprecated: "Set `confirmation.always` to `true` instead.",
 	},
 	"option": {
 		Short: "Settings for `option` command",
@@ -210,8 +225,26 @@ var SettingsDocs = map[string]DescriptionEntry{
 		Short: "Debounce time for searching options using the UI, in milliseconds",
 		Long:  "Controls how often search results are recomputed when typing in the options UI, in milliseconds.",
 	},
+	"rollback": {
+		Short: "Settings for automatic rollback upon failure",
+	},
+	"rollback.enable": {
+		Short: "Automatically rollback system on activation failure or lack of remote acknowledgement",
+		Long: `Enable automatic/"magic" rollback of a NixOS system profile when an activation command fails. This can be ` +
+			"disabled when a reboot or some other circumstance is needed for successful activation. " +
+			"In the case of remote activations, this will also run the previous switch-to-configuration if an " +
+			"acknowledgement from the invoking system is not received, in order to re-establish a connection " +
+			"for further troubleshooting.",
+	},
+	"rollback.timeout": {
+		Short: "Period of time to wait for an acknowledgement from the machine invoking an activation",
+		Long: "The period of time to wait for the invoking machine to send back an acknowledgement machine to " +
+			"the destination machine after a successful activation has been performed before performing a rollback. " +
+			`This only applies to remote/"magic" rollback mode for when remote activation of NixOS systems fails to be ` +
+			"acknowledged. The timeout is specified as a `systemd.time(7)`-formatted time span, and must be at least 1 second.",
+	},
 	"ssh": {
-		Short: "Settings for ssh",
+		Short: "Settings for SSH",
 	},
 	"ssh.known_hosts_files": {
 		Short: "List of paths to known hosts files",
@@ -236,7 +269,6 @@ var SettingsDocs = map[string]DescriptionEntry{
 
 func NewSettings() *Settings {
 	return &Settings{
-		AutoRollback:   true,
 		UseColor:       true,
 		ConfigLocation: "/etc/nixos",
 		Confirmation: ConfirmationSettings{
@@ -253,6 +285,10 @@ func NewSettings() *Settings {
 			MinScore:     1,
 			Prettify:     true,
 			DebounceTime: 25,
+		},
+		Rollback: RollbackSettings{
+			Enable:  true,
+			Timeout: rollbackTimeoutDefaultValue,
 		},
 		SSH: SSHSettings{},
 	}
@@ -297,7 +333,7 @@ var hasWhitespaceRegex = regexp.MustCompile(`\s`)
 // Validate the configuration and remove any erroneous values.
 // A list of detected errors is returned, if any exist.
 func (cfg *Settings) Validate() SettingsErrors {
-	errs := []SettingsError{}
+	errs := []error{}
 
 	// First, validate the aliases. Any alias has to adhere to the following rules:
 	// 1. Alias names cannot be empty.
@@ -321,11 +357,28 @@ func (cfg *Settings) Validate() SettingsErrors {
 	}
 
 	if cfg.NoConfirm {
-		errs = append(errs, SettingsError{
-			Field:   "no_confirm",
-			Message: deprecatedDocString + "\nhint: set `confirmation.always` to `true` instead.",
+		errs = append(errs, DeprecatedSettingError{
+			Field:       "no_confirm",
+			Alternative: "set `confirmation.always` to `true` instead",
 		})
 		cfg.Confirmation.Always = true
+	}
+
+	if cfg.AutoRollback {
+		errs = append(errs, DeprecatedSettingError{
+			Field:       "auto_rollback",
+			Alternative: "set `rollback.enable` to `true` instead",
+		})
+		cfg.Confirmation.Always = true
+	}
+
+	if cfg.Rollback.Timeout.Duration() < time.Second {
+		errs = append(errs, SettingsError{
+			Field:   "rollback.timeout",
+			Message: fmt.Sprintf("rollback.timeout must be at least 1 second long; using default (%s)", rollbackTimeoutDefaultValue.Duration().String()),
+		})
+
+		cfg.Rollback.Timeout = rollbackTimeoutDefaultValue
 	}
 
 	if len(errs) > 0 {
@@ -405,11 +458,4 @@ func isSettable(value *reflect.Value) bool {
 	}
 
 	return false
-}
-
-// A naive way to bold a given input.
-//
-// Does not escape contents, so use wisely.
-func bolded(input string) string {
-	return fmt.Sprintf("**%s**", input)
 }
