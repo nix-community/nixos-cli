@@ -32,16 +32,31 @@
         self',
         pkgs,
         ...
-      }: {
-        packages = {
-          default = self'.packages.nixos-cli;
-
-          nixos-cli = pkgs.callPackage ./nix/package.nix {
-            revision = self.rev or self.dirtyRev or "unknown";
+      }: let
+        mkWrapped = unwrapped:
+          pkgs.callPackage ./nix/package {
+            nixos-cli-unwrapped = unwrapped;
           };
-          nixos = lib.warn "the 'nixos' package has been renamed to 'nixos-cli'" self'.packages.nixos-cli;
 
-          nixos-cli-legacy = self'.packages.nixos-cli.override {flake = false;};
+        nixos-cli-unwrapped = pkgs.callPackage ./nix/package/unwrapped.nix {
+          revision = self.rev or self.dirtyRev or "unknown";
+        };
+        nixos-cli-legacy-unwrapped = nixos-cli-unwrapped.override {flake = false;};
+
+        nixos-cli = mkWrapped nixos-cli-unwrapped;
+        nixos-cli-legacy = mkWrapped nixos-cli-legacy-unwrapped;
+      in {
+        packages = {
+          default = nixos-cli;
+
+          inherit
+            nixos-cli
+            nixos-cli-legacy
+            nixos-cli-unwrapped
+            nixos-cli-legacy-unwrapped
+            ;
+
+          nixos = lib.warn "the 'nixos' package has been renamed to 'nixos-cli'" self'.packages.nixos-cli;
           nixosLegacy = lib.warn "the 'nixosLegacy' package has been renamed to 'nixos-cli-legacy'" self'.packages.nixos-cli-legacy;
         };
 

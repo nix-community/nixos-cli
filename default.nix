@@ -6,6 +6,8 @@ in {
     (flakeSelf.packages.${system})
     nixos-cli
     nixos-cli-legacy
+    nixos-cli-unwrapped
+    nixos-cli-legacy-unwrapped
     # Also inherit aliases, to be removed later.
     nixos
     nixosLegacy

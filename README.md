@@ -38,11 +38,28 @@ All dependencies for this project are neatly provided in a Nix shell. Run
 `nix develop .#` or use [`direnv`](https://direnv.net) to automatically drop
 into this Nix shell on changing to this directory.
 
-In order to build both packages at the same time, run
+### Nix Package
+
+The Nix package is divided into two variants: an unwrapped variant and a wrapped
+one. The wrapped one adds dependencies such as Nix itself to the PATH, while the
+unwrapped package is the one that gets rebuilt when the source
+code/documentation is changed. This is done to avoid excessive rebuilds if Nix
+itself or other runtime dependencies of `nixos-cli` is changed.
+
+There are four packages provided as flake package outputs:
+
+- `nixos-cli`
+- `nixos-cli-legacy`
+- `nixos-cli-unwrapped`
+- `nixos-cli-legacy-uwnrapped`
+
+Only use the unwrapped packages when absolutely necessary.
+
+In order to build both wrapped packages at the same time, run
 `nix build .#{nixos-cli,nixos-cli-legacy}`.
 
 Legacy-style `nix-build` and `nix-shell` can also be used; this uses
-`flake-compat` under the hood.
+[`flake-compat`](https://github.com/NixOS/flake-compat) under the hood.
 
 ### Tests
 
@@ -99,16 +116,16 @@ Check the build script source for more information on how to work with this.
 
 Version numbers are handled using [semantic versioning](https://semver.org/).
 They are also managed using Git tags; every version has a Git tag named with the
-version; the tag name does not have a preceding "v".
+version; the tag name does not have a preceding letter "v".
 
 Non-released builds have a version number that is suffixed with `"-dev"`. As
 such, a tag should always exist on a version number change (which removes the
-suffix), and the very next commit will re-introduce the suffix.
+suffix), and the very next commit will reintroduce the suffix.
 
 Once a tag is created and pushed, create a GitHub release off this tag.
 
-The version number is managed inside the Nix derivation at
-[package.nix](./nix/package.nix).
+The version number is managed inside the Nix derivation inside the
+[nix/package](./nix/package/unwrapped.nix) directory.
 
 ### CI
 
