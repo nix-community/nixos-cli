@@ -27,7 +27,7 @@ func findFieldCompletions(value any, prefix string) ([]fieldCompleteResult, bool
 	}
 
 	current := reflect.ValueOf(value)
-	if current.Kind() == reflect.Ptr {
+	if current.Kind() == reflect.Pointer {
 		current = current.Elem()
 	}
 
@@ -39,7 +39,7 @@ func findFieldCompletions(value any, prefix string) ([]fieldCompleteResult, bool
 			field := current.Type().Field(i)
 			if field.Tag.Get("koanf") == fieldName {
 				current = current.Field(i)
-				if current.Kind() == reflect.Ptr {
+				if current.Kind() == reflect.Pointer {
 					if current.IsNil() {
 						current.Set(reflect.New(current.Type().Elem()))
 					}
@@ -215,6 +215,9 @@ func completeConfirmationBehaviorKey(key, candidate string) ([]string, cobra.She
 var completionValueFuncs = map[string]CompletionValueFunc{
 	"confirmation.empty":   completeConfirmationBehaviorKey,
 	"confirmation.invalid": completeConfirmationBehaviorKey,
+	"differ.tool": func(key, candidate string) ([]string, cobra.ShellCompDirective) {
+		return stringCompletionFunc(key, candidate, AvailableDiffToolOptions)
+	},
 }
 
 func completeValues(key string, value string) ([]string, cobra.ShellCompDirective) {

@@ -29,6 +29,10 @@ import (
 	replCmd "github.com/nix-community/nixos-cli/cmd/repl"
 )
 
+func init() {
+	cobra.EnableTraverseRunHooks = true
+}
+
 const helpTemplate = `Usage:{{if .Runnable}}
   {{.UseLine}}{{end}}{{if .HasAvailableSubCommands}}
   {{.CommandPath}} [command]{{end}}{{if gt (len .Aliases) 0}}
