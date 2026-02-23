@@ -375,18 +375,21 @@ func writeSettingsDoc(
 		if field.Type.Kind() == reflect.Struct {
 			nestedFields = append(nestedFields, nestedField{field, fieldVal, fullKey})
 		} else {
-			descriptions, exists := settings.SettingsDocs[fullKey]
+			entry, exists := settings.SettingsDocs[fullKey]
 			if !exists {
-				panic("missing description for " + fullKey)
+				panic("missing settings entry for " + fullKey)
 			}
 
-			defaultVal := fieldVal.Interface()
+			defaultVal := entry.DefaultValue
+			if defaultVal == nil {
+				defaultVal = fieldVal.Interface()
+			}
 
-			desc := descriptions.Long
+			desc := entry.Long
 			if desc == "" {
-				desc = descriptions.Short
+				desc = entry.Short
 			}
-			generalItems = append(generalItems, configKey{fullKey, desc, descriptions.Example, defaultVal, descriptions.Deprecated})
+			generalItems = append(generalItems, configKey{fullKey, desc, entry.Example, defaultVal, entry.Deprecated})
 		}
 	}
 

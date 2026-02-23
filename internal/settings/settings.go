@@ -2,10 +2,8 @@ package settings
 
 import (
 	"fmt"
-	"maps"
 	"reflect"
 	"regexp"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -94,10 +92,26 @@ func (c *ConfirmationPromptBehavior) UnmarshalText(text []byte) error {
 	return fmt.Errorf("invalid value for ConfirmationPromptBehavior '%s'", val)
 }
 
-type DescriptionEntry struct {
-	Short      string
-	Long       string
-	Example    any
+type SettingsDocEntry struct {
+	// A short description when displaying completion
+	// script prompts or other short-form docs.
+	Short string
+
+	// A long description to embed in long-form
+	// documentation like the website and man pages.
+	Long string
+
+	// An example of how this value can be set.
+	// This value is serialized to TOML.
+	Example any
+
+	// This field is only set when custom text is required
+	// for the default value, since it isn't reflected in
+	// the actual default NewSettings value.
+	DefaultValue any
+
+	// If the value is set to be removed in a future release,
+	// this field describes what to do instead.
 	Deprecated string
 }
 
@@ -108,27 +122,28 @@ const (
 )
 
 var DefaultAliases = map[string][]string{
-	"switch":                   []string{"apply"},
-	"boot":                     []string{"apply", "--no-activate"},
-	"test":                     []string{"apply", "--no-boot"},
-	"build":                    []string{"apply", "--no-activate", "--no-boot", "--output", "./result"},
-	"build-image":              []string{"apply", "--no-activate", "--no-boot", "--output", "./result", "--image"},
-	"build-vm":                 []string{"apply", "--no-activate", "--no-boot", "--output", "./result", "--vm"},
-	"build-vm-with-bootloader": []string{"apply", "--no-activate", "--no-boot", "--output", "./result", "--vm-with-bootloader"},
-	"dry-build":                []string{"apply", "--no-activate", "--no-boot", "--dry"},
-	"dry-activate":             []string{"apply", "--dry"},
-	"list-generations":         []string{"generation", "list", "--table"},
+	"switch":                   {"apply"},
+	"boot":                     {"apply", "--no-activate"},
+	"test":                     {"apply", "--no-boot"},
+	"build":                    {"apply", "--no-activate", "--no-boot", "--output", "./result"},
+	"build-image":              {"apply", "--no-activate", "--no-boot", "--output", "./result", "--image"},
+	"build-vm":                 {"apply", "--no-activate", "--no-boot", "--output", "./result", "--vm"},
+	"build-vm-with-bootloader": {"apply", "--no-activate", "--no-boot", "--output", "./result", "--vm-with-bootloader"},
+	"dry-build":                {"apply", "--no-activate", "--no-boot", "--dry"},
+	"dry-activate":             {"apply", "--dry"},
+	"list-generations":         {"generation", "list", "--table"},
 }
 
-var SettingsDocs = map[string]DescriptionEntry{
+var SettingsDocs = map[string]SettingsDocEntry{
 	"aliases": {
 		Short: "Shortcuts for long commands",
-		Long:  "Defines alternative aliases for long commands to improve user ergonomics.",
+		Long:  "Defines alternative aliases for long commands to improve user ergonomics. The default list of aliases are mapped to common operations, and they can be overridden. They can also be disabled by setting `use_default_aliases = false`.",
 		Example: map[string][]string{
 			"genlist":  {"generation", "list"},
 			"switch":   {"generation", "switch"},
 			"rollback": {"generation", "rollback"},
 		},
+		DefaultValue: DefaultAliases,
 	},
 	"apply": {
 		Short: "Settings for `apply` command",
@@ -253,9 +268,8 @@ var SettingsDocs = map[string]DescriptionEntry{
 		Long:  "Specifies which command to use for privilege escalation (e.g., sudo or doas).",
 	},
 	"use_default_aliases": {
-		Short: "Enables default aliases",
-		Long: "Enables the following default aliases: \n\n```\n" + formatStringSliceMap(DefaultAliases) + "```" +
-			"\n\nEach alias can be overriden using the `aliases` setting.",
+		Short: "Enables default list of aliases",
+		Long:  "Enables commonly used command aliases by default; these can be overridden by configuring the `aliases` setting. Defaults are shown in the `aliases` setting.",
 	},
 	"use_nvd": {
 		Short: "Use 'nvd' instead of `nix store diff-closures`",
@@ -436,11 +450,4 @@ func isSettable(value *reflect.Value) bool {
 	}
 
 	return false
-}
-
-func formatStringSliceMap(m map[string][]string) (result string) {
-	for _, key := range slices.Sorted(maps.Keys(m)) {
-		result += fmt.Sprintf("%s = [%s]\n", key, strings.Join(m[key], ", "))
-	}
-	return result
 }
