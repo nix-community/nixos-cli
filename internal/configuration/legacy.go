@@ -135,26 +135,19 @@ func (l *LegacyConfiguration) EvalAttribute(attr string) (*string, error) {
 	return &value, nil
 }
 
-func (l *LegacyConfiguration) EvalSystem(opts *SystemEvalOptions) error {
-	argv := []string{"nix-instantiate", "--eval", l.ConfigPathArg(), "-A", l.BuildAttr("toplevel")}
-
-	for _, v := range l.Includes {
-		argv = append(argv, "-I", v)
-	}
+func (l *LegacyConfiguration) EvalSystem(s *system.LocalSystem, buildType BuildType, opts *SystemEvalOptions) error {
+	argv := []string{"--eval", l.ConfigPathArg(), "-A", l.BuildAttr(buildType.BuildAttr())}
 
 	if opts.NixOpts != nil {
 		argv = append(argv, opts.NixOpts.ArgsForCommand(nixopts.CmdInstantiate)...)
 	}
 
-	cmd := exec.Command(argv[0], argv[1:]...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	s.Logger().CmdArray(append([]string{"nix-instantiate"}, argv...))
 
-	for k, v := range opts.Env {
-		cmd.Env = append(os.Environ(), fmt.Sprintf("%s=%s", k, v))
-	}
+	cmd := system.NewCommand("nix-instantiate", argv...)
 
-	return cmd.Run()
+	_, err := s.Run(cmd)
+	return err
 }
 
 func (l *LegacyConfiguration) buildLocalSystem(s *system.LocalSystem, buildType BuildType, opts *SystemBuildOptions) (string, error) {

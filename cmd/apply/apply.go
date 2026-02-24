@@ -62,27 +62,6 @@ func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 				}
 			}
 
-			if opts.EvalOnly {
-				if opts.NoActivate {
-					return fmt.Errorf("--eval-only and --no-activate are mutually exclusive")
-				}
-				if opts.NoBoot {
-					return fmt.Errorf("--eval-only and --no-boot are mutually exclusive")
-				}
-				if opts.InstallBootloader {
-					return fmt.Errorf("--eval-only and --install-bootloader are mutually exclusive")
-				}
-				if opts.StorePath != "" {
-					return fmt.Errorf("--eval-only and --store-path are mutually exclusive")
-				}
-				if opts.BuildVM || opts.BuildVMWithBootloader {
-					return fmt.Errorf("--eval-only and --vm/--vm-with-bootloader are mutually exclusive")
-				}
-				if opts.BuildImage != "" {
-					return fmt.Errorf("--eval-only and --image are mutually exclusive")
-				}
-			}
-
 			if opts.NoActivate && opts.NoBoot {
 				if opts.InstallBootloader {
 					return fmt.Errorf("--install-bootloader requires activation, remove --no-activate and/or --no-boot to use this option")
@@ -212,6 +191,7 @@ func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 	cmd.MarkFlagsMutuallyExclusive("dry", "output")
 	cmd.MarkFlagsMutuallyExclusive("vm", "vm-with-bootloader", "image", "store-path")
 	cmd.MarkFlagsMutuallyExclusive("no-activate", "specialisation")
+	cmd.MarkFlagsMutuallyExclusive("eval-only", "store-path")
 
 	helpTemplate := cmd.HelpTemplate()
 	if build.Flake() {
@@ -377,11 +357,10 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 			log.Step("Evaluating configuration...")
 
 			evalOptions := &configuration.SystemEvalOptions{
-				CmdFlags: cmd.Flags(),
-				NixOpts:  &opts.NixOptions,
+				NixOpts: &opts.NixOptions,
 			}
 
-			if err := nixConfig.EvalSystem(evalOptions); err != nil {
+			if err := nixConfig.EvalSystem(localSystem, buildType, evalOptions); err != nil {
 				log.Errorf("failed to evaluate configuration: %v", err)
 				return err
 			}

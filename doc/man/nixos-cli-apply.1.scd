@@ -78,10 +78,6 @@ _`nix eval .#nixosConfigurations.$HOSTNAME.config.system.build.toplevel`_
 
 	*nixos apply --eval-only*
 
-	or using the default alias:
-
-	*nixos eval*
-
 Many other behaviors for _nixos-rebuild_ are in the *nixos generation*
 command tree. See *nixos-cli-generation(1)* for details.
 
@@ -175,12 +171,7 @@ global *--config* flag as such:
 	_nix eval .#nixosConfigurations.$HOSTNAME.config.system.build.toplevel_
 	for flake-based configurations.
 
-	A default alias *eval* is provided, so *nixos eval* can be used as a
-	shorthand for *nixos apply --eval-only*.
-
-	Mutually exclusive with *--no-activate*, *--no-boot*,
-	*--install-bootloader*, *--store-path*, *--vm[-with-bootloader]*,
-	and *--image*.
+	Mutually exclusive with *--store-path*.
 
 *-i*, *--image* <VARIANT>
 	Build a disk-image variant, pre-configured for the given platform/provider.
