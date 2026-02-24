@@ -18,6 +18,7 @@ import (
 	"github.com/nix-community/nixos-cli/internal/logger"
 	"github.com/nix-community/nixos-cli/internal/settings"
 	"github.com/nix-community/nixos-cli/internal/system"
+	"golang.org/x/crypto/ssh"
 )
 
 const (
@@ -348,6 +349,10 @@ func RunActivationSupervisor(
 	action SwitchToConfigurationAction,
 	opts *RunActivationSupervisorOptions,
 ) error {
+	if _, ok := s.(*system.SSHSystem); !ok {
+		panic("RunActivationSupervisor() called with a non-SSH system")
+	}
+
 	log := s.Logger()
 
 	argv := []string{
@@ -417,6 +422,9 @@ func RunActivationSupervisor(
 
 	activationComplete := make(chan error, 1)
 	go func() {
+		// FIXME: there are times where if a connection is taken
+		// down using `ip link set down`, then the whole process
+		// hangs. Figure out a way to detect this condition.
 		_, activationErr := s.Run(cmd)
 		activationComplete <- activationErr
 	}()
@@ -425,6 +433,7 @@ func RunActivationSupervisor(
 	defer successTriggerCheckTimer.Stop()
 
 	successDetected := false
+	activationChConsumed := false
 	for !successDetected {
 		select {
 		case err := <-activationComplete:
@@ -434,19 +443,38 @@ func RunActivationSupervisor(
 			// final check is here.
 			if _, statErr := s.FS().Stat(SWITCH_SUCCESS_PATH); statErr == nil {
 				successDetected = true
+				activationChConsumed = true
 				break
 			}
 
 			// At this point, the supervisor exited before the success file appeared,
 			// so the switch has either failed, or a transport error has occurred
 			// and we need to re-initiate the SSH connection.
-			// FIXME: we need to still try and create the ACK file
-			// in case the connection was terminated, with a new
-			// SSH client.
+
+			if _, ok := err.(*ssh.ExitMissingError); ok {
+				log.Warn("lost connection to target host, attempting to reconnect")
+				err = s.(*system.SSHSystem).Reconnect()
+				if err != nil {
+					log.Errorf("%v", err)
+					log.Info("the target host should rollback soon")
+					return err
+				}
+
+				log.Debug("attempting to acknowledge success after reconnecting")
+				if err = s.FS().CreateFile(successTrigger); err != nil {
+					log.Errorf("failed to create %v on remote system: %v", successTrigger, err)
+					log.Info("the target host should rollback soon")
+					return err
+				}
+				return nil
+			}
+
+			// At this point, the SSH command has failed to run and
+			// we cannot do anything more, so exit with an error.
 			if err != nil {
 				return fmt.Errorf("activation supervisor exited early: %w", err)
 			}
-			return fmt.Errorf("activation supervisor exited without success signal")
+			return errors.New("activation supervisor exited without success signal")
 		case <-successTriggerCheckTimer.C:
 			// Check for the existence of the switch success trigger.
 			// If it exists, then the switch has completed
@@ -463,20 +491,50 @@ func RunActivationSupervisor(
 		}
 	}
 
-	// TODO: reconnect system connection first if SSH was restarted
+	// Create a new target host connection, since SSH sessions
+	// will not terminate if sshd itself has terminated.
+	reconnectCh := make(chan *system.SSHSystem, 1)
 
-	err := s.FS().CreateFile(successTrigger)
-	if err != nil {
-		log.Errorf("failed to create %v on remote system: %v", successTrigger, err)
+	go func() {
+		log.Debug("attempting reconnect")
+		s2, err := s.(*system.SSHSystem).Clone()
+		if err != nil {
+			log.Errorf("%v", err)
+			log.Warnf("it is very likely that SSH access cannot be re-established")
+			log.Warnf("the target host should rollback soon")
+			reconnectCh <- nil
+			return
+		}
+		reconnectCh <- s2
+	}()
+
+	select {
+	case s2 := <-reconnectCh:
+		if s2 == nil {
+			break
+		}
+
+		defer s2.Close()
+		err := s2.FS().CreateFile(successTrigger)
+		if err != nil {
+			log.Errorf("failed to create %v on remote system: %v", successTrigger, err)
+		}
+	case <-time.After(opts.AckTimeout):
+		// FIXME: fix race condition where s2 is never closed if this is reached first.
+		break
 	}
 
-	// Wait for the watchdog to either rollback or finish.
-	// If the SSH connection is broken, then this case
-	// cannot be hit because the connection was
-	// already terminated with a broken pipe.
-	err = <-activationComplete
-	if err != nil {
-		return fmt.Errorf("activation supervisor exited with error: %v", err)
+	log.Debug("waiting for activation process to complete")
+
+	if !activationChConsumed {
+		// Wait for the watchdog to either rollback or finish.
+		// If the SSH connection is broken, then this case
+		// cannot be hit because the connection was
+		// already terminated with a broken pipe.
+		err := <-activationComplete
+		if err != nil {
+			return fmt.Errorf("activation supervisor exited with error: %v", err)
+		}
 	}
 
 	return nil

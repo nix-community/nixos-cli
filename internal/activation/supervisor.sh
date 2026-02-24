@@ -66,6 +66,8 @@ rollback() {
 	# `nixos apply --no-boot` or `nixos-rebuild test` to another
 	# one.
 	if [ "$ROLLBACK_PROFILE_ON_FAILURE" != "" ]; then
+		# FIXME: --rollback may not be the correct solution for the system profile!
+		# may need to specify explicit generation number
 		nix-env -p "$PROFILE" --rollback "$verbose_flag"
 	fi
 
