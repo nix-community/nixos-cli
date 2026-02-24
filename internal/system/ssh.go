@@ -28,19 +28,38 @@ import (
 )
 
 type SSHSystem struct {
-	conn       net.Conn
-	client     *ssh.Client
-	sftp       *sftp.Client
-	user       string
-	address    string
-	port       int
-	password   []byte
-	keyFile    *TempFile
-	nixSSHOpts []string
-	logger     logger.Logger
+	cfg *SSHConfig
+
+	client *ssh.Client
+	sftp   *sftp.Client
+
+	rootPassword []byte
+
+	logger logger.Logger
 }
 
-func NewSSHSystem(localSystem *LocalSystem, host string, log logger.Logger, cfg *settings.Settings) (*SSHSystem, error) {
+type SSHConfig struct {
+	agentConn net.Conn
+
+	User    string
+	Address string
+	Port    int
+
+	AuthMethods     []ssh.AuthMethod
+	HostKeyCallback ssh.HostKeyCallback
+
+	password []byte
+
+	KeyFile    *TempFile
+	NixSSHOpts []string
+}
+type SSHConfigOptions struct {
+	KnownHostsFiles []string
+	PrivateKeyCmd   []string
+}
+
+func NewSSHConfig(host string, log logger.Logger, options SSHConfigOptions) (*SSHConfig, error) {
+	// Parse the user@address:port SSH host string
 	if after, ok := strings.CutPrefix(host, "ssh://"); ok {
 		host = after
 	}
@@ -75,29 +94,33 @@ func NewSSHSystem(localSystem *LocalSystem, host string, log logger.Logger, cfg 
 		port = 22
 	}
 
-	auth := []ssh.AuthMethod{}
+	local := NewLocalSystem(log)
 
-	var keyFile *TempFile
+	var auth []ssh.AuthMethod
+
+	// Create any private key files if needed.
+	var tempKeyFile *TempFile
 	var nixSSHOpts []string
-	if privateKeyCmd := cfg.SSH.PrivateKeyCmd; len(privateKeyCmd) > 0 {
-		log.CmdArray(privateKeyCmd)
+	if len(options.PrivateKeyCmd) > 0 {
+		log.CmdArray(options.PrivateKeyCmd)
 
 		var sshAuth ssh.AuthMethod
-		sshAuth, keyFile, err = getPrivateKeyAuth(localSystem, host, username, privateKeyCmd)
+		sshAuth, tempKeyFile, err = getPrivateKeyAuth(local, host, username, options.PrivateKeyCmd)
 		if err == nil {
 			auth = append(auth, sshAuth)
-			nixSSHOpts = append(nixSSHOpts, "-i", keyFile.Path())
+			nixSSHOpts = append(nixSSHOpts, "-i", tempKeyFile.Path())
 		} else {
 			log.Warnf("failed to obtain private key: %v", err)
 		}
 	}
 
-	var conn net.Conn
+	// Add all keys from the SSH agent if it exists.
+	var agentConn net.Conn
 	if sock := os.Getenv("SSH_AUTH_SOCK"); sock != "" {
 		dialer := net.Dialer{Timeout: 2 * time.Second}
-		conn, err = dialer.Dial("unix", sock)
+		agentConn, err = dialer.Dial("unix", sock)
 		if err == nil {
-			agentClient := agent.NewClient(conn)
+			agentClient := agent.NewClient(agentConn)
 			auth = append(auth, ssh.PublicKeysCallback(agentClient.Signers))
 		} else {
 			log.Warnf("failed to connect to SSH agent: %v", err)
@@ -105,68 +128,134 @@ func NewSSHSystem(localSystem *LocalSystem, host string, log logger.Logger, cfg 
 		}
 	}
 
-	getKnownHostsFiles := func(files []string, logFunc func(string, ...any)) (result []string) {
-		for _, f := range files {
-			if _, err = os.Stat(f); err != nil {
-				logFunc("failed to access known hosts file: %v", err)
-			} else {
-				result = append(result, f)
-			}
-		}
-		return result
-	}
-	knownHostsFileUser := filepath.Join(os.Getenv("HOME"), ".ssh", "known_hosts")
-	knownHostsFilesBase := []string{"/etc/ssh/ssh_known_hosts", knownHostsFileUser}
-	knownHostsFiles := getKnownHostsFiles(knownHostsFilesBase, log.Debugf)
-	knownHostsFiles = append(knownHostsFiles, getKnownHostsFiles(cfg.SSH.KnownHostsFiles, log.Warnf)...)
-	knownHostsKeyCallback, err := knownhosts.New(knownHostsFiles...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create known hosts callback: %v", err)
+	cfg := &SSHConfig{
+		agentConn: agentConn,
+
+		User:    username,
+		Address: address,
+		Port:    port,
+
+		KeyFile:    tempKeyFile,
+		NixSSHOpts: nixSSHOpts,
 	}
 
-	var password []byte
+	// Use password auth to access the SSH system with
+	// if all else fails. This will be used as a fallback
+	// for `sudo` passwords if it exists; otherwise, the
+	// user will have to type it in manually.
+	// Every SSHConfig owns their own `password` instance.
 	passwordCallback := ssh.PasswordCallback(func() (string, error) {
+		if cfg.password != nil {
+			return string(cfg.password), nil
+		}
+
 		var bytePassword []byte
 		bytePassword, err = promptForPassword(username, address)
 		if err != nil {
 			return "", err
 		}
-		password = bytePassword
+		cfg.password = bytePassword
 		return string(bytePassword), nil
 	})
 	auth = append(auth, passwordCallback)
 
-	hostKeyCallback := wrappedKnownHostsCallback(log, knownHostsKeyCallback, knownHostsFileUser)
+	hostKeyCallback, err := knownHostsCallback(log, options.KnownHostsFiles)
+	if err != nil {
+		return nil, err
+	}
 
-	client, err := ssh.Dial("tcp", net.JoinHostPort(address, strconv.Itoa(port)), &ssh.ClientConfig{
-		User:            username,
-		Auth:            auth,
-		HostKeyCallback: hostKeyCallback,
+	cfg.AuthMethods = auth
+	cfg.HostKeyCallback = hostKeyCallback
+
+	return cfg, nil
+}
+
+func (c *SSHConfig) Close() {
+	if c.agentConn != nil {
+		_ = c.agentConn.Close()
+	}
+
+	if c.KeyFile != nil {
+		_ = c.KeyFile.Remove()
+	}
+}
+
+func knownHostsCallback(log logger.Logger, extraKnownHosts []string) (ssh.HostKeyCallback, error) {
+	var knownHostsFiles []string
+
+	// By default, use /etc/ssh/ssh_known_hosts and $HOME/.ssh/known_hosts.
+	// These usually exist on most systems.
+	defaultKnownHosts := []string{"/etc/ssh/ssh_known_hosts"}
+
+	homeDir, _ := os.UserHomeDir()
+	knownHostsUserFile := filepath.Join(homeDir, ".ssh", "known_hosts")
+	defaultKnownHosts = append(defaultKnownHosts, knownHostsUserFile)
+
+	// Make sure files exist before adding to the known hosts constructor.
+	// The known hosts constructor fails catastrophically if any files
+	// are unable to be accessed.
+	// Warn about explicitly specified paths not existing, but only warn
+	// about default files not existing in debug mode.
+	for _, f := range defaultKnownHosts {
+		if _, err := os.Stat(f); err != nil {
+			log.Debugf("failed to access known hosts at %v: %v", f, err)
+		} else {
+			knownHostsFiles = append(knownHostsFiles, f)
+		}
+	}
+
+	for _, f := range extraKnownHosts {
+		if _, err := os.Stat(f); err != nil {
+			log.Warnf("failed to access known hosts at %v: %v", f, err)
+		} else {
+			knownHostsFiles = append(knownHostsFiles, f)
+		}
+	}
+
+	knownHostsKeyCallback, err := knownhosts.New(knownHostsFiles...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create known hosts callback: %v", err)
+	}
+
+	return addKeyToKnownHostsCallback(log, knownHostsKeyCallback, knownHostsUserFile), nil
+}
+
+func NewSSHSystem(cfg *SSHConfig, log logger.Logger) (*SSHSystem, error) {
+	client, sftpClient, err := dialClient(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	return &SSHSystem{
+		cfg: cfg,
+
+		client: client,
+		sftp:   sftpClient,
+
+		rootPassword: cfg.password,
+
+		logger: log,
+	}, nil
+}
+
+func dialClient(cfg *SSHConfig) (*ssh.Client, *sftp.Client, error) {
+	client, err := ssh.Dial("tcp", net.JoinHostPort(cfg.Address, strconv.Itoa(cfg.Port)), &ssh.ClientConfig{
+		User:            cfg.User,
+		Auth:            cfg.AuthMethods,
+		HostKeyCallback: cfg.HostKeyCallback,
+		Timeout:         30 * time.Second,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to %s: %w", host, err)
+		return nil, nil, fmt.Errorf("failed to connect to %s: %w", cfg.Address, err)
 	}
 
 	sftpClient, err := sftp.NewClient(client)
 	if err != nil {
 		_ = client.Close()
-		return nil, fmt.Errorf("failed to instantiate SFTP client: %w", err)
+		return nil, nil, fmt.Errorf("failed to instantiate SFTP client: %w", err)
 	}
 
-	s := &SSHSystem{
-		conn:       conn,
-		client:     client,
-		sftp:       sftpClient,
-		user:       username,
-		address:    address,
-		port:       port,
-		password:   password,
-		keyFile:    keyFile,
-		nixSSHOpts: nixSSHOpts,
-		logger:     log,
-	}
-
-	return s, nil
+	return client, sftpClient, nil
 }
 
 func (s *SSHSystem) EnsureRemoteRootPassword(rootCmd string) error {
@@ -174,24 +263,66 @@ func (s *SSHSystem) EnsureRemoteRootPassword(rootCmd string) error {
 	// permissions and don't need to check. If the logged-in user doesn't,
 	// then the first command that requires sudo will say as much and exit,
 	// so no need to verify it explicitly here.
-	if s.password != nil {
+	if s.rootPassword != nil {
+		return nil
+	}
+
+	if s.cfg.password != nil {
+		s.rootPassword = s.cfg.password
 		return nil
 	}
 
 	s.Logger().Info("please input password to run commands as root")
 
-	bytePassword, err := promptForPassword(s.user, s.address)
+	bytePassword, err := promptForPassword(s.cfg.User, s.cfg.Address)
 	if err != nil {
 		return err
 	}
 
-	s.password = bytePassword
+	s.rootPassword = bytePassword
 
 	if err = s.testRemoteRoot(rootCmd); err != nil {
 		return fmt.Errorf("failed to verify %s password: %s", rootCmd, err)
 	}
 
 	return nil
+}
+
+func (s *SSHSystem) Reconnect() error {
+	_ = s.sftp.Close()
+	_ = s.client.Close()
+
+	client, sftpClient, err := dialClient(s.cfg)
+	if err != nil {
+		return fmt.Errorf("failed to reconnect to %s: %w", s.Address(), err)
+	}
+
+	s.client = client
+	s.sftp = sftpClient
+
+	return nil
+}
+
+// Create a new SSH connection instance from the existing
+// information of this instance.
+//
+// Caller must keep the `cfg` field alive until ALL clones are closed.
+func (s *SSHSystem) Clone() (*SSHSystem, error) {
+	client, sftpClient, err := dialClient(s.cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to clone connection to %s: %w", s.Address(), err)
+	}
+
+	return &SSHSystem{
+		cfg: s.cfg,
+
+		client: client,
+		sftp:   sftpClient,
+
+		rootPassword: s.rootPassword,
+
+		logger: s.logger,
+	}, nil
 }
 
 func (s *SSHSystem) testRemoteRoot(rootCmd string) error {
@@ -251,7 +382,7 @@ func promptForPassword(username string, address string) ([]byte, error) {
 // Only occurs if the key is not already in known_hosts and
 // if running in interactive mode in a terminal. Otherwise,
 // this will result in failure to connect.
-func wrappedKnownHostsCallback(log logger.Logger, origCallback ssh.HostKeyCallback, knownHostsPath string) ssh.HostKeyCallback {
+func addKeyToKnownHostsCallback(log logger.Logger, origCallback ssh.HostKeyCallback, knownHostsPath string) ssh.HostKeyCallback {
 	return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
 		err := origCallback(hostname, remote, key)
 		if err == nil {
@@ -351,11 +482,11 @@ func (s *SSHSystem) Run(cmd *Command) (int, error) {
 		// never need something like that here.
 		//
 		// As such, we're replacing the entire stdin with this password.
-		if cmd.RootElevationCmd == "sudo" && s.password != nil {
+		if cmd.RootElevationCmd == "sudo" && s.rootPassword != nil {
 			// Make a copy of the command struct to add the root elevation flags to
 			cmd = cmd.Clone()
 			cmd.RootElevationCmdFlags = append(cmd.RootElevationCmdFlags, "-S", "-p", "")
-			pw := append([]byte{}, s.password...)
+			pw := append([]byte{}, s.rootPassword...)
 			pw = append(pw, '\n')
 			session.Stdin = bytes.NewReader(pw)
 		} else if isTerminal(cmd.Stdin) {
@@ -528,11 +659,11 @@ func (s *SSHSystem) IsNixOS() bool {
 }
 
 func (s *SSHSystem) Address() string {
-	return fmt.Sprintf("%s@%s:%d", s.user, s.address, s.port)
+	return fmt.Sprintf("%s@%s:%d", s.cfg.User, s.cfg.Address, s.cfg.Port)
 }
 
 func (s *SSHSystem) NixSSHOpts() []string {
-	return s.nixSSHOpts
+	return s.cfg.NixSSHOpts
 }
 
 func (s *SSHSystem) IsRemote() bool {
@@ -558,14 +689,6 @@ func (s *SSHSystem) HasCommand(name string) bool {
 func (s *SSHSystem) Close() {
 	_ = s.sftp.Close()
 	_ = s.client.Close()
-
-	if s.keyFile != nil {
-		_ = s.keyFile.Remove()
-	}
-
-	if s.conn != nil {
-		_ = s.conn.Close()
-	}
 }
 
 func isTerminal(r io.Reader) bool {
