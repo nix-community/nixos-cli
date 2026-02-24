@@ -238,13 +238,23 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 
 	if opts.TargetHost != "" {
 		log.Debugf("connecting to %s", opts.TargetHost)
-		host, err := system.NewSSHSystem(localSystem, opts.TargetHost, log, cfg)
+
+		sshCfg, err := system.NewSSHConfig(opts.TargetHost, log, system.SSHConfigOptions{
+			KnownHostsFiles: cfg.SSH.KnownHostsFiles,
+			PrivateKeyCmd:   cfg.SSH.PrivateKeyCmd,
+		})
 		if err != nil {
 			log.Errorf("%v", err)
 			return err
 		}
 
+		host, err := system.NewSSHSystem(sshCfg, log)
+		if err != nil {
+			log.Errorf("%v", err)
+			return err
+		}
 		defer host.Close()
+
 		targetHost = host
 	} else {
 		targetHost = localSystem
@@ -300,13 +310,23 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 
 	if opts.BuildHost != "" {
 		log.Debugf("connecting to %s", opts.BuildHost)
-		host, err := system.NewSSHSystem(localSystem, opts.BuildHost, log, cfg)
+
+		sshCfg, err := system.NewSSHConfig(opts.BuildHost, log, system.SSHConfigOptions{
+			KnownHostsFiles: cfg.SSH.KnownHostsFiles,
+			PrivateKeyCmd:   cfg.SSH.PrivateKeyCmd,
+		})
 		if err != nil {
 			log.Errorf("%v", err)
 			return err
 		}
 
+		host, err := system.NewSSHSystem(sshCfg, log)
+		if err != nil {
+			log.Errorf("%v", err)
+			return err
+		}
 		defer host.Close()
+
 		buildHost = host
 	} else {
 		buildHost = localSystem
