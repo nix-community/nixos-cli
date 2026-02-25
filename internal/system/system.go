@@ -63,8 +63,6 @@ func CopyClosures(src System, dest System, paths []string, extraArgs ...string) 
 		}
 		srcArg := fmt.Sprintf("ssh://%s", srcAddr)
 		argv = append(argv, "--store", srcArg, "--to", destAddr)
-		nixSSHOpts = append(nixSSHOpts, src.(*SSHSystem).NixSSHOpts()...)
-		nixSSHOpts = append(nixSSHOpts, dest.(*SSHSystem).NixSSHOpts()...)
 	} else if srcIsRemote && !destIsRemote {
 		// remote -> local, so use --from and run on the local host (dest), since there
 		// is no reliable way to run this on the remote while determining how
@@ -72,13 +70,11 @@ func CopyClosures(src System, dest System, paths []string, extraArgs ...string) 
 		commandRunner = dest
 		srcAddr := src.(*SSHSystem).Address()
 		argv = append(argv, "--from", srcAddr)
-		nixSSHOpts = append(nixSSHOpts, src.(*SSHSystem).NixSSHOpts()...)
 	} else if !srcIsRemote && destIsRemote {
 		// local -> remote, so run this command on the local host.
 		commandRunner = src
 		destAddr := dest.(*SSHSystem).Address()
 		argv = append(argv, "--to", destAddr)
-		nixSSHOpts = append(nixSSHOpts, dest.(*SSHSystem).NixSSHOpts()...)
 	} else {
 		// local -> local, no-op
 		log.Debugf("both systems are local, skipping copy")

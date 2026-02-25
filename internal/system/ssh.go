@@ -20,9 +20,9 @@ import (
 	"github.com/nix-community/nixos-cli/internal/logger"
 	"github.com/nix-community/nixos-cli/internal/settings"
 	sshUtils "github.com/nix-community/nixos-cli/internal/ssh"
+	"github.com/nix-community/nixos-cli/internal/utils"
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
-	"golang.org/x/crypto/ssh/agent"
 	"golang.org/x/crypto/ssh/knownhosts"
 	"golang.org/x/term"
 )
@@ -39,8 +39,6 @@ type SSHSystem struct {
 }
 
 type SSHConfig struct {
-	agentConn net.Conn
-
 	User    string
 	Address string
 	Port    int
@@ -50,10 +48,11 @@ type SSHConfig struct {
 
 	password []byte
 
-	KeyFile    *TempFile
-	NixSSHOpts []string
+	agentManager *sshUtils.AgentManager
 }
+
 type SSHConfigOptions struct {
+	AgentManager    *sshUtils.AgentManager
 	KnownHostsFiles []string
 	PrivateKeyCmd   []string
 }
@@ -98,45 +97,48 @@ func NewSSHConfig(host string, log logger.Logger, options SSHConfigOptions) (*SS
 
 	var auth []ssh.AuthMethod
 
-	// Create any private key files if needed.
-	var tempKeyFile *TempFile
-	var nixSSHOpts []string
+	// Attempt to calculate the private key if a command is defined.
+	var computedPrivateKey any
 	if len(options.PrivateKeyCmd) > 0 {
-		log.CmdArray(options.PrivateKeyCmd)
-
-		var sshAuth ssh.AuthMethod
-		sshAuth, tempKeyFile, err = getPrivateKeyAuth(local, host, username, options.PrivateKeyCmd)
-		if err == nil {
-			auth = append(auth, sshAuth)
-			nixSSHOpts = append(nixSSHOpts, "-i", tempKeyFile.Path())
-		} else {
-			log.Warnf("failed to obtain private key: %v", err)
+		computedPrivateKey, err = runPrivateKeyCmd(local, host, username, options.PrivateKeyCmd)
+		if err != nil {
+			log.Warnf("failed to run private key command: %v", err)
 		}
 	}
 
-	// Add all keys from the SSH agent if it exists.
-	var agentConn net.Conn
-	if sock := os.Getenv("SSH_AUTH_SOCK"); sock != "" {
-		dialer := net.Dialer{Timeout: 2 * time.Second}
-		agentConn, err = dialer.Dial("unix", sock)
-		if err == nil {
-			agentClient := agent.NewClient(agentConn)
-			auth = append(auth, ssh.PublicKeysCallback(agentClient.Signers))
+	if computedPrivateKey != nil {
+		// If the key is computed, then we add it to the agent
+		// if it exists. This is so forked processes can also
+		// use the fetched private key through the SSH agent.
+		//
+		// If the agent doesn't exist, this key will simply be added
+		// as a direct authentication method, but forked processes
+		// will be unable to use it.
+		if options.AgentManager != nil {
+			if err = options.AgentManager.Add(computedPrivateKey, utils.EscapeAndJoinArgs(options.PrivateKeyCmd)); err != nil {
+				log.Warnf("failed to add key to agent: %v", err)
+			}
 		} else {
-			log.Warnf("failed to connect to SSH agent: %v", err)
-			log.Warnf("falling back to password auth")
+			signer, signErr := ssh.NewSignerFromKey(computedPrivateKey)
+			if signErr != nil {
+				log.Warnf("failed to create signer from private key: %v", signErr)
+			} else {
+				auth = append(auth, ssh.PublicKeys(signer))
+			}
 		}
+	}
+	// If an SSH agent client is available, add all possible keys
+	// to the available auth methods.
+	if manager := options.AgentManager; manager != nil {
+		auth = append(auth, ssh.PublicKeysCallback(manager.Client().Signers))
 	}
 
 	cfg := &SSHConfig{
-		agentConn: agentConn,
+		agentManager: options.AgentManager,
 
 		User:    username,
 		Address: address,
 		Port:    port,
-
-		KeyFile:    tempKeyFile,
-		NixSSHOpts: nixSSHOpts,
 	}
 
 	// Use password auth to access the SSH system with
@@ -168,16 +170,6 @@ func NewSSHConfig(host string, log logger.Logger, options SSHConfigOptions) (*SS
 	cfg.HostKeyCallback = hostKeyCallback
 
 	return cfg, nil
-}
-
-func (c *SSHConfig) Close() {
-	if c.agentConn != nil {
-		_ = c.agentConn.Close()
-	}
-
-	if c.KeyFile != nil {
-		_ = c.KeyFile.Remove()
-	}
 }
 
 func knownHostsCallback(log logger.Logger, extraKnownHosts []string) (ssh.HostKeyCallback, error) {
@@ -332,7 +324,7 @@ func (s *SSHSystem) testRemoteRoot(rootCmd string) error {
 	return err
 }
 
-func getPrivateKeyAuth(s *LocalSystem, host string, username string, privateKeyCmd []string) (ssh.AuthMethod, *TempFile, error) {
+func runPrivateKeyCmd(s *LocalSystem, host string, username string, privateKeyCmd []string) (any, error) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
@@ -344,22 +336,15 @@ func getPrivateKeyAuth(s *LocalSystem, host string, username string, privateKeyC
 
 	var err error
 	if _, err = s.Run(cmd); err != nil {
-		return nil, nil, fmt.Errorf("failed to run private key command: %v\n%v", err, strings.TrimSpace(stderr.String()))
+		return nil, fmt.Errorf("failed to run private key command: %v\n%v", err, strings.TrimSpace(stderr.String()))
 	}
 
-	var signer ssh.Signer
-	if signer, err = ssh.ParsePrivateKey(stdout.Bytes()); err != nil {
-		return nil, nil, fmt.Errorf("failed to parse private key: %v", err)
+	var signer any
+	if signer, err = ssh.ParseRawPrivateKey(stdout.Bytes()); err != nil {
+		return nil, fmt.Errorf("failed to parse private key: %v", err)
 	}
 
-	keyFile, err := NewTempFile("nixos-cli-ssh-key", stdout.Bytes())
-	if err != nil {
-		return nil, nil, err
-	}
-
-	auth := ssh.PublicKeys(signer)
-
-	return auth, keyFile, nil
+	return signer, nil
 }
 
 func promptForPassword(username string, address string) ([]byte, error) {
@@ -660,10 +645,6 @@ func (s *SSHSystem) IsNixOS() bool {
 
 func (s *SSHSystem) Address() string {
 	return fmt.Sprintf("%s@%s:%d", s.cfg.User, s.cfg.Address, s.cfg.Port)
-}
-
-func (s *SSHSystem) NixSSHOpts() []string {
-	return s.cfg.NixSSHOpts
 }
 
 func (s *SSHSystem) IsRemote() bool {
