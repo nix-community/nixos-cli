@@ -21,6 +21,7 @@ import (
 	"github.com/nix-community/nixos-cli/internal/logger"
 	"github.com/nix-community/nixos-cli/internal/nix"
 	"github.com/nix-community/nixos-cli/internal/settings"
+	sshUtils "github.com/nix-community/nixos-cli/internal/ssh"
 	"github.com/nix-community/nixos-cli/internal/system"
 	"github.com/nix-community/nixos-cli/internal/utils"
 	"github.com/spf13/cobra"
@@ -234,12 +235,24 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 	cfg := settings.FromContext(cmd.Context())
 	localSystem := system.NewLocalSystem(log)
 
+	sshAgent, err := sshUtils.NewAgentManager(log)
+	if err != nil {
+		log.Warnf("failed to start/connect to SSH agent: %v", err)
+	}
+	defer func() {
+		if sshAgent != nil {
+			_ = sshAgent.Stop()
+		}
+	}()
+
 	var targetHost system.System
 
 	if opts.TargetHost != "" {
 		log.Debugf("connecting to %s", opts.TargetHost)
 
-		sshCfg, err := system.NewSSHConfig(opts.TargetHost, log, system.SSHConfigOptions{
+		var sshCfg *system.SSHConfig
+		sshCfg, err = system.NewSSHConfig(opts.TargetHost, log, system.SSHConfigOptions{
+			AgentManager:    sshAgent,
 			KnownHostsFiles: cfg.SSH.KnownHostsFiles,
 			PrivateKeyCmd:   cfg.SSH.PrivateKeyCmd,
 		})
@@ -248,7 +261,8 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 			return err
 		}
 
-		host, err := system.NewSSHSystem(sshCfg, log)
+		var host *system.SSHSystem
+		host, err = system.NewSSHSystem(sshCfg, log)
 		if err != nil {
 			log.Errorf("%v", err)
 			return err
@@ -261,7 +275,6 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 	}
 
 	if !targetHost.IsNixOS() {
-		var err error
 		switch targetHost.(type) {
 		case *system.SSHSystem:
 			err = fmt.Errorf("target host %s is not a NixOS system", opts.TargetHost)
@@ -297,8 +310,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 		// system build type or upgrading channels.
 		if v, ok := buildType.(*configuration.SystemBuild); ok && v.Activate ||
 			!build.Flake() && (opts.UpgradeChannels || opts.UpgradeAllChannels) {
-			err := utils.ExecAsRoot(cfg.RootCommand)
-			if err != nil {
+			if err = utils.ExecAsRoot(cfg.RootCommand); err != nil {
 				log.Errorf("failed to re-exec command as root: %v", err)
 				return err
 			}
@@ -311,7 +323,9 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 	if opts.BuildHost != "" {
 		log.Debugf("connecting to %s", opts.BuildHost)
 
-		sshCfg, err := system.NewSSHConfig(opts.BuildHost, log, system.SSHConfigOptions{
+		var sshCfg *system.SSHConfig
+		sshCfg, err = system.NewSSHConfig(opts.BuildHost, log, system.SSHConfigOptions{
+			AgentManager:    sshAgent,
 			KnownHostsFiles: cfg.SSH.KnownHostsFiles,
 			PrivateKeyCmd:   cfg.SSH.PrivateKeyCmd,
 		})
@@ -320,7 +334,8 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 			return err
 		}
 
-		host, err := system.NewSSHSystem(sshCfg, log)
+		var host *system.SSHSystem
+		host, err = system.NewSSHSystem(sshCfg, log)
 		if err != nil {
 			log.Errorf("%v", err)
 			return err
@@ -340,12 +355,13 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 
 		if opts.FlakeRef != "" {
 			nixConfig = configuration.FlakeRefFromString(opts.FlakeRef)
-			if err := nixConfig.(*configuration.FlakeRef).InferSystemFromHostnameIfNeeded(); err != nil {
+			if err = nixConfig.(*configuration.FlakeRef).InferSystemFromHostnameIfNeeded(); err != nil {
 				log.Errorf("failed to infer hostname: %v", err)
 				return err
 			}
 		} else if opts.File != "" {
-			configPath, err := utils.ResolveNixFilename(opts.File)
+			var configPath string
+			configPath, err = utils.ResolveNixFilename(opts.File)
 			if err != nil {
 				log.Error(err)
 				return err
@@ -363,7 +379,8 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 				log.Debugf("using attribute '%s'", opts.Attr)
 			}
 		} else {
-			c, err := configuration.FindConfiguration(log, cfg, opts.NixOptions.Include)
+			var c configuration.Configuration
+			c, err = configuration.FindConfiguration(log, cfg, opts.NixOptions.Include)
 			if err != nil {
 				log.Errorf("failed to find configuration: %v", err)
 				return err
@@ -406,7 +423,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 				return err
 			}
 
-			if err := upgradeChannels(localSystem, &upgradeChannelsOptions{
+			if err = upgradeChannels(localSystem, &upgradeChannelsOptions{
 				UpgradeAll:     opts.UpgradeAllChannels,
 				RootCommand:    cfg.RootCommand,
 				UseRootCommand: !effectiveRoot && opts.LocalRoot,
@@ -419,7 +436,8 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 		// Confirm if the requested image exists, or list available images
 		// if no parameter is specified/is empty.
 		if imgBuild, ok := buildType.(*configuration.ImageBuild); ok {
-			images, err := getAvailableImageAttrs(localSystem, nixConfig, &opts.NixOptions)
+			var images []string
+			images, err = getAvailableImageAttrs(localSystem, nixConfig, &opts.NixOptions)
 			if err != nil {
 				log.Errorf("failed to get available images: %v", err)
 				return err
@@ -452,7 +470,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 		useNom := cfg.Apply.UseNom || opts.UseNom
 		nomFound := buildHost.HasCommand("nom")
 		if opts.UseNom && !nomFound {
-			err := fmt.Errorf("--use-nom was specified, but `nom` is not executable")
+			err = fmt.Errorf("--use-nom was specified, but `nom` is not executable")
 			log.Error(err)
 			return err
 		} else if cfg.Apply.UseNom && !nomFound {
@@ -477,7 +495,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 			case *configuration.LegacyConfiguration:
 				configDirname = c.Dirname()
 			}
-			configDirname, err := utils.ResolveDirectory(configDirname)
+			configDirname, err = utils.ResolveDirectory(configDirname)
 
 			if err != nil {
 				log.Warnf("failed to resolve configuration path: %v", err)
@@ -499,7 +517,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 		if generationTag != "" {
 			// Make sure --impure is added to the Nix options if
 			// an implicit commit message is used.
-			if err := cmd.Flags().Set("impure", "true"); err != nil {
+			if err = cmd.Flags().Set("impure", "true"); err != nil {
 				panic("failed to set --impure flag for apply command before exec with implicit generation tag with git message")
 			}
 		}
@@ -514,7 +532,6 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 			NixOpts:  &opts.NixOptions,
 		}
 
-		var err error
 		resultLocation, err = nixConfig.BuildSystem(buildType, buildOptions)
 		if err != nil {
 			log.Errorf("failed to build configuration: %v", err)
@@ -526,7 +543,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 
 	if !dryBuild {
 		copyFlags := opts.NixOptions.ArgsForCommand(nixopts.CmdCopyClosure)
-		err := system.CopyClosures(buildHost, targetHost, []string{resultLocation}, copyFlags...)
+		err = system.CopyClosures(buildHost, targetHost, []string{resultLocation}, copyFlags...)
 		if err != nil {
 			log.Errorf("failed to copy system closure to target host: %v", err)
 			return err
@@ -536,7 +553,8 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 	switch v := buildType.(type) {
 	case *configuration.ImageBuild:
 		if !dryBuild {
-			imagePath, err := getImageName(localSystem, nixConfig, v.Variant, &opts.NixOptions)
+			var imagePath string
+			imagePath, err = getImageName(localSystem, nixConfig, v.Variant, &opts.NixOptions)
 			if err != nil {
 				log.Infof("finished building image in %s", resultLocation)
 			} else {
@@ -548,7 +566,8 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 		return nil
 	case *configuration.VMBuild:
 		if !dryBuild {
-			matches, err := filepath.Glob(fmt.Sprintf("%v/bin/run-*-vm", resultLocation))
+			var matches []string
+			matches, err = filepath.Glob(fmt.Sprintf("%v/bin/run-*-vm", resultLocation))
 			if err != nil || len(matches) == 0 {
 				log.Warnf("failed to find VM binary; look in %v for the script to run the VM", resultLocation)
 			} else {
@@ -571,7 +590,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 
 	log.Step("Comparing changes...")
 
-	err := generation.RunDiffCommand(targetHost, constants.CurrentSystem, resultLocation, &generation.DiffCommandOptions{
+	err = generation.RunDiffCommand(targetHost, constants.CurrentSystem, resultLocation, &generation.DiffCommandOptions{
 		UseNvd: cfg.UseNvd,
 	})
 	if err != nil {
