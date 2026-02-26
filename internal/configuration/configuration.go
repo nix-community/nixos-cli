@@ -34,7 +34,7 @@ type SystemEvalOptions struct {
 type Configuration interface {
 	SetBuilder(builder system.CommandRunner)
 	EvalAttribute(attr string) (*string, error)
-	EvalSystem(s *system.LocalSystem, buildType BuildType, opts *SystemEvalOptions) error
+	EvalSystem(s *system.LocalSystem, buildType BuildType, opts *SystemEvalOptions) (string, error)
 	BuildSystem(buildType BuildType, opts *SystemBuildOptions) (string, error)
 }
 
