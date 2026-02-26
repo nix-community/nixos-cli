@@ -125,15 +125,15 @@ func (f *FlakeRef) EvalAttribute(attr string) (*string, error) {
 func (f *FlakeRef) EvalSystem(s *system.LocalSystem, buildType BuildType, opts *SystemEvalOptions) error {
 	systemAttribute := f.BuildAttr(buildType.BuildAttr())
 
-	argv := []string{"eval", systemAttribute}
+	argv := []string{"nix", "eval", systemAttribute}
 
 	if opts.NixOpts != nil {
 		argv = append(argv, opts.NixOpts.ArgsForCommand(nixopts.CmdEval)...)
 	}
 
-	s.Logger().CmdArray(append([]string{"nix"}, argv...))
+	s.Logger().CmdArray(argv)
 
-	cmd := system.NewCommand("nix", argv...)
+	cmd := system.NewCommand(argv[0], argv[1:]...)
 
 	_, err := s.Run(cmd)
 	return err
