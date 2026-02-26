@@ -354,18 +354,26 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 		nixConfig.SetBuilder(buildHost)
 
 		if opts.EvalOnly {
-			log.Step("Evaluating configuration...")
+			switch buildType.(type) {
+			case *configuration.SystemBuild:
+				log.Step("Evaluating configuration...")
+			case *configuration.ImageBuild:
+				log.Step("Evaluating image...")
+			case *configuration.VMBuild:
+				log.Step("Evaluating VM...")
+			}
 
 			evalOptions := &configuration.SystemEvalOptions{
 				NixOpts: &opts.NixOptions,
 			}
 
-			if err := nixConfig.EvalSystem(localSystem, buildType, evalOptions); err != nil {
+			drvPath, err := nixConfig.EvalSystem(localSystem, buildType, evalOptions)
+			if err != nil {
 				log.Errorf("failed to evaluate configuration: %v", err)
 				return err
 			}
 
-			log.Info("evaluation successful")
+			log.Infof("the evaluated derivation is %v", drvPath)
 			return nil
 		}
 

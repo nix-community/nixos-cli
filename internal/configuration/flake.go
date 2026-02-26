@@ -122,10 +122,10 @@ func (f *FlakeRef) EvalAttribute(attr string) (*string, error) {
 	return &value, nil
 }
 
-func (f *FlakeRef) EvalSystem(s *system.LocalSystem, buildType BuildType, opts *SystemEvalOptions) error {
-	systemAttribute := f.BuildAttr(buildType.BuildAttr())
+func (f *FlakeRef) EvalSystem(s *system.LocalSystem, buildType BuildType, opts *SystemEvalOptions) (string, error) {
+	drvPathAttr := f.BuildAttr(buildType.BuildAttr(), "drvPath")
 
-	argv := []string{"nix", "eval", systemAttribute}
+	argv := []string{"nix", "eval", "--raw", drvPathAttr}
 
 	if opts.NixOpts != nil {
 		argv = append(argv, opts.NixOpts.ArgsForCommand(nixopts.CmdEval)...)
@@ -133,10 +133,12 @@ func (f *FlakeRef) EvalSystem(s *system.LocalSystem, buildType BuildType, opts *
 
 	s.Logger().CmdArray(argv)
 
+	var stdout bytes.Buffer
 	cmd := system.NewCommand(argv[0], argv[1:]...)
+	cmd.Stdout = &stdout
 
 	_, err := s.Run(cmd)
-	return err
+	return strings.TrimSpace(stdout.String()), err
 }
 
 func (f *FlakeRef) buildLocalSystem(s *system.LocalSystem, buildType BuildType, opts *SystemBuildOptions) (string, error) {
