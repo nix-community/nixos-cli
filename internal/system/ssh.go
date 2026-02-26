@@ -179,9 +179,11 @@ func knownHostsCallback(log logger.Logger, extraKnownHosts []string) (ssh.HostKe
 	// These usually exist on most systems.
 	defaultKnownHosts := []string{"/etc/ssh/ssh_known_hosts"}
 
-	homeDir, _ := os.UserHomeDir()
-	knownHostsUserFile := filepath.Join(homeDir, ".ssh", "known_hosts")
-	defaultKnownHosts = append(defaultKnownHosts, knownHostsUserFile)
+	var knownHostsUserFile string
+	if homeDir, err := os.UserHomeDir(); err == nil {
+		knownHostsUserFile = filepath.Join(homeDir, ".ssh", "known_hosts")
+		defaultKnownHosts = append(defaultKnownHosts, knownHostsUserFile)
+	}
 
 	// Make sure files exist before adding to the known hosts constructor.
 	// The known hosts constructor fails catastrophically if any files
@@ -209,7 +211,11 @@ func knownHostsCallback(log logger.Logger, extraKnownHosts []string) (ssh.HostKe
 		return nil, fmt.Errorf("failed to create known hosts callback: %v", err)
 	}
 
-	return addKeyToKnownHostsCallback(log, knownHostsKeyCallback, knownHostsUserFile), nil
+	if knownHostsUserFile != "" {
+		return addKeyToKnownHostsCallback(log, knownHostsKeyCallback, knownHostsUserFile), nil
+	} else {
+		return knownHostsKeyCallback, nil
+	}
 }
 
 func NewSSHSystem(cfg *SSHConfig, log logger.Logger) (*SSHSystem, error) {
