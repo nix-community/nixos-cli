@@ -21,6 +21,7 @@ import (
 	"github.com/nix-community/nixos-cli/internal/logger"
 	"github.com/nix-community/nixos-cli/internal/nix"
 	"github.com/nix-community/nixos-cli/internal/settings"
+	"github.com/nix-community/nixos-cli/internal/ssh"
 	"github.com/nix-community/nixos-cli/internal/system"
 	"github.com/nix-community/nixos-cli/internal/utils"
 	"github.com/spf13/cobra"
@@ -186,6 +187,8 @@ func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 
 	_ = cmd.RegisterFlagCompletionFunc("profile-name", generation.CompleteProfileFlag)
 	_ = cmd.RegisterFlagCompletionFunc("specialisation", generation.CompleteSpecialisationFlagFromConfig(opts.FlakeRef, opts.NixOptions.Include))
+	_ = cmd.RegisterFlagCompletionFunc("build-host", ssh.CompleteHost)
+	_ = cmd.RegisterFlagCompletionFunc("target-host", ssh.CompleteHost)
 	_ = cmd.RegisterFlagCompletionFunc("store-path", cmdUtils.DirCompletions)
 
 	cmd.MarkFlagsMutuallyExclusive("dry", "output")
