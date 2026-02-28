@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"slices"
 	"strings"
+	"syscall"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/nix-community/nixos-cli/internal/activation"
@@ -235,6 +237,9 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 	cfg := settings.FromContext(cmd.Context())
 	localSystem := system.NewLocalSystem(log)
 
+	stopCtx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	sshAgent, err := sshUtils.NewAgentManager(log)
 	if err != nil {
 		log.Warnf("failed to start/connect to SSH agent: %v", err)
@@ -251,7 +256,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 		log.Debugf("connecting to %s", opts.TargetHost)
 
 		var sshCfg *system.SSHConfig
-		sshCfg, err = system.NewSSHConfig(opts.TargetHost, log, system.SSHConfigOptions{
+		sshCfg, err = system.NewSSHConfig(stopCtx, opts.TargetHost, log, system.SSHConfigOptions{
 			AgentManager:    sshAgent,
 			KnownHostsFiles: cfg.SSH.KnownHostsFiles,
 			PrivateKeyCmd:   cfg.SSH.PrivateKeyCmd,
@@ -324,7 +329,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 		log.Debugf("connecting to %s", opts.BuildHost)
 
 		var sshCfg *system.SSHConfig
-		sshCfg, err = system.NewSSHConfig(opts.BuildHost, log, system.SSHConfigOptions{
+		sshCfg, err = system.NewSSHConfig(stopCtx, opts.BuildHost, log, system.SSHConfigOptions{
 			AgentManager:    sshAgent,
 			KnownHostsFiles: cfg.SSH.KnownHostsFiles,
 			PrivateKeyCmd:   cfg.SSH.PrivateKeyCmd,
@@ -404,7 +409,8 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 				NixOpts: &opts.NixOptions,
 			}
 
-			drvPath, err := nixConfig.EvalSystem(localSystem, buildType, evalOptions)
+			var drvPath string
+			drvPath, err = nixConfig.EvalSystem(localSystem, buildType, evalOptions)
 			if err != nil {
 				log.Errorf("failed to evaluate configuration: %v", err)
 				return err
@@ -617,7 +623,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 	}
 
 	if t, ok := targetHost.(*system.SSHSystem); ok && opts.RemoteRoot {
-		err = t.EnsureRemoteRootPassword(cfg.RootCommand)
+		err = t.EnsureRemoteRootPassword(stopCtx, cfg.RootCommand)
 		if err != nil {
 			log.Error(err)
 			return err

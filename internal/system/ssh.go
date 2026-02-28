@@ -2,6 +2,7 @@ package system
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -57,7 +58,12 @@ type SSHConfigOptions struct {
 	PrivateKeyCmd   []string
 }
 
-func NewSSHConfig(host string, log logger.Logger, options SSHConfigOptions) (*SSHConfig, error) {
+// Initialize a new SSH configuration that can be passed
+// to configure an SSH system instance.
+//
+// The context is required to construct the password callback
+// such that it can be canceled gracefully.
+func NewSSHConfig(ctx context.Context, host string, log logger.Logger, options SSHConfigOptions) (*SSHConfig, error) {
 	// Parse the user@address:port SSH host string
 	if after, ok := strings.CutPrefix(host, "ssh://"); ok {
 		host = after
@@ -152,7 +158,7 @@ func NewSSHConfig(host string, log logger.Logger, options SSHConfigOptions) (*SS
 		}
 
 		var bytePassword []byte
-		bytePassword, err = promptForPassword(username, address)
+		bytePassword, err = promptForPassword(ctx, username, address)
 		if err != nil {
 			return "", err
 		}
@@ -256,7 +262,12 @@ func dialClient(cfg *SSHConfig) (*ssh.Client, *sftp.Client, error) {
 	return client, sftpClient, nil
 }
 
-func (s *SSHSystem) EnsureRemoteRootPassword(rootCmd string) error {
+// Ensure that a password exists for any root elevation command
+// if necessary.
+//
+// This makes sure that any root elevation can be invoked properly
+// on the remote system, even if a password wasn't specified before.
+func (s *SSHSystem) EnsureRemoteRootPassword(ctx context.Context, rootCmd string) error {
 	// If the password already exists, presumably we already have sudo
 	// permissions and don't need to check. If the logged-in user doesn't,
 	// then the first command that requires sudo will say as much and exit,
@@ -272,7 +283,7 @@ func (s *SSHSystem) EnsureRemoteRootPassword(rootCmd string) error {
 
 	s.Logger().Info("please input password to run commands as root")
 
-	bytePassword, err := promptForPassword(s.cfg.User, s.cfg.Address)
+	bytePassword, err := promptForPassword(ctx, s.cfg.User, s.cfg.Address)
 	if err != nil {
 		return err
 	}
@@ -353,18 +364,45 @@ func runPrivateKeyCmd(s *LocalSystem, host string, username string, privateKeyCm
 	return signer, nil
 }
 
-func promptForPassword(username string, address string) ([]byte, error) {
+// Prompt for a password from stdin.
+//
+// This operation can be cancelled using the provided context.
+func promptForPassword(ctx context.Context, username string, address string) ([]byte, error) {
 	fd := int(os.Stdin.Fd())
 	if !term.IsTerminal(fd) {
 		return nil, fmt.Errorf("cannot prompt for password: stdin is not a terminal")
 	}
 
+	oldState, err := term.GetState(fd)
+	if err != nil {
+		return nil, err
+	}
+
 	fmt.Fprintf(os.Stderr, "Password for %s@%s: ", username, address)
 	_ = os.Stdin.Sync()
 
-	bytePassword, err := term.ReadPassword(int(os.Stdin.Fd()))
-	fmt.Fprintln(os.Stderr)
-	return bytePassword, err
+	type result struct {
+		pw  []byte
+		err error
+	}
+
+	ch := make(chan result, 1)
+
+	go func() {
+		pw, readErr := term.ReadPassword(fd)
+		ch <- result{pw, readErr}
+	}()
+
+	select {
+	case <-ctx.Done():
+		_ = term.Restore(fd, oldState)
+		fmt.Fprintln(os.Stderr)
+		return nil, ctx.Err()
+
+	case res := <-ch:
+		fmt.Fprintln(os.Stderr)
+		return res.pw, res.err
+	}
 }
 
 // This mimics the automatic addition of known_hosts entries
