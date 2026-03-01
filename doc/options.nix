@@ -14,7 +14,13 @@ in
         self.nixosModules.nixos-cli
       ];
     specialArgs = {
-      inherit pkgs;
+      # This missing package is preventing option evaluation from
+      # occurring. This needs to be fixed upstream.
+      pkgs = pkgs.extend (final: prev: {
+        xf86-video-nested = prev.xf86_video_nested;
+      });
     };
-    excluded = ["_module.args"];
+    excluded = [
+      "_module.args"
+    ];
   }
