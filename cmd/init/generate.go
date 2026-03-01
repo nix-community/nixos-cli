@@ -324,20 +324,19 @@ const (
 func generateFilesystemAttrset(filesystem *Filesystem) string {
 	fsStr := strings.Builder{}
 
-	_, _ = fsStr.WriteString(fmt.Sprintf(fileSystemEntryKeyTemplate, filesystem.Mountpoint))
-	_, _ = fsStr.WriteString(fmt.Sprintf(fileSystemDeviceTemplate, filesystem.DevicePath))
-	_, _ = fsStr.WriteString(fmt.Sprintf(fileSystemTypeTemplate, filesystem.FSType))
+	fmt.Fprintf(&fsStr, fileSystemEntryKeyTemplate, filesystem.Mountpoint)
+	fmt.Fprintf(&fsStr, fileSystemDeviceTemplate, filesystem.DevicePath)
+	fmt.Fprintf(&fsStr, fileSystemTypeTemplate, filesystem.FSType)
 
 	if len(filesystem.Options) > 0 {
-		optionStr := fmt.Sprintf(fileSystemOptionTemplate, nixStringList(uniqueStringsInSlice(filesystem.Options)))
-		_, _ = fsStr.WriteString(optionStr)
+		fmt.Fprintf(&fsStr, fileSystemOptionTemplate, nixStringList(uniqueStringsInSlice(filesystem.Options)))
 	}
 
 	fsStr.WriteString("  };\n")
 
 	luks := filesystem.LUKSInformation
 	if luks != nil {
-		_, _ = fsStr.WriteString(fmt.Sprintf(fileSystemLuksTemplate, luks.Name, luks.DevicePath))
+		fmt.Fprintf(&fsStr, fileSystemLuksTemplate, luks.Name, luks.DevicePath)
 	}
 
 	return fsStr.String()
