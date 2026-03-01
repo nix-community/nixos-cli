@@ -39,3 +39,6 @@ jobs:
 
       - name: Build Nix packages
         run: nix build .#{nixos,nixosLegacy}
+
+      - name: Build docs
+        run: nix develop .# -c make gen-docs
