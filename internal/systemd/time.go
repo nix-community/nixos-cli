@@ -2,13 +2,18 @@ package systemdUtils
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"time"
 	"unicode"
 )
 
-// Parse a time.Duration from a systemd.time(7) string.
-func DurationFromTimeSpan(span string) (time.Duration, error) {
+type SystemdDuration time.Duration
+
+// Parse a duration from a systemd.time(7) string.
+//
+// Returns a SystemdDuration, a defined type wrapping time.Duration.
+func DurationFromTimeSpan(span string) (SystemdDuration, error) {
 	if len(span) < 2 {
 		return 0, fmt.Errorf("time span too short")
 	}
@@ -58,25 +63,25 @@ func DurationFromTimeSpan(span string) (time.Duration, error) {
 		unit := span[unitStart:i]
 
 		var durationUnit time.Duration
-		if containsSlice(unit, []string{"ns", "nsec"}) {
+		if slices.Contains([]string{"ns", "nsec"}, unit) {
 			durationUnit = time.Nanosecond
-		} else if containsSlice(unit, []string{"us", "usec"}) {
+		} else if slices.Contains([]string{"us", "usec"}, unit) {
 			durationUnit = time.Microsecond
-		} else if containsSlice(unit, []string{"ms", "msec"}) {
+		} else if slices.Contains([]string{"ms", "msec"}, unit) {
 			durationUnit = time.Millisecond
-		} else if containsSlice(unit, []string{"s", "sec", "second", "seconds"}) {
+		} else if slices.Contains([]string{"s", "sec", "second", "seconds"}, unit) {
 			durationUnit = time.Second
-		} else if containsSlice(unit, []string{"m", "min", "minute", "minutes"}) {
+		} else if slices.Contains([]string{"m", "min", "minute", "minutes"}, unit) {
 			durationUnit = time.Minute
-		} else if containsSlice(unit, []string{"h", "hr", "hour", "hours"}) {
+		} else if slices.Contains([]string{"h", "hr", "hour", "hours"}, unit) {
 			durationUnit = time.Hour
-		} else if containsSlice(unit, []string{"d", "day", "days"}) {
+		} else if slices.Contains([]string{"d", "day", "days"}, unit) {
 			durationUnit = time.Hour * 24
-		} else if containsSlice(unit, []string{"w", "week", "weeks"}) {
+		} else if slices.Contains([]string{"w", "week", "weeks"}, unit) {
 			durationUnit = time.Hour * 24 * 7
-		} else if containsSlice(unit, []string{"M", "month", "months"}) {
+		} else if slices.Contains([]string{"M", "month", "months"}, unit) {
 			durationUnit = time.Duration(30.44 * float64(24) * float64(time.Hour))
-		} else if containsSlice(unit, []string{"y", "year", "years"}) {
+		} else if slices.Contains([]string{"y", "year", "years"}, unit) {
 			durationUnit = time.Duration(365.25 * float64(24) * float64(time.Hour))
 		} else {
 			return 0, fmt.Errorf("invalid unit")
@@ -85,14 +90,39 @@ func DurationFromTimeSpan(span string) (time.Duration, error) {
 		totalDuration += time.Duration(num) * durationUnit
 	}
 
-	return totalDuration, nil
+	return SystemdDuration(totalDuration), nil
 }
 
-func containsSlice(candidate string, candidates []string) bool {
-	for _, v := range candidates {
-		if v == candidate {
-			return true
-		}
+func (s SystemdDuration) Duration() time.Duration {
+	return time.Duration(s)
+}
+
+// cobra value parsing implementation
+func (d *SystemdDuration) Set(value string) error {
+	parsed, err := DurationFromTimeSpan(value)
+	if err != nil {
+		return err
 	}
-	return false
+
+	*d = parsed
+	return nil
+}
+
+func (d *SystemdDuration) String() string {
+	return time.Duration(*d).String()
+}
+
+func (d *SystemdDuration) Type() string {
+	return "systemd-duration"
+}
+
+// koanf unmarshaling support
+func (d *SystemdDuration) UnmarshalText(text []byte) error {
+	parsed, err := DurationFromTimeSpan(string(text))
+	if err != nil {
+		return err
+	}
+
+	*d = parsed
+	return nil
 }

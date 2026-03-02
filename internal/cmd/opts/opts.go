@@ -4,6 +4,7 @@ import (
 	"github.com/nix-community/nixos-cli/internal/activation"
 	"github.com/nix-community/nixos-cli/internal/cmd/nixopts"
 	"github.com/nix-community/nixos-cli/internal/configuration"
+	systemdUtils "github.com/nix-community/nixos-cli/internal/systemd"
 )
 
 type MainOpts struct {
@@ -22,23 +23,25 @@ type AliasesOpts struct {
 }
 
 type ApplyOpts struct {
-	File                  string
-	Attr                  string
 	AlwaysConfirm         bool
+	Attr                  string
 	BuildHost             string
 	BuildImage            string
 	BuildVM               bool
 	BuildVMWithBootloader bool
 	Dry                   bool
+	File                  string
 	FlakeRef              string
 	GenerationTag         string
 	InstallBootloader     bool
+	LocalRoot             bool
 	NoActivate            bool
 	NoBoot                bool
+	NoRollback            bool
 	OutputPath            string
 	ProfileName           string
-	LocalRoot             bool
 	RemoteRoot            bool
+	RollbackTimeout       systemdUtils.SystemdDuration
 	Specialisation        string
 	StorePath             string
 	TargetHost            string
@@ -119,7 +122,7 @@ type GenerationDeleteOpts struct {
 	// but Cobra's pflags does not support this type yet.
 	Keep          []uint
 	MinimumToKeep uint64
-	OlderThan     string
+	OlderThan     systemdUtils.SystemdDuration
 	UpperBound    uint64
 	AlwaysConfirm bool
 	Pattern       string
