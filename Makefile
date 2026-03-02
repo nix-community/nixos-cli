@@ -58,3 +58,7 @@ gen-manpages:
 .PHONY: serve-site
 serve-site:
 	mdbook serve ./doc --open
+
+.PHONY: vuln-check
+vuln-check:
+	govulncheck ./...
