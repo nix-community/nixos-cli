@@ -37,3 +37,25 @@ func (f *SFTPFilesystem) ReadFile(path string) ([]byte, error) {
 func (f *SFTPFilesystem) MkdirAll(path string, perm os.FileMode) error {
 	return f.client.MkdirAll(path)
 }
+
+func (f *SFTPFilesystem) CreateFile(path string) error {
+	file, err := f.client.Create(path)
+	if err != nil {
+		return err
+	}
+
+	_ = file.Close()
+	return nil
+}
+
+func (f *SFTPFilesystem) ReadDir(path string) ([]os.FileInfo, error) {
+	return f.client.ReadDir(path)
+}
+
+func (f *SFTPFilesystem) RealPath(path string) (string, error) {
+	return f.client.RealPath(path)
+}
+
+func (f *SFTPFilesystem) Glob(pattern string) ([]string, error) {
+	return f.client.Glob(pattern)
+}

@@ -211,7 +211,7 @@ func generationSwitchMain(cmd *cobra.Command, genOpts *cmdOpts.GenerationOpts, o
 				return
 			}
 
-			if !cfg.AutoRollback {
+			if !cfg.Rollback.Enable {
 				log.Warnf("automatic rollback is disabled, the currently active profile may have unresolved problems")
 				log.Warnf("you are on your own!")
 				return

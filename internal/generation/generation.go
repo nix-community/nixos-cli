@@ -14,6 +14,7 @@ import (
 	"github.com/djherbis/times"
 	"github.com/nix-community/nixos-cli/internal/constants"
 	"github.com/nix-community/nixos-cli/internal/logger"
+	"github.com/nix-community/nixos-cli/internal/system"
 )
 
 func GetProfileDirectoryFromName(profile string) string {
@@ -25,6 +26,7 @@ func GetProfileDirectoryFromName(profile string) string {
 }
 
 type Generation struct {
+	Path            string    `json:"path"`
 	Number          uint64    `json:"number"`
 	CreationDate    time.Time `json:"creation_date"`
 	IsCurrent       bool      `json:"is_current"`
@@ -54,8 +56,14 @@ func (e *GenerationReadError) Error() string {
 	return fmt.Sprintf("failed to read generation %d from directory %s", e.Number, e.Directory)
 }
 
-func GenerationFromDirectory(generationDirname string, number uint64) (*Generation, error) {
+func GenerationFromDirectory(s system.System, generationDirname string, number uint64) (*Generation, error) {
+	generationPath, err := s.FS().RealPath(generationDirname)
+	if err != nil {
+		generationPath = generationDirname
+	}
+
 	info := &Generation{
+		Path:            generationPath,
 		Number:          number,
 		CreationDate:    time.Time{},
 		IsCurrent:       false,
@@ -67,7 +75,7 @@ func GenerationFromDirectory(generationDirname string, number uint64) (*Generati
 
 	encounteredErrors := []error{}
 
-	manifestBytes, err := os.ReadFile(nixosVersionManifestFile)
+	manifestBytes, err := s.FS().ReadFile(nixosVersionManifestFile)
 	if err != nil {
 		// The `nixos-version.json` file does not exist in generations that
 		// are created without the corresponding NixOS module enabled or
@@ -95,7 +103,8 @@ func GenerationFromDirectory(generationDirname string, number uint64) (*Generati
 		nixosVersionFile := filepath.Join(generationDirname, constants.NixOSVersionFile)
 
 		var nixosVersionContents []byte
-		nixosVersionContents, err = os.ReadFile(nixosVersionFile)
+		nixosVersionContents, err = s.FS().ReadFile(nixosVersionFile)
+
 		if err != nil {
 			encounteredErrors = append(encounteredErrors, err)
 		} else {
@@ -104,19 +113,23 @@ func GenerationFromDirectory(generationDirname string, number uint64) (*Generati
 	}
 
 	// Get time of creation for the generation
-	creationTimeStat, err := times.Stat(generationDirname)
-	if err != nil {
-		encounteredErrors = append(encounteredErrors, err)
-	} else {
-		if creationTimeStat.HasBirthTime() {
-			info.CreationDate = creationTimeStat.BirthTime()
+	switch s.(type) {
+	case *system.LocalSystem:
+		var creationTimeStat times.Timespec
+		creationTimeStat, err = times.Stat(generationDirname)
+		if err != nil {
+			encounteredErrors = append(encounteredErrors, err)
 		} else {
-			info.CreationDate = creationTimeStat.ModTime()
+			if creationTimeStat.HasBirthTime() {
+				info.CreationDate = creationTimeStat.BirthTime()
+			} else {
+				info.CreationDate = creationTimeStat.ModTime()
+			}
 		}
 	}
 
 	kernelVersionDirGlob := filepath.Join(generationDirname, "kernel-modules", "lib", "modules", "*")
-	kernelVersionMatches, err := filepath.Glob(kernelVersionDirGlob)
+	kernelVersionMatches, err := s.FS().Glob(kernelVersionDirGlob)
 	if err != nil {
 		encounteredErrors = append(encounteredErrors, err)
 	} else if len(kernelVersionMatches) == 0 {
@@ -125,7 +138,7 @@ func GenerationFromDirectory(generationDirname string, number uint64) (*Generati
 		info.KernelVersion = filepath.Base(kernelVersionMatches[0])
 	}
 
-	specialisations, err := CollectSpecialisations(generationDirname)
+	specialisations, err := CollectSpecialisations(s, generationDirname)
 	if err != nil {
 		encounteredErrors = append(encounteredErrors, err)
 	}
@@ -147,13 +160,13 @@ const (
 	GenerationLinkTemplateRegex = `^%s-(\d+)-link$`
 )
 
-func CollectGenerationsInProfile(log logger.Logger, profile string) ([]Generation, error) {
+func CollectGenerationsInProfile(s system.System, log logger.Logger, profile string) ([]Generation, error) {
 	profileDirectory := constants.NixProfileDirectory
 	if profile != "system" {
 		profileDirectory = constants.NixSystemProfileDirectory
 	}
 
-	generationDirEntries, err := os.ReadDir(profileDirectory)
+	generationDirEntries, err := s.FS().ReadDir(profileDirectory)
 	if err != nil {
 		return nil, err
 	}
@@ -185,7 +198,7 @@ func CollectGenerationsInProfile(log logger.Logger, profile string) ([]Generatio
 			generationDirectoryName := filepath.Join(profileDirectory, fmt.Sprintf("%s-%d-link", profile, genNumber))
 
 			var info *Generation
-			info, err = GenerationFromDirectory(generationDirectoryName, genNumber)
+			info, err = GenerationFromDirectory(s, generationDirectoryName, genNumber)
 			if err != nil {
 				return nil, err
 			}
