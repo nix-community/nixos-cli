@@ -45,8 +45,7 @@ gen-docs: gen-manpages gen-site
 
 .PHONY: site
 site: gen-site
-	# -d is interpreted relative to the book directory.
-	mdbook build ./doc -d ../site
+	mdbook build ./doc -d ./site
 
 .PHONY: gen-site
 gen-site:
