@@ -11,7 +11,13 @@
 
     flake-parts.url = "github:hercules-ci/flake-parts";
 
-    optnix.url = "github:water-sucks/optnix";
+    optnix = {
+      url = "github:water-sucks/optnix";
+      inputs = {
+        flake-compat.follows = "flake-compat";
+        nixpkgs.follows = "nixpkgs";
+      };
+    };
   };
 
   outputs = {
