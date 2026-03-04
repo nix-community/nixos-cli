@@ -59,7 +59,7 @@ Then, enable the module.
 {
   programs.nixos-cli = {
     enable = true;
-    config = {
+    settings = {
       # Whatever settings desired.
     }
   };
