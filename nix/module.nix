@@ -115,6 +115,7 @@ in {
       enable = lib.mkOption {
         type = types.bool;
         default = config.documentation.nixos.enable;
+        defaultText = lib.literalExpression ''config.documentation.nixos.enable'';
         description = "Prebuild JSON cache for `nixos option` command";
       };
 
