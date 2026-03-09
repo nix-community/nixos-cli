@@ -17,16 +17,17 @@ type Settings struct {
 	Aliases           map[string][]string  `koanf:"aliases" noset:"true"`
 	Apply             ApplySettings        `koanf:"apply"`
 	AutoRollback      bool                 `koanf:"auto_rollback"`
+	ConfigLocation    string               `koanf:"config_location"`
 	Confirmation      ConfirmationSettings `koanf:"confirmation"`
 	Differ            DifferSettings       `koanf:"differ"`
-	UseColor          bool                 `koanf:"color"`
-	ConfigLocation    string               `koanf:"config_location"`
 	Enter             EnterSettings        `koanf:"enter"`
 	Init              InitSettings         `koanf:"init"`
 	NoConfirm         bool                 `koanf:"no_confirm"`
 	Option            OptionSettings       `koanf:"option"`
-	SSH               SSHSettings          `koanf:"ssh"`
+	Root              RootCommandSettings  `koanf:"root"`
 	RootCommand       string               `koanf:"root_command"`
+	SSH               SSHSettings          `koanf:"ssh"`
+	UseColor          bool                 `koanf:"color"`
 	UseDefaultAliases bool                 `koanf:"use_default_aliases"`
 	UseNvd            bool                 `koanf:"use_nvd"`
 }
@@ -69,6 +70,11 @@ type OptionSettings struct {
 	DebounceTime int64 `koanf:"debounce_time"`
 }
 
+type RootCommandSettings struct {
+	Command        string              `koanf:"command"`
+	PasswordMethod PasswordInputMethod `koanf:"password_method"`
+}
+
 type SSHSettings struct {
 	KnownHostsFiles []string `koanf:"known_hosts_files"`
 	PrivateKeyCmd   []string `koanf:"private_key_cmd"`
@@ -81,6 +87,20 @@ const (
 	ConfirmationPromptDefaultYes ConfirmationPromptBehavior = "default-yes"
 	ConfirmationPromptDefaultNo  ConfirmationPromptBehavior = "default-no"
 )
+
+type PasswordInputMethod string
+
+const (
+	PasswordInputMethodStdin PasswordInputMethod = "stdin"
+	PasswordInputMethodTTY   PasswordInputMethod = "tty"
+	PasswordInputMethodNone  PasswordInputMethod = "none"
+)
+
+var AvailablePasswordInputMethods = map[string]string{
+	string(PasswordInputMethodStdin): "Prompt for the password once and pass it on stdin for all invocations",
+	string(PasswordInputMethodTTY):   "Allocate a TTY and always use interactive input for password",
+	string(PasswordInputMethodNone):  "Fail if command requires authentication",
+}
 
 type DiffTool string
 
@@ -318,9 +338,26 @@ This requires the 'nix-command' experimental feature to be enabled in the Nix co
 			"ssh": {"sh", "-c", "rbw get $NIXOS_CLI_SSH_HOST"},
 		},
 	},
+	"root": {
+		Short: "Settings for root command escalation",
+	},
+	"root.command": {
+		Short: "Command to use to run command as root",
+		Long: "Specifies which command to use for privilege escalation (such as sudo or doas)." +
+			" Password input behavior depends on the `root.password_method` setting.",
+		Example: "doas",
+	},
+	"root.password_method": {
+		Short: "Method to use for passing the invoking user's password",
+		Long: "Specifies the method of password entry for the command." +
+			" The `stdin` method prompts for the password once, and passes it on the process's standard input with a trailing newline for all invoking processes." +
+			" The `tty` method will allocate a TTY if necessary (i.e. when running over SSH), and almost always requires interactive input." +
+			" The `none` method assumes that no password is required (i.e. when a sudo user has NOPASSWD set), and will fail otherwise.",
+	},
 	"root_command": {
-		Short: "Command to use to promote process to root",
-		Long:  "Specifies which command to use for privilege escalation (e.g., sudo or doas).",
+		Short:      "Command to use to promote process to root",
+		Long:       "Specifies which command to use for privilege escalation (such as sudo or doas)",
+		Deprecated: "Use the settings defined under the `root` key instead.",
 	},
 	"use_default_aliases": {
 		Short: "Enables default list of aliases",
@@ -350,12 +387,15 @@ func NewSettings() *Settings {
 		Enter: EnterSettings{
 			MountResolvConf: true,
 		},
-		Init:        InitSettings{},
-		RootCommand: "sudo",
+		Init: InitSettings{},
 		Option: OptionSettings{
 			MinScore:     1,
 			Prettify:     true,
 			DebounceTime: 25,
+		},
+		Root: RootCommandSettings{
+			Command:        "sudo",
+			PasswordMethod: PasswordInputMethodStdin,
 		},
 		SSH:               SSHSettings{},
 		UseDefaultAliases: true,
@@ -451,6 +491,20 @@ func (cfg *Settings) Validate() SettingsErrors {
 	default:
 		errs = append(errs, SettingsError{Field: "differ.tool", Message: fmt.Sprintf("invalid value '%s' specified", cfg.Differ.Tool)})
 		cfg.Differ.Tool = DifferNix
+	}
+
+	if cfg.RootCommand != "" {
+		errs = append(errs, DeprecatedSettingError{
+			Field:       "root_command",
+			Alternative: "use the settings defined under the `root` key instead",
+		})
+		cfg.Root.Command = cfg.RootCommand
+		// Make sure that known elevation tools don't suddenly break
+		// when still in the backwards compat phase.
+		if cfg.Root.Command == "doas" || cfg.Root.Command == "run0" {
+			errs = append(errs, fmt.Errorf("since %s is being used, make sure to set `root.password_method` to 'tty' as well", cfg.Root.Command))
+			cfg.Root.PasswordMethod = PasswordInputMethodTTY
+		}
 	}
 
 	if len(errs) > 0 {

@@ -316,7 +316,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 		// system build type or upgrading channels.
 		if v, ok := buildType.(*configuration.SystemBuild); ok && v.Activate ||
 			!build.Flake() && (opts.UpgradeChannels || opts.UpgradeAllChannels) {
-			if err = utils.ExecAsRoot(cfg.RootCommand); err != nil {
+			if err = utils.ExecAsRoot(cfg.Root.Command); err != nil {
 				log.Errorf("failed to re-exec command as root: %v", err)
 				return err
 			}
@@ -351,6 +351,15 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 		buildHost = host
 	} else {
 		buildHost = localSystem
+	}
+
+	var rootElevator *system.RootElevator
+	if opts.RemoteRoot || (opts.LocalRoot && !effectiveRoot) {
+		rootElevator, err = system.ElevatorFromConfig(&cfg.Root)
+		if err != nil {
+			log.Error(err)
+			return err
+		}
 	}
 
 	var nixConfig configuration.Configuration
@@ -432,8 +441,8 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 
 			if err = upgradeChannels(localSystem, &upgradeChannelsOptions{
 				UpgradeAll:     opts.UpgradeAllChannels,
-				RootCommand:    cfg.RootCommand,
 				UseRootCommand: !effectiveRoot && opts.LocalRoot,
+				RootElevator:   rootElevator,
 			}); err != nil {
 				log.Warnf("failed to update channels: %v", err)
 				log.Warnf("continuing with existing channels")
@@ -625,14 +634,6 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 		}
 	}
 
-	if t, ok := targetHost.(*system.SSHSystem); ok && opts.RemoteRoot {
-		err = t.EnsureRemoteRootPassword(stopCtx, cfg.RootCommand)
-		if err != nil {
-			log.Error(err)
-			return err
-		}
-	}
-
 	specialisation := opts.Specialisation
 	if specialisation == "" {
 		var defaultSpecialisation string
@@ -659,6 +660,16 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 	activationMissingRoot := !effectiveRoot && !opts.LocalRoot && !targetHost.IsRemote()
 	activationUseRoot := !effectiveRoot && opts.LocalRoot && !targetHost.IsRemote() || opts.RemoteRoot && targetHost.IsRemote()
 
+	if rootElevator != nil && activationUseRoot {
+		if rootElevator.PasswordProvider != nil {
+			log.Infof("please enter password for %s", rootElevator.Command)
+			if err = rootElevator.PromptIfNecessary(stopCtx); err != nil {
+				log.Error(err)
+				return err
+			}
+		}
+	}
+
 	// Do not create a generation for dry runs or for
 	// testing generations using the --no-boot option.
 	createGeneration := !opts.Dry && !opts.NoBoot
@@ -677,7 +688,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 			opts.ProfileName,
 			resultLocation,
 			&activation.AddNewNixProfileOptions{
-				RootCommand:    cfg.RootCommand,
+				RootElevator:   rootElevator,
 				UseRootCommand: activationUseRoot,
 			},
 		); err != nil {
@@ -710,8 +721,8 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 				targetHost,
 				opts.ProfileName,
 				previousGenNumber, &activation.SetNixProfileGenerationOptions{
-					RootCommand:    cfg.RootCommand,
 					UseRootCommand: activationUseRoot,
+					RootElevator:   rootElevator,
 				},
 			); err != nil {
 				log.Errorf("failed to rollback system profile: %v", err)
@@ -745,7 +756,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 		InstallBootloader: opts.InstallBootloader,
 		Specialisation:    specialisation,
 		UseRootCommand:    activationUseRoot,
-		RootCommand:       cfg.RootCommand,
+		RootElevator:      rootElevator,
 	})
 	if err != nil {
 		rollbackProfile = true
@@ -760,7 +771,7 @@ const channelDirectory = constants.NixProfileDirectory + "/per-user/root/channel
 
 type upgradeChannelsOptions struct {
 	UpgradeAll     bool
-	RootCommand    string
+	RootElevator   *system.RootElevator
 	UseRootCommand bool
 }
 
@@ -789,8 +800,8 @@ func upgradeChannels(s system.CommandRunner, opts *upgradeChannelsOptions) error
 	s.Logger().CmdArray(argv)
 
 	cmd := system.NewCommand(argv[0], argv[1:]...)
-	if opts.UseRootCommand {
-		cmd.AsRoot(opts.RootCommand)
+	if opts.RootElevator != nil {
+		cmd.AsRoot(opts.RootElevator)
 	}
 	_, err := s.Run(cmd)
 	return err

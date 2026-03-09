@@ -3,6 +3,8 @@ package system
 import (
 	"strings"
 	"testing"
+
+	"github.com/nix-community/nixos-cli/internal/settings"
 )
 
 func TestBuildShellWrapper_NoEnv_NoRoot(t *testing.T) {
@@ -94,8 +96,14 @@ func TestBuildShellWrapper_NulInArgs(t *testing.T) {
 }
 
 func TestBuildShellWrapper_WithRootElevation(t *testing.T) {
+	elevator := &RootElevator{
+		Command: "sudo",
+		Flags:   []string{"-n"},
+		Method:  settings.PasswordInputMethodNone,
+	}
+
 	cmd := NewCommand("id")
-	cmd.AsRoot("sudo", "-n")
+	cmd.AsRoot(elevator)
 
 	argv, err := cmd.BuildShellWrapper()
 	if err != nil {

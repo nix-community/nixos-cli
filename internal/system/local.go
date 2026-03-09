@@ -2,6 +2,7 @@ package system
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"syscall"
 
 	"github.com/nix-community/nixos-cli/internal/logger"
+	"github.com/nix-community/nixos-cli/internal/settings"
 )
 
 type LocalSystem struct {
@@ -33,7 +35,7 @@ func (l *LocalSystem) Run(cmd *Command) (int, error) {
 
 	var err error
 
-	if cmd.RootElevationCmd != "" {
+	if cmd.rootElevator != nil {
 		// If environment variables are specified,
 		// use the shell wrapper to set them inline
 		// to bypass root elevation environment
@@ -61,10 +63,37 @@ func (l *LocalSystem) Run(cmd *Command) (int, error) {
 	command.Stdin = cmd.Stdin
 	command.Env = os.Environ()
 
-	// If RootElevationCmd is set, then these variables are
-	// handled by the wrapper. Otherwise, set them directly
-	// for the process.
-	if cmd.RootElevationCmd == "" {
+	if elevator := cmd.rootElevator; elevator != nil {
+		switch elevator.Method {
+		case settings.PasswordInputMethodStdin:
+			if elevator.PasswordProvider == nil {
+				return 0, fmt.Errorf("password provider is required for stdin password input method")
+			}
+			// Processes will likely never expect stdin to be set for SSH
+			// if they are running as root, since this seems to be a
+			// fairly uncommon scenario to need to pass things through
+			// stdin while simultaneously needing root, and we will likely
+			// never need something like that here.
+			//
+			// As such, we're replacing the entire stdin with this password.
+			pwStr, pwErr := elevator.PasswordProvider.GetPassword()
+			if pwErr != nil {
+				return 0, pwErr
+			}
+			pw := append([]byte(pwStr), '\n')
+			command.Stdin = bytes.NewReader(pw)
+		case settings.PasswordInputMethodTTY:
+			// Do nothing; if the input is not a terminal, then
+			// it will fail on its own.
+		case settings.PasswordInputMethodNone:
+			command.Stdin = nil
+		default:
+			return 0, fmt.Errorf("unsupported password input method: %v", elevator.Method)
+		}
+	} else {
+		// If the root elevator is set, then these variables are
+		// handled by the wrapper. Otherwise, set them directly
+		// for the process.
 		for key, value := range cmd.Env {
 			command.Env = append(command.Env, key+"="+value)
 		}

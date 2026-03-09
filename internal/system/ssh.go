@@ -9,7 +9,6 @@ import (
 	"net"
 	"os"
 	"os/signal"
-	"os/user"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -33,8 +32,6 @@ type SSHSystem struct {
 
 	client *ssh.Client
 	sftp   *sftp.Client
-
-	rootPassword []byte
 
 	logger logger.Logger
 }
@@ -79,14 +76,12 @@ func NewSSHConfig(ctx context.Context, host string, log logger.Logger, options S
 	var port int
 
 	if hostInfo.User == "" {
-		var current *user.User
-		if current, err = user.Current(); err == nil {
-			username = current.Username
-		} else if current := os.Getenv("USER"); current != "" {
-			username = current
-		} else {
-			return nil, fmt.Errorf("failed to determine current user")
+		var currentUser string
+		currentUser, err = utils.GetUsername()
+		if err != nil {
+			return nil, err
 		}
+		username = currentUser
 	} else {
 		username = hostInfo.User
 	}
@@ -158,7 +153,7 @@ func NewSSHConfig(ctx context.Context, host string, log logger.Logger, options S
 		}
 
 		var bytePassword []byte
-		bytePassword, err = promptForPassword(ctx, username, address)
+		bytePassword, err = utils.PromptForPassword(ctx, fmt.Sprintf("Password for %s@%s:", username, address))
 		if err != nil {
 			return "", err
 		}
@@ -236,8 +231,6 @@ func NewSSHSystem(cfg *SSHConfig, log logger.Logger) (*SSHSystem, error) {
 		client: client,
 		sftp:   sftpClient,
 
-		rootPassword: cfg.password,
-
 		logger: log,
 	}, nil
 }
@@ -260,41 +253,6 @@ func dialClient(cfg *SSHConfig) (*ssh.Client, *sftp.Client, error) {
 	}
 
 	return client, sftpClient, nil
-}
-
-// Ensure that a password exists for any root elevation command
-// if necessary.
-//
-// This makes sure that any root elevation can be invoked properly
-// on the remote system, even if a password wasn't specified before.
-func (s *SSHSystem) EnsureRemoteRootPassword(ctx context.Context, rootCmd string) error {
-	// If the password already exists, presumably we already have sudo
-	// permissions and don't need to check. If the logged-in user doesn't,
-	// then the first command that requires sudo will say as much and exit,
-	// so no need to verify it explicitly here.
-	if s.rootPassword != nil {
-		return nil
-	}
-
-	if s.cfg.password != nil {
-		s.rootPassword = s.cfg.password
-		return nil
-	}
-
-	s.Logger().Info("please input password to run commands as root")
-
-	bytePassword, err := promptForPassword(ctx, s.cfg.User, s.cfg.Address)
-	if err != nil {
-		return err
-	}
-
-	s.rootPassword = bytePassword
-
-	if err = s.testRemoteRoot(rootCmd); err != nil {
-		return fmt.Errorf("failed to verify %s password: %s", rootCmd, err)
-	}
-
-	return nil
 }
 
 func (s *SSHSystem) Reconnect() error {
@@ -328,17 +286,8 @@ func (s *SSHSystem) Clone() (*SSHSystem, error) {
 		client: client,
 		sftp:   sftpClient,
 
-		rootPassword: s.rootPassword,
-
 		logger: s.logger,
 	}, nil
-}
-
-func (s *SSHSystem) testRemoteRoot(rootCmd string) error {
-	cmd := NewCommand("true").AsRoot(rootCmd)
-
-	_, err := s.Run(cmd)
-	return err
 }
 
 func runPrivateKeyCmd(s *LocalSystem, host string, username string, privateKeyCmd []string) (any, error) {
@@ -364,47 +313,6 @@ func runPrivateKeyCmd(s *LocalSystem, host string, username string, privateKeyCm
 	return signer, nil
 }
 
-// Prompt for a password from stdin.
-//
-// This operation can be cancelled using the provided context.
-func promptForPassword(ctx context.Context, username string, address string) ([]byte, error) {
-	fd := int(os.Stdin.Fd())
-	if !term.IsTerminal(fd) {
-		return nil, fmt.Errorf("cannot prompt for password: stdin is not a terminal")
-	}
-
-	oldState, err := term.GetState(fd)
-	if err != nil {
-		return nil, err
-	}
-
-	fmt.Fprintf(os.Stderr, "Password for %s@%s: ", username, address)
-	_ = os.Stdin.Sync()
-
-	type result struct {
-		pw  []byte
-		err error
-	}
-
-	ch := make(chan result, 1)
-
-	go func() {
-		pw, readErr := term.ReadPassword(fd)
-		ch <- result{pw, readErr}
-	}()
-
-	select {
-	case <-ctx.Done():
-		_ = term.Restore(fd, oldState)
-		fmt.Fprintln(os.Stderr)
-		return nil, ctx.Err()
-
-	case res := <-ch:
-		fmt.Fprintln(os.Stderr)
-		return res.pw, res.err
-	}
-}
-
 // This mimics the automatic addition of known_hosts entries
 // to the known_hosts file that OpenSSH performs.
 //
@@ -418,8 +326,7 @@ func addKeyToKnownHostsCallback(log logger.Logger, origCallback ssh.HostKeyCallb
 			return nil
 		}
 
-		var keyErr *knownhosts.KeyError
-		if errors.As(err, &keyErr) {
+		if keyErr, ok := errors.AsType[*knownhosts.KeyError](err); ok {
 			// Only allow adding the key like OpenSSH does if the
 			// stdin terminal can accept input.
 			if !term.IsTerminal(int(os.Stdin.Fd())) {
@@ -500,25 +407,28 @@ func (s *SSHSystem) Run(cmd *Command) (int, error) {
 		}
 	}()
 
-	if cmd.RootElevationCmd != "" {
-		// Pass `sudo` passwords from `stdin` if they are present.
-		// This requires the `-S` flag.
-		//
-		// Processes will likely never expect stdin to be set for SSH
-		// if they are running as root, since this seems to be a
-		// fairly uncommon scenario to need to pass things through
-		// stdin while simultaneously needing root, and we will likely
-		// never need something like that here.
-		//
-		// As such, we're replacing the entire stdin with this password.
-		if cmd.RootElevationCmd == "sudo" && s.rootPassword != nil {
-			// Make a copy of the command struct to add the root elevation flags to
-			cmd = cmd.Clone()
-			cmd.RootElevationCmdFlags = append(cmd.RootElevationCmdFlags, "-S", "-p", "")
-			pw := append([]byte{}, s.rootPassword...)
-			pw = append(pw, '\n')
+	if elevator := cmd.rootElevator; elevator != nil {
+		switch elevator.Method {
+		case settings.PasswordInputMethodStdin:
+			if elevator.PasswordProvider == nil {
+				return 0, fmt.Errorf("password provider is required for stdin password input method")
+			}
+			// Processes will likely never expect stdin to be set for SSH
+			// if they are running as root, since this seems to be a
+			// fairly uncommon scenario to need to pass things through
+			// stdin while simultaneously needing root, and we will likely
+			// never need something like that here.
+			//
+			// As such, we're replacing the entire stdin with this password.
+			pwStr, pwErr := elevator.PasswordProvider.GetPassword()
+			if pwErr != nil {
+				return 0, pwErr
+			}
+			pw := append([]byte(pwStr), '\n')
+
 			session.Stdin = bytes.NewReader(pw)
-		} else if isTerminal(cmd.Stdin) {
+
+		case settings.PasswordInputMethodTTY:
 			session.Stdin = cmd.Stdin
 			// sudo and other root-escalating commands need a PTY if running
 			// in interactive mode.
@@ -533,10 +443,7 @@ func (s *SSHSystem) Run(cmd *Command) (int, error) {
 			// The preferred way to avoid interactive input from root-escalating
 			// commands is to have a user that can run such a command with a no-password
 			// policy such as sudo's NOPASSWD directive, and to deploy using that.
-			//
-			// FIXME: Entering passwords interactively with `sudo` and a PTY
-			// seems to have a bug where the first attempt is wrong due to
-			// the PTY discarding the first inputted byte.
+
 			var restoreLocal func()
 			restoreLocal, err = requestRootPasswordPTY(session, cmd.Stdin)
 			if err != nil {
@@ -544,6 +451,25 @@ func (s *SSHSystem) Run(cmd *Command) (int, error) {
 			} else {
 				defer restoreLocal()
 			}
+		case settings.PasswordInputMethodNone:
+			session.Stdin = nil
+		default:
+			return 0, fmt.Errorf("unsupported password input method: %v", elevator.Method)
+		}
+	} else {
+		session.Stdin = cmd.Stdin
+	}
+
+	// HACK: A stupid bug.
+	// https://github.com/golang/go/issues/41390
+	// And a stupid workaround to show for it.
+	if session.Stdin == os.Stdin {
+		dupStdin, openErr := os.OpenFile("/dev/stdin", os.O_RDONLY, 0)
+		if openErr != nil {
+			log.Warnf("failed to open stdin: %v", openErr)
+		} else {
+			defer dupStdin.Close()
+			session.Stdin = dupStdin
 		}
 	}
 
@@ -631,8 +557,19 @@ func requestRootPasswordPTY(session *ssh.Session, stdin io.Reader) (func(), erro
 		return nil, errors.New("stdin is not a file")
 	}
 
+	fd := int(file.Fd())
+	oldState, err := term.MakeRaw(fd)
+	if err != nil {
+		return nil, err
+	}
+
+	restoreTerminalState := func() {
+		_ = term.Restore(fd, oldState)
+	}
+
 	w, h, err := term.GetSize(int(file.Fd()))
 	if err != nil {
+		restoreTerminalState()
 		return nil, fmt.Errorf("failed to get terminal size: %w", err)
 	}
 
@@ -648,18 +585,11 @@ func requestRootPasswordPTY(session *ssh.Session, stdin io.Reader) (func(), erro
 	}
 
 	if err = session.RequestPty(termType, h, w, modes); err != nil {
+		restoreTerminalState()
 		return nil, fmt.Errorf("failed to allocate pty for process: %w", err)
 	}
 
-	fd := int(file.Fd())
-	oldState, err := term.MakeRaw(fd)
-	if err != nil {
-		return nil, err
-	}
-
-	return func() {
-		_ = term.Restore(fd, oldState)
-	}, nil
+	return restoreTerminalState, nil
 }
 
 func (s *SSHSystem) IsNixOS() bool {
@@ -714,14 +644,4 @@ func (s *SSHSystem) HasCommand(name string) bool {
 func (s *SSHSystem) Close() {
 	_ = s.sftp.Close()
 	_ = s.client.Close()
-}
-
-func isTerminal(r io.Reader) bool {
-	file, ok := r.(*os.File)
-	if !ok {
-		return false
-	}
-
-	fd := file.Fd()
-	return term.IsTerminal(int(fd))
 }

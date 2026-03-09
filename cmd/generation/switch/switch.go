@@ -108,7 +108,7 @@ func generationSwitchMain(cmd *cobra.Command, genOpts *cmdOpts.GenerationOpts, o
 	s := system.NewLocalSystem(log)
 
 	if os.Geteuid() != 0 {
-		err := utils.ExecAsRoot(cfg.RootCommand)
+		err := utils.ExecAsRoot(cfg.Root.Command)
 		if err != nil {
 			log.Errorf("failed to re-exec command as root: %v", err)
 			return err
