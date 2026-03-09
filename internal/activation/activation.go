@@ -92,8 +92,8 @@ Change the directory to somewhere else (e.g., 'cd $HOME') before trying again.
 Please open an issue if you think this is a mistake.`
 
 type AddNewNixProfileOptions struct {
-	RootCommand    string
 	UseRootCommand bool
+	RootElevator   *system.RootElevator
 }
 
 func AddNewNixProfile(s system.System, profile string, closure string, opts *AddNewNixProfileOptions) error {
@@ -120,7 +120,7 @@ func AddNewNixProfile(s system.System, profile string, closure string, opts *Add
 
 	cmd := system.NewCommand(argv[0], argv[1:]...)
 	if opts.UseRootCommand {
-		cmd.AsRoot(opts.RootCommand)
+		cmd.AsRoot(opts.RootElevator)
 	}
 
 	_, err := s.Run(cmd)
@@ -128,8 +128,8 @@ func AddNewNixProfile(s system.System, profile string, closure string, opts *Add
 }
 
 type SetNixProfileGenerationOptions struct {
-	RootCommand    string
 	UseRootCommand bool
+	RootElevator   *system.RootElevator
 }
 
 func SetNixProfileGeneration(s system.System, profile string, genNumber uint64, opts *SetNixProfileGenerationOptions) error {
@@ -148,7 +148,7 @@ func SetNixProfileGeneration(s system.System, profile string, genNumber uint64, 
 
 	cmd := system.NewCommand(argv[0], argv[1:]...)
 	if opts.UseRootCommand {
-		cmd.AsRoot(opts.RootCommand)
+		cmd.AsRoot(opts.RootElevator)
 	}
 
 	_, err := s.Run(cmd)
@@ -229,7 +229,7 @@ type SwitchToConfigurationOptions struct {
 	InstallBootloader bool
 	Specialisation    string
 	UseRootCommand    bool
-	RootCommand       string
+	RootElevator      *system.RootElevator
 }
 
 func SwitchToConfiguration(s system.CommandRunner, generationLocation string, action SwitchToConfigurationAction, opts *SwitchToConfigurationOptions) error {
@@ -251,7 +251,7 @@ func SwitchToConfiguration(s system.CommandRunner, generationLocation string, ac
 
 	cmd := system.NewCommand(argv[0], argv[1:]...)
 	if opts.UseRootCommand {
-		cmd.AsRoot(opts.RootCommand)
+		cmd.AsRoot(opts.RootElevator)
 	}
 
 	if opts.InstallBootloader {

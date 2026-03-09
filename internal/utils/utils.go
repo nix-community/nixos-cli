@@ -1,13 +1,17 @@
 package utils
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"syscall"
+
+	"golang.org/x/term"
 )
 
 // Re-exec the current process as root with the same arguments.
@@ -130,4 +134,55 @@ func ResolveDirectory(input string) (string, error) {
 	}
 
 	return absolutePath, nil
+}
+
+// Prompt for a password from stdin.
+//
+// This operation can be cancelled using the provided context.
+func PromptForPassword(ctx context.Context, prompt string) ([]byte, error) {
+	fd := int(os.Stdin.Fd())
+	if !term.IsTerminal(fd) {
+		return nil, fmt.Errorf("cannot prompt for password: stdin is not a terminal")
+	}
+
+	oldState, err := term.GetState(fd)
+	if err != nil {
+		return nil, err
+	}
+
+	fmt.Fprintf(os.Stderr, "%s", prompt)
+
+	type result struct {
+		pw  []byte
+		err error
+	}
+
+	ch := make(chan result, 1)
+
+	go func() {
+		pw, readErr := term.ReadPassword(fd)
+		ch <- result{pw, readErr}
+	}()
+
+	select {
+	case <-ctx.Done():
+		_ = term.Restore(fd, oldState)
+		fmt.Fprintln(os.Stderr)
+		return nil, ctx.Err()
+
+	case res := <-ch:
+		fmt.Fprintln(os.Stderr)
+		return res.pw, res.err
+	}
+}
+
+// Get the current user's username.
+func GetUsername() (string, error) {
+	if current, err := user.Current(); err == nil {
+		return current.Username, nil
+	} else if u := os.Getenv("USER"); u != "" {
+		return u, nil
+	} else {
+		return "", fmt.Errorf("failed to determine current user")
+	}
 }

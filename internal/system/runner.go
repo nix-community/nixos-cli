@@ -3,10 +3,8 @@ package system
 import (
 	"errors"
 	"io"
-	"maps"
 	"os"
 	"regexp"
-	"slices"
 	"sort"
 	"strings"
 
@@ -28,8 +26,7 @@ type Command struct {
 	Stderr io.Writer
 	Env    map[string]string
 
-	RootElevationCmd      string
-	RootElevationCmdFlags []string
+	rootElevator *RootElevator
 }
 
 func NewCommand(name string, args ...string) *Command {
@@ -51,31 +48,9 @@ func (c *Command) SetEnv(key string, value string) {
 	c.Env[key] = value
 }
 
-func (c *Command) AsRoot(rootCmd string, rootCmdFlags ...string) *Command {
-	c.RootElevationCmd = rootCmd
-	c.RootElevationCmdFlags = rootCmdFlags
+func (c *Command) AsRoot(elevator *RootElevator) *Command {
+	c.rootElevator = elevator
 	return c
-}
-
-func (c *Command) Clone() *Command {
-	args := slices.Clone(c.Args)
-
-	env := make(map[string]string, len(c.Env))
-	maps.Copy(env, c.Env)
-
-	rootElevationCmdFlags := slices.Clone(c.RootElevationCmdFlags)
-
-	return &Command{
-		Name:   c.Name,
-		Args:   args,
-		Stdin:  c.Stdin,
-		Stdout: c.Stdout,
-		Stderr: c.Stderr,
-		Env:    env,
-
-		RootElevationCmd:      c.RootElevationCmd,
-		RootElevationCmdFlags: rootElevationCmdFlags,
-	}
 }
 
 var envVarNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
@@ -94,18 +69,20 @@ func (c *Command) BuildShellWrapper() ([]string, error) {
 		return nil, errors.New("NUL (0x00) bytes are not allowed in env values or args")
 	}
 
-	if strings.IndexByte(c.RootElevationCmd, 0) != -1 {
-		return nil, errors.New("NUL (0x00) bytes are not allowed in env values or args")
-	}
-
 	for _, a := range c.Args {
 		if strings.IndexByte(a, 0) != -1 {
 			return nil, errors.New("NUL (0x00) bytes are not allowed in env values or args")
 		}
 	}
 
-	for _, a := range c.RootElevationCmdFlags {
-		if strings.IndexByte(a, 0) != -1 {
+	if elevator := c.rootElevator; elevator != nil {
+		for _, a := range elevator.Flags {
+			if strings.IndexByte(a, 0) != -1 {
+				return nil, errors.New("NUL (0x00) bytes are not allowed in env values or args")
+			}
+		}
+
+		if strings.IndexByte(elevator.Command, 0) != -1 {
 			return nil, errors.New("NUL (0x00) bytes are not allowed in env values or args")
 		}
 	}
@@ -153,11 +130,11 @@ func (c *Command) BuildShellWrapper() ([]string, error) {
 	wrappedCmdScript := b.String()
 
 	var argv []string
-	if c.RootElevationCmd != "" {
+	if elevator := c.rootElevator; elevator != nil {
 		// Root elevation commands/flags must go BEFORE the `sh` invocation.
 		// This will ensure that the environment is preserved across the
 		// elevation boundary.
-		argv = append([]string{c.RootElevationCmd}, c.RootElevationCmdFlags...)
+		argv = append([]string{elevator.Command}, elevator.Flags...)
 	}
 	argv = append(argv, "sh", "-c", wrappedCmdScript)
 
@@ -173,9 +150,9 @@ func (c *Command) BuildShellWrapper() ([]string, error) {
 func (c *Command) BuildArgs() []string {
 	var argv []string
 
-	if c.RootElevationCmd != "" {
-		argv = append(argv, c.RootElevationCmd)
-		argv = append(argv, c.RootElevationCmdFlags...)
+	if elevator := c.rootElevator; elevator != nil {
+		argv = append(argv, elevator.Command)
+		argv = append(argv, elevator.Flags...)
 	}
 
 	argv = append(argv, c.Name)
