@@ -1,13 +1,13 @@
 {
   lib,
-  buildGoModule,
+  buildGo126Module,
   installShellFiles,
   stdenv,
   scdoc,
   revision ? "unknown",
   flake ? true,
 }:
-buildGoModule (finalAttrs: {
+buildGo126Module (finalAttrs: {
   pname = "nixos-cli-unwrapped";
   version = "0.15.0-dev";
 

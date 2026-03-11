@@ -1,6 +1,6 @@
 module github.com/nix-community/nixos-cli
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/carapace-sh/carapace v1.8.6
