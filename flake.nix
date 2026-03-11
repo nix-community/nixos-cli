@@ -67,7 +67,8 @@
         };
 
         devShells = let
-          inherit (pkgs) go golangci-lint mkShell mdbook scdoc govulncheck;
+          inherit (pkgs) golangci-lint mkShell mdbook scdoc govulncheck;
+          go = pkgs.go_1_26;
           inherit (pkgs.nodePackages) prettier;
         in {
           default = mkShell {
