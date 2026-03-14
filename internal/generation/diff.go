@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 
 	_ "modernc.org/sqlite"
@@ -54,12 +55,11 @@ func RunDiffCommand(s system.System, before string, after string, opts *DiffComm
 	case settings.DifferCommand:
 		argv = append(opts.DiffToolCmd, before, after)
 	case settings.DifferInternal:
-		diffs, err := diffNixStoreDB(before, after)
+		diff, err := diffNixStoreDB(before, after)
 		if err != nil {
 			return err
 		}
-		_ = diffs
-		log.Info("internal differ currently not implemented")
+		displayDiffResults(diff)
 		return nil
 	case settings.DifferNix:
 		argv = []string{"nix", "store", "diff-closures", before, after}
@@ -72,6 +72,12 @@ func RunDiffCommand(s system.System, before string, after string, opts *DiffComm
 	cmd := system.NewCommand(argv[0], argv[1:]...)
 	_, err := s.Run(cmd)
 	return err
+}
+
+type ClosureDiff struct {
+	OldSize uint64
+	NewSize uint64
+	Diffs   []PathDiff
 }
 
 type PathInfo struct {
@@ -104,8 +110,8 @@ const (
 	ChangeTypeChange ChangeType = "change"
 )
 
-func diffNixStoreDB(before string, after string) ([]PathDiff, error) {
-	conn, err := sql.Open("sqlite", constants.NixStoreDatabase)
+func diffNixStoreDB(before string, after string) (*ClosureDiff, error) {
+	conn, err := sql.Open("sqlite", fmt.Sprintf("file:%s?mode=ro&immutable=1", constants.NixStoreDatabase))
 	if err != nil {
 		return nil, fmt.Errorf("error opening nix sqlite db: %w", err)
 	}
@@ -138,7 +144,11 @@ func diffNixStoreDB(before string, after string) ([]PathDiff, error) {
 		systemPathsAfter,
 	)
 
-	return diffs, nil
+	return &ClosureDiff{
+		OldSize: closuresBefore.Size,
+		NewSize: closuresAfter.Size,
+		Diffs:   diffs,
+	}, nil
 }
 
 type Closure struct {
@@ -308,7 +318,7 @@ func parsePnameAndVersion(path string) (string, string) {
 }
 
 // Create a changeset between two different lists of store paths,
-// usually calculated from the transitive closures and the sets.
+// usually calculated from the transitive closures and the sets
 // of system-path paths for that closure.
 func calculateDiffs(
 	oldPaths []PathInfo,
@@ -326,75 +336,300 @@ func calculateDiffs(
 		newSystemPathSet[path.Name] = struct{}{}
 	}
 
-	diffSet := make(map[string]PathDiff, max(len(oldPaths), len(newPaths)))
+	type versionSet struct {
+		versions map[string]struct{}
+	}
 
+	oldPackageVersions := make(map[string]*versionSet)
 	for _, path := range oldPaths {
-		v := path.Version
-		if v == "" {
-			v = "<none>"
+		if _, exists := oldPackageVersions[path.Name]; !exists {
+			oldPackageVersions[path.Name] = &versionSet{versions: make(map[string]struct{})}
 		}
-
-		diff := diffSet[path.Name]
-		diff.Old = append(diff.Old, v)
-		diffSet[path.Name] = diff
+		oldPackageVersions[path.Name].versions[path.Version] = struct{}{}
 	}
 
+	newPackageVersions := make(map[string]*versionSet)
 	for _, path := range newPaths {
-		v := path.Version
-		if v == "" {
-			v = "<none>"
+		if _, exists := newPackageVersions[path.Name]; !exists {
+			newPackageVersions[path.Name] = &versionSet{versions: make(map[string]struct{})}
 		}
-
-		diff := diffSet[path.Name]
-		diff.New = append(diff.New, v)
-		diffSet[path.Name] = diff
+		newPackageVersions[path.Name].versions[path.Version] = struct{}{}
 	}
 
-	diffs := make([]PathDiff, 0, len(diffSet))
-	for name, diff := range diffSet {
-		diff.Name = name
+	diffs := make([]PathDiff, 0)
 
-		if len(diff.Old) == 0 && len(diff.New) == 0 {
-			continue
-		}
+	for name, oldVS := range oldPackageVersions {
+		if newVS, exists := newPackageVersions[name]; exists {
+			oldVersions := make([]string, 0, len(oldVS.versions))
+			for v := range oldVS.versions {
+				oldVersions = append(oldVersions, v)
+			}
 
-		changed := false
-		if len(diff.Old) > 0 && len(diff.New) > 0 {
-			if diff.Old[0] != diff.New[0] {
+			newVersions := make([]string, 0, len(newVS.versions))
+			for v := range newVS.versions {
+				newVersions = append(newVersions, v)
+			}
+
+			oldVersionsSet := make(map[string]struct{})
+			for _, v := range oldVersions {
+				oldVersionsSet[v] = struct{}{}
+			}
+
+			newVersionsSet := make(map[string]struct{})
+			for _, v := range newVersions {
+				newVersionsSet[v] = struct{}{}
+			}
+
+			commonVersions := make(map[string]struct{})
+			for v := range oldVersionsSet {
+				if _, exists := newVersionsSet[v]; exists {
+					commonVersions[v] = struct{}{}
+				}
+			}
+
+			uniqueOldVersions := make([]string, 0)
+			for v := range oldVersionsSet {
+				if _, exists := newVersionsSet[v]; !exists {
+					uniqueOldVersions = append(uniqueOldVersions, v)
+				}
+			}
+
+			uniqueNewVersions := make([]string, 0)
+			for v := range newVersionsSet {
+				if _, exists := oldVersionsSet[v]; !exists {
+					uniqueNewVersions = append(uniqueNewVersions, v)
+				}
+			}
+
+			if len(uniqueOldVersions) == 0 && len(uniqueNewVersions) == 0 {
+				continue
+			}
+
+			changed := false
+			if len(uniqueOldVersions) > 0 && len(uniqueNewVersions) > 0 {
 				changed = true
 			}
-		}
 
-		if len(diff.Old) > 0 && len(diff.New) == 0 {
-			diff.Change = ChangeTypeRemove
-		} else if len(diff.Old) == 0 && len(diff.New) > 0 {
-			diff.Change = ChangeTypeAdd
-		} else if changed {
-			diff.Change = ChangeTypeChange
-		}
+			diff := PathDiff{
+				Name: name,
+			}
 
-		oldInPath := false
-		newInPath := false
+			if len(uniqueOldVersions) > 0 && len(uniqueNewVersions) == 0 {
+				diff.Change = ChangeTypeRemove
+				diff.Old = uniqueOldVersions
+			} else if len(uniqueOldVersions) == 0 && len(uniqueNewVersions) > 0 {
+				diff.Change = ChangeTypeAdd
+				diff.New = uniqueNewVersions
+			} else if changed {
+				diff.Change = ChangeTypeChange
+				diff.Old = uniqueOldVersions
+				diff.New = uniqueNewVersions
+			}
 
-		if _, ok := oldSystemPathSet[name]; ok {
-			oldInPath = true
-		}
-		if _, ok := newSystemPathSet[name]; ok {
-			newInPath = true
-		}
+			oldInPath := false
+			newInPath := false
 
-		if oldInPath && newInPath {
-			diff.SystemPathStatus = SystemPathStatusBoth
-		} else if !oldInPath && !newInPath {
-			diff.SystemPathStatus = SystemPathStatusNeither
-		} else if oldInPath && !newInPath {
-			diff.SystemPathStatus = SystemPathStatusOldOnly
-		} else if !oldInPath && newInPath {
-			diff.SystemPathStatus = SystemPathStatusNewOnly
-		}
+			if _, ok := oldSystemPathSet[name]; ok {
+				oldInPath = true
+			}
+			if _, ok := newSystemPathSet[name]; ok {
+				newInPath = true
+			}
 
-		diffs = append(diffs, diff)
+			if oldInPath && newInPath {
+				diff.SystemPathStatus = SystemPathStatusBoth
+			} else if !oldInPath && !newInPath {
+				diff.SystemPathStatus = SystemPathStatusNeither
+			} else if oldInPath && !newInPath {
+				diff.SystemPathStatus = SystemPathStatusOldOnly
+			} else if !oldInPath && newInPath {
+				diff.SystemPathStatus = SystemPathStatusNewOnly
+			}
+
+			diffs = append(diffs, diff)
+		} else {
+			oldVersions := make([]string, 0, len(oldVS.versions))
+			for v := range oldVS.versions {
+				oldVersions = append(oldVersions, v)
+			}
+
+			diff := PathDiff{
+				Name:             name,
+				Old:              oldVersions,
+				New:              []string{},
+				Change:           ChangeTypeRemove,
+				SystemPathStatus: SystemPathStatusOldOnly,
+			}
+			diffs = append(diffs, diff)
+		}
+	}
+
+	for name, newVS := range newPackageVersions {
+		if _, exists := oldPackageVersions[name]; !exists {
+			newVersions := make([]string, 0, len(newVS.versions))
+			for v := range newVS.versions {
+				newVersions = append(newVersions, v)
+			}
+
+			diff := PathDiff{
+				Name:             name,
+				Old:              []string{},
+				New:              newVersions,
+				Change:           ChangeTypeAdd,
+				SystemPathStatus: SystemPathStatusNewOnly,
+			}
+			diffs = append(diffs, diff)
+		}
 	}
 
 	return diffs
+}
+
+func formatSize(size uint64) string {
+	const (
+		kb = 1024
+		mb = kb * 1024
+		gb = mb * 1024
+	)
+
+	if size >= gb {
+		return fmt.Sprintf("%.2f GiB", float64(size)/float64(gb))
+	}
+	if size >= mb {
+		return fmt.Sprintf("%.2f MiB", float64(size)/float64(mb))
+	}
+	return fmt.Sprintf("%d KiB", size/kb)
+}
+
+func formatVersionList(versions []string) string {
+	if len(versions) == 0 {
+		return "∅"
+	}
+	return strings.Join(versions, ", ")
+}
+
+func displayDiffResults(closureDiff *ClosureDiff) {
+	fmt.Println("Closure Comparison:")
+	fmt.Println(strings.Repeat("=", 19))
+
+	added := 0
+	removed := 0
+	changed := 0
+
+	for _, diff := range closureDiff.Diffs {
+		switch diff.Change {
+		case ChangeTypeAdd:
+			added++
+		case ChangeTypeRemove:
+			removed++
+		case ChangeTypeChange:
+			changed++
+		}
+	}
+
+	fmt.Printf("Added:     %d package(s)\n", added)
+	fmt.Printf("Removed:   %d package(s)\n", removed)
+	fmt.Printf("Changed:   %d package(s)\n", changed)
+
+	fmt.Println()
+
+	addedDiffs := make([]PathDiff, 0, len(closureDiff.Diffs))
+	changedDiffs := make([]PathDiff, 0, len(closureDiff.Diffs))
+	removedDiffs := make([]PathDiff, 0, len(closureDiff.Diffs))
+
+	for _, diff := range closureDiff.Diffs {
+		switch diff.Change {
+		case ChangeTypeAdd:
+			addedDiffs = append(addedDiffs, diff)
+		case ChangeTypeChange:
+			changedDiffs = append(changedDiffs, diff)
+		case ChangeTypeRemove:
+			removedDiffs = append(removedDiffs, diff)
+		}
+	}
+
+	sortPathDiffs(addedDiffs)
+	sortPathDiffs(changedDiffs)
+	sortPathDiffs(removedDiffs)
+
+	if len(addedDiffs) > 0 {
+		fmt.Println("Added Packages:")
+		fmt.Println(strings.Repeat("=", 12))
+		for _, diff := range addedDiffs {
+			oldVersionStr := formatVersionList(diff.Old)
+			newVersionStr := formatVersionList(diff.New)
+			systemPathIndicator := " "
+			switch diff.SystemPathStatus {
+			case SystemPathStatusNewOnly, SystemPathStatusBoth:
+				systemPathIndicator = "x"
+			}
+			fmt.Printf("[%s] %s: %s -> %s\n", systemPathIndicator, diff.Name, oldVersionStr, newVersionStr)
+		}
+		fmt.Println()
+	}
+
+	if len(removedDiffs) > 0 {
+		fmt.Println("Removed Packages:")
+		fmt.Println(strings.Repeat("=", 14))
+		for _, diff := range removedDiffs {
+			oldVersionStr := formatVersionList(diff.Old)
+			newVersionStr := formatVersionList(diff.New)
+			systemPathIndicator := " "
+			switch diff.SystemPathStatus {
+			case SystemPathStatusOldOnly, SystemPathStatusBoth:
+				systemPathIndicator = "*"
+			}
+			fmt.Printf("[%s] %s: %s -> %s\n", systemPathIndicator, diff.Name, oldVersionStr, newVersionStr)
+		}
+		fmt.Println()
+	}
+
+	if len(changedDiffs) > 0 {
+		fmt.Println("Changed Packages:")
+		fmt.Println(strings.Repeat("=", 15))
+		for _, diff := range changedDiffs {
+			oldVersionStr := formatVersionList(diff.Old)
+			newVersionStr := formatVersionList(diff.New)
+			systemPathIndicator := " "
+			switch diff.SystemPathStatus {
+			case SystemPathStatusBoth:
+				systemPathIndicator = "x"
+			case SystemPathStatusNewOnly:
+				systemPathIndicator = "↑"
+			case SystemPathStatusOldOnly:
+				systemPathIndicator = "↓"
+			}
+			fmt.Printf("[%s] %s: %s -> %s\n", systemPathIndicator, diff.Name, oldVersionStr, newVersionStr)
+		}
+		fmt.Println()
+	}
+
+	fmt.Println("Closure Sizes:")
+	fmt.Println(strings.Repeat("=", 14))
+
+	oldSizeStr := formatSize(closureDiff.OldSize)
+	newSizeStr := formatSize(closureDiff.NewSize)
+
+	if closureDiff.OldSize == closureDiff.NewSize {
+		fmt.Printf("Old: %s\n", oldSizeStr)
+		fmt.Printf("New: %s\n", newSizeStr)
+	} else {
+		if closureDiff.NewSize > closureDiff.OldSize {
+			change := closureDiff.NewSize - closureDiff.OldSize
+			changeStr := formatSize(change)
+			fmt.Printf("Old: %s\n", oldSizeStr)
+			fmt.Printf("New: %s (+%s)\n", newSizeStr, changeStr)
+		} else {
+			change := closureDiff.OldSize - closureDiff.NewSize
+			changeStr := formatSize(change)
+			fmt.Printf("Old: %s (-%s)\n", oldSizeStr, changeStr)
+			fmt.Printf("New: %s\n", newSizeStr)
+		}
+	}
+}
+
+func sortPathDiffs(diffs []PathDiff) {
+	sort.Slice(diffs, func(i, j int) bool {
+		return diffs[i].Name < diffs[j].Name
+	})
 }
