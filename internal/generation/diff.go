@@ -1,8 +1,11 @@
 package generation
 
 import (
+	"bytes"
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -81,8 +84,10 @@ type ClosureDiff struct {
 }
 
 type PathInfo struct {
+	Path    string
 	Name    string
 	Version string
+	Deriver *string
 }
 
 type SystemPathStatus string
@@ -180,7 +185,7 @@ closure (id) AS (
     JOIN closure c ON r.referrer = c.id
 )
 
-SELECT v.path, v.narSize FROM closure c
+SELECT v.path, v.deriver, v.narSize FROM closure c
 JOIN ValidPaths v ON v.id = c.id;
 `
 
@@ -195,9 +200,10 @@ JOIN ValidPaths v ON v.id = c.id;
 
 	for rows.Next() {
 		var path string
+		var deriver *string
 		var size uint64
 
-		err = rows.Scan(&path, &size)
+		err = rows.Scan(&path, &deriver, &size)
 		if err != nil {
 			return &Closure{
 				Paths: results,
@@ -207,16 +213,17 @@ JOIN ValidPaths v ON v.id = c.id;
 
 		totalSize += size
 
-		pname, version := parsePnameAndVersion(path)
-
 		results = append(results, PathInfo{
-			Name:    pname,
-			Version: version,
+			Path:    path,
+			Deriver: deriver,
 		})
 	}
 	if err = rows.Err(); err != nil {
 		return nil, fmt.Errorf("error scanning rows: %w", err)
 	}
+
+	g, _ := getDrvAttrs(results)
+	fillPnameVersion(results, g)
 
 	return &Closure{
 		Size:  totalSize,
@@ -255,7 +262,7 @@ pkgs AS (
     JOIN system_path ON referrer = id
 )
 
-SELECT path FROM pkgs
+SELECT path, deriver FROM pkgs
 JOIN validpaths vp ON vp.id = pkgs.id;
 `
 
@@ -269,22 +276,24 @@ JOIN validpaths vp ON vp.id = pkgs.id;
 
 	for rows.Next() {
 		var path string
+		var deriver *string
 
-		err = rows.Scan(&path)
+		err = rows.Scan(&path, &deriver)
 		if err != nil {
 			return results, fmt.Errorf("error scanning rows: %w", err)
 		}
 
-		pname, version := parsePnameAndVersion(path)
-
 		results = append(results, PathInfo{
-			Name:    pname,
-			Version: version,
+			Path:    path,
+			Deriver: deriver,
 		})
 	}
 	if err = rows.Err(); err != nil {
 		return nil, fmt.Errorf("error scanning rows: %w", err)
 	}
+
+	g, _ := getDrvAttrs(results)
+	fillPnameVersion(results, g)
 
 	return results, nil
 }
@@ -632,4 +641,126 @@ func sortPathDiffs(diffs []PathDiff) {
 	sort.Slice(diffs, func(i, j int) bool {
 		return diffs[i].Name < diffs[j].Name
 	})
+}
+
+type drvAttrs struct {
+	Drvs map[string]struct {
+		Env             map[string]string `json:"env"`
+		StructuredAttrs map[string]any    `json:"structuredAttrs,omitempty"`
+	} `json:"derivations"`
+}
+
+// Calculate the dependency graph of a Nix store derivation
+// using `nix derivation show`.
+//
+// This is used for determining what the pname and version are
+// exactly, if available, using `nix derivation show`.
+func getDrvAttrs(paths []PathInfo) (*drvAttrs, error) {
+	cmd := exec.Command("nix", "derivation", "show", "--stdin")
+
+	var drvArgs bytes.Buffer
+	for _, p := range paths {
+		if p.Deriver == nil {
+			continue
+		}
+
+		drv := *p.Deriver
+		if _, err := os.Stat(drv); err != nil {
+			continue
+		}
+
+		drvArgs.WriteString(*p.Deriver)
+		drvArgs.WriteString("\n")
+	}
+
+	cmd.Stdin = bytes.NewReader(drvArgs.Bytes())
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	cmd.Stderr = &stderr
+	cmd.Stdout = &stdout
+
+	if err := cmd.Run(); err != nil {
+		return nil, err
+	}
+
+	var graph drvAttrs
+	if err := json.Unmarshal(stdout.Bytes(), &graph); err != nil {
+		return nil, err
+	}
+
+	return &graph, nil
+}
+
+func fillPnameVersion(paths []PathInfo, graph *drvAttrs) {
+	for i, path := range paths {
+		if graph == nil || path.Deriver == nil {
+			paths[i].Name, paths[i].Version = parsePnameAndVersion(path.Path)
+			continue
+		}
+
+		name := paths[i].Name
+		version := paths[i].Version
+
+		// Helper: only set if empty
+		setName := func(v string) {
+			if name == "" && v != "" {
+				name = v
+			}
+		}
+		setVersion := func(v string) {
+			if version == "" && v != "" {
+				version = v
+			}
+		}
+
+		// Derivers in the graph are addressed by basename rather
+		// than by the whole store path.
+		baseDrvPath := filepath.Base(*path.Deriver)
+		drv, drvExists := graph.Drvs[baseDrvPath]
+		if !drvExists {
+			paths[i].Name, paths[i].Version = parsePnameAndVersion(path.Path)
+			continue
+		}
+
+		// Use structuredAttrs first before env.
+		if attrs := drv.StructuredAttrs; attrs != nil {
+			if pnameAttr, exists := attrs["pname"].(string); exists {
+				setName(pnameAttr)
+			} else if nameAttr, exists2 := attrs["name"].(string); exists2 {
+				setName(nameAttr)
+			}
+
+			if versionAttr, exists := attrs["version"].(string); exists {
+				setVersion(versionAttr)
+			}
+		}
+
+		// Then, check if the attr is in env.
+		if attrs := drv.Env; attrs != nil {
+			if pnameAttr, exists := attrs["pname"]; exists {
+				setName(pnameAttr)
+			} else if nameAttr, exists2 := attrs["name"]; exists2 {
+				setName(nameAttr)
+			}
+
+			if versionAttr, exists := attrs["version"]; exists {
+				setVersion(versionAttr)
+			}
+		}
+
+		if paths[i].Name == "" || paths[i].Version == "" {
+			n, v := parsePnameAndVersion(path.Path)
+			if paths[i].Name == "" {
+				setName(n)
+			}
+			if paths[i].Version == "" {
+				setVersion(v)
+			}
+		}
+
+		paths[i].Name = name
+		paths[i].Version = version
+	}
 }
