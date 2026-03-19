@@ -17,6 +17,7 @@ import (
 	"github.com/nix-community/nixos-cli/internal/constants"
 	"github.com/nix-community/nixos-cli/internal/settings"
 	"github.com/nix-community/nixos-cli/internal/system"
+	"github.com/nix-community/nixos-cli/internal/utils/set"
 )
 
 type DiffCommandOptions struct {
@@ -326,6 +327,22 @@ func parsePnameAndVersion(path string) (string, string) {
 	return name, ""
 }
 
+func buildPackageVersions(paths []PathInfo) map[string]set.Set[string] {
+	out := make(map[string]set.Set[string])
+
+	for _, p := range paths {
+		s, ok := out[p.Name]
+		if !ok {
+			s = set.New[string]()
+			out[p.Name] = s
+		}
+
+		s.Add(p.Version)
+	}
+
+	return out
+}
+
 // Create a changeset between two different lists of store paths,
 // usually calculated from the transitive closures and the sets
 // of system-path paths for that closure.
@@ -335,80 +352,25 @@ func calculateDiffs(
 	oldSystemPath []PathInfo,
 	newSystemPath []PathInfo,
 ) []PathDiff {
-	oldSystemPathSet := make(map[string]struct{})
-	for _, path := range oldSystemPath {
-		oldSystemPathSet[path.Name] = struct{}{}
+	oldSystemPathSet := set.New[string]()
+	for _, p := range oldSystemPath {
+		oldSystemPathSet.Add(p.Name)
 	}
 
-	newSystemPathSet := make(map[string]struct{})
+	newSystemPathSet := set.New[string]()
 	for _, path := range newSystemPath {
-		newSystemPathSet[path.Name] = struct{}{}
+		newSystemPathSet.Add(path.Name)
 	}
 
-	type versionSet struct {
-		versions map[string]struct{}
-	}
-
-	oldPackageVersions := make(map[string]*versionSet)
-	for _, path := range oldPaths {
-		if _, exists := oldPackageVersions[path.Name]; !exists {
-			oldPackageVersions[path.Name] = &versionSet{versions: make(map[string]struct{})}
-		}
-		oldPackageVersions[path.Name].versions[path.Version] = struct{}{}
-	}
-
-	newPackageVersions := make(map[string]*versionSet)
-	for _, path := range newPaths {
-		if _, exists := newPackageVersions[path.Name]; !exists {
-			newPackageVersions[path.Name] = &versionSet{versions: make(map[string]struct{})}
-		}
-		newPackageVersions[path.Name].versions[path.Version] = struct{}{}
-	}
+	oldPackageVersions := buildPackageVersions(oldPaths)
+	newPackageVersions := buildPackageVersions(newPaths)
 
 	diffs := make([]PathDiff, 0)
 
-	for name, oldVS := range oldPackageVersions {
-		if newVS, exists := newPackageVersions[name]; exists {
-			oldVersions := make([]string, 0, len(oldVS.versions))
-			for v := range oldVS.versions {
-				oldVersions = append(oldVersions, v)
-			}
-
-			newVersions := make([]string, 0, len(newVS.versions))
-			for v := range newVS.versions {
-				newVersions = append(newVersions, v)
-			}
-
-			oldVersionsSet := make(map[string]struct{})
-			for _, v := range oldVersions {
-				oldVersionsSet[v] = struct{}{}
-			}
-
-			newVersionsSet := make(map[string]struct{})
-			for _, v := range newVersions {
-				newVersionsSet[v] = struct{}{}
-			}
-
-			commonVersions := make(map[string]struct{})
-			for v := range oldVersionsSet {
-				if _, exists := newVersionsSet[v]; exists {
-					commonVersions[v] = struct{}{}
-				}
-			}
-
-			uniqueOldVersions := make([]string, 0)
-			for v := range oldVersionsSet {
-				if _, exists := newVersionsSet[v]; !exists {
-					uniqueOldVersions = append(uniqueOldVersions, v)
-				}
-			}
-
-			uniqueNewVersions := make([]string, 0)
-			for v := range newVersionsSet {
-				if _, exists := oldVersionsSet[v]; !exists {
-					uniqueNewVersions = append(uniqueNewVersions, v)
-				}
-			}
+	for name, oldVersions := range oldPackageVersions {
+		if newVersions, exists := newPackageVersions[name]; exists {
+			uniqueOldVersions := oldVersions.Difference(newVersions).Slice()
+			uniqueNewVersions := newVersions.Difference(oldVersions).Slice()
 
 			if len(uniqueOldVersions) == 0 && len(uniqueNewVersions) == 0 {
 				continue
@@ -457,14 +419,9 @@ func calculateDiffs(
 
 			diffs = append(diffs, diff)
 		} else {
-			oldVersions := make([]string, 0, len(oldVS.versions))
-			for v := range oldVS.versions {
-				oldVersions = append(oldVersions, v)
-			}
-
 			diff := PathDiff{
 				Name:             name,
-				Old:              oldVersions,
+				Old:              oldVersions.Slice(),
 				New:              []string{},
 				Change:           ChangeTypeRemove,
 				SystemPathStatus: SystemPathStatusOldOnly,
@@ -473,17 +430,12 @@ func calculateDiffs(
 		}
 	}
 
-	for name, newVS := range newPackageVersions {
+	for name, newVersions := range newPackageVersions {
 		if _, exists := oldPackageVersions[name]; !exists {
-			newVersions := make([]string, 0, len(newVS.versions))
-			for v := range newVS.versions {
-				newVersions = append(newVersions, v)
-			}
-
 			diff := PathDiff{
 				Name:             name,
 				Old:              []string{},
-				New:              newVersions,
+				New:              newVersions.Slice(),
 				Change:           ChangeTypeAdd,
 				SystemPathStatus: SystemPathStatusNewOnly,
 			}
@@ -514,7 +466,19 @@ func formatVersionList(versions []string) string {
 	if len(versions) == 0 {
 		return "∅"
 	}
-	return strings.Join(versions, ", ")
+
+	out := make([]string, len(versions))
+	for i, v := range versions {
+		if v == "" {
+			out[i] = "<unknown>"
+		} else {
+			out[i] = v
+		}
+	}
+
+	sort.Strings(out)
+
+	return strings.Join(out, ", ")
 }
 
 func displayDiffResults(closureDiff *ClosureDiff) {
@@ -562,40 +526,38 @@ func displayDiffResults(closureDiff *ClosureDiff) {
 	sortPathDiffs(removedDiffs)
 
 	if len(addedDiffs) > 0 {
-		fmt.Println("Added Packages:")
-		fmt.Println(strings.Repeat("=", 12))
+		fmt.Println("Added Packages")
+		fmt.Println("==============")
 		for _, diff := range addedDiffs {
-			oldVersionStr := formatVersionList(diff.Old)
 			newVersionStr := formatVersionList(diff.New)
 			systemPathIndicator := " "
 			switch diff.SystemPathStatus {
 			case SystemPathStatusNewOnly, SystemPathStatusBoth:
 				systemPathIndicator = "x"
 			}
-			fmt.Printf("[%s] %s: %s -> %s\n", systemPathIndicator, diff.Name, oldVersionStr, newVersionStr)
+			fmt.Printf("[%s] %s: %s\n", systemPathIndicator, diff.Name, newVersionStr)
 		}
 		fmt.Println()
 	}
 
 	if len(removedDiffs) > 0 {
-		fmt.Println("Removed Packages:")
-		fmt.Println(strings.Repeat("=", 14))
+		fmt.Println("Removed Packages")
+		fmt.Println("================")
 		for _, diff := range removedDiffs {
 			oldVersionStr := formatVersionList(diff.Old)
-			newVersionStr := formatVersionList(diff.New)
 			systemPathIndicator := " "
 			switch diff.SystemPathStatus {
 			case SystemPathStatusOldOnly, SystemPathStatusBoth:
 				systemPathIndicator = "*"
 			}
-			fmt.Printf("[%s] %s: %s -> %s\n", systemPathIndicator, diff.Name, oldVersionStr, newVersionStr)
+			fmt.Printf("[%s] %s: %s\n", systemPathIndicator, diff.Name, oldVersionStr)
 		}
 		fmt.Println()
 	}
 
 	if len(changedDiffs) > 0 {
-		fmt.Println("Changed Packages:")
-		fmt.Println(strings.Repeat("=", 15))
+		fmt.Println("Changed Packages")
+		fmt.Println("================")
 		for _, diff := range changedDiffs {
 			oldVersionStr := formatVersionList(diff.Old)
 			newVersionStr := formatVersionList(diff.New)
