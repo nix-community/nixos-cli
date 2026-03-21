@@ -18,6 +18,7 @@ import (
 	"github.com/nix-community/nixos-cli/internal/settings"
 	"github.com/nix-community/nixos-cli/internal/system"
 	"github.com/nix-community/nixos-cli/internal/utils/set"
+	"github.com/olekukonko/tablewriter"
 )
 
 type DiffCommandOptions struct {
@@ -443,6 +444,8 @@ func calculateDiffs(
 		}
 	}
 
+	sortPathDiffs(diffs)
+
 	return diffs
 }
 
@@ -500,103 +503,57 @@ func displayDiffResults(closureDiff *ClosureDiff) {
 		}
 	}
 
-	fmt.Printf("Added:     %d package(s)\n", added)
-	fmt.Printf("Removed:   %d package(s)\n", removed)
-	fmt.Printf("Changed:   %d package(s)\n", changed)
+	fmt.Println("\nPackages:")
+	fmt.Printf("  + %d added\n", added)
+	fmt.Printf("  - %d removed\n", removed)
+	fmt.Printf("  ~ %d changed\n", changed)
+
+	fmt.Println("\nSize:")
+	if closureDiff.OldSize == closureDiff.NewSize {
+		fmt.Println("  (no change)")
+	} else {
+		oldSize := formatSize(closureDiff.OldSize)
+		newSize := formatSize(closureDiff.NewSize)
+
+		var change string
+		if closureDiff.NewSize > closureDiff.OldSize {
+			change = "-" + formatSize(closureDiff.NewSize-closureDiff.OldSize)
+		} else {
+			change = "+" + formatSize(closureDiff.OldSize-closureDiff.NewSize)
+		}
+
+		fmt.Printf("  %s -> %s (%s)\n", oldSize, newSize, change)
+	}
 
 	fmt.Println()
 
-	addedDiffs := make([]PathDiff, 0, len(closureDiff.Diffs))
-	changedDiffs := make([]PathDiff, 0, len(closureDiff.Diffs))
-	removedDiffs := make([]PathDiff, 0, len(closureDiff.Diffs))
+	table := tablewriter.NewWriter(os.Stdout)
+	table.SetHeader([]string{"", "Package", "Old", "New"})
+	table.SetHeaderAlignment(tablewriter.ALIGN_CENTER)
+	table.SetAlignment(tablewriter.ALIGN_LEFT)
+	table.SetAutoFormatHeaders(false)
+	table.SetAutoWrapText(false)
+	table.SetReflowDuringAutoWrap(false)
+	table.SetBorder(false)
+	table.SetRowSeparator("-")
+	table.SetColumnSeparator("|")
 
+	rows := make([][]string, 0, len(closureDiff.Diffs))
 	for _, diff := range closureDiff.Diffs {
-		switch diff.Change {
-		case ChangeTypeAdd:
-			addedDiffs = append(addedDiffs, diff)
-		case ChangeTypeChange:
-			changedDiffs = append(changedDiffs, diff)
-		case ChangeTypeRemove:
-			removedDiffs = append(removedDiffs, diff)
-		}
+		row := make([]string, 4)
+
+		row[0] = statusMarker(diff)
+		row[1] = diff.Name
+		row[2] = formatVersionList(diff.Old)
+		row[3] = formatVersionList(diff.New)
+
+		rows = append(rows, row)
 	}
 
-	sortPathDiffs(addedDiffs)
-	sortPathDiffs(changedDiffs)
-	sortPathDiffs(removedDiffs)
+	table.AppendBulk(rows)
 
-	if len(addedDiffs) > 0 {
-		fmt.Println("Added Packages")
-		fmt.Println("==============")
-		for _, diff := range addedDiffs {
-			newVersionStr := formatVersionList(diff.New)
-			systemPathIndicator := " "
-			switch diff.SystemPathStatus {
-			case SystemPathStatusNewOnly, SystemPathStatusBoth:
-				systemPathIndicator = "x"
-			}
-			fmt.Printf("[%s] %s: %s\n", systemPathIndicator, diff.Name, newVersionStr)
-		}
-		fmt.Println()
-	}
-
-	if len(removedDiffs) > 0 {
-		fmt.Println("Removed Packages")
-		fmt.Println("================")
-		for _, diff := range removedDiffs {
-			oldVersionStr := formatVersionList(diff.Old)
-			systemPathIndicator := " "
-			switch diff.SystemPathStatus {
-			case SystemPathStatusOldOnly, SystemPathStatusBoth:
-				systemPathIndicator = "*"
-			}
-			fmt.Printf("[%s] %s: %s\n", systemPathIndicator, diff.Name, oldVersionStr)
-		}
-		fmt.Println()
-	}
-
-	if len(changedDiffs) > 0 {
-		fmt.Println("Changed Packages")
-		fmt.Println("================")
-		for _, diff := range changedDiffs {
-			oldVersionStr := formatVersionList(diff.Old)
-			newVersionStr := formatVersionList(diff.New)
-			systemPathIndicator := " "
-			switch diff.SystemPathStatus {
-			case SystemPathStatusBoth:
-				systemPathIndicator = "x"
-			case SystemPathStatusNewOnly:
-				systemPathIndicator = "↑"
-			case SystemPathStatusOldOnly:
-				systemPathIndicator = "↓"
-			}
-			fmt.Printf("[%s] %s: %s -> %s\n", systemPathIndicator, diff.Name, oldVersionStr, newVersionStr)
-		}
-		fmt.Println()
-	}
-
-	fmt.Println("Closure Sizes:")
-	fmt.Println(strings.Repeat("=", 14))
-
-	oldSizeStr := formatSize(closureDiff.OldSize)
-	newSizeStr := formatSize(closureDiff.NewSize)
-
-	if closureDiff.OldSize == closureDiff.NewSize {
-		fmt.Printf("Old: %s\n", oldSizeStr)
-		fmt.Printf("New: %s\n", newSizeStr)
-	} else {
-		if closureDiff.NewSize > closureDiff.OldSize {
-			change := closureDiff.NewSize - closureDiff.OldSize
-			changeStr := formatSize(change)
-			fmt.Printf("Old: %s\n", oldSizeStr)
-			fmt.Printf("New: %s (+%s)\n", newSizeStr, changeStr)
-		} else {
-			change := closureDiff.OldSize - closureDiff.NewSize
-			changeStr := formatSize(change)
-			fmt.Printf("Old: %s (-%s)\n", oldSizeStr, changeStr)
-			fmt.Printf("New: %s\n", newSizeStr)
-		}
-	}
+	table.Render()
+	fmt.Println()
 }
 
 func sortPathDiffs(diffs []PathDiff) {
@@ -722,7 +679,32 @@ func fillPnameVersion(paths []PathInfo, graph *drvAttrs) {
 			}
 		}
 
+		if before, ok := strings.CutSuffix(name, version); ok {
+			name = before
+			name = strings.TrimSuffix(name, "-")
+		}
+
 		paths[i].Name = name
 		paths[i].Version = version
+	}
+}
+
+func statusMarker(diff PathDiff) string {
+	switch diff.Change {
+	case ChangeTypeAdd:
+		return "+"
+	case ChangeTypeRemove:
+		return "-"
+	}
+
+	switch diff.SystemPathStatus {
+	case SystemPathStatusBoth:
+		return "●"
+	case SystemPathStatusNewOnly:
+		return "⊕"
+	case SystemPathStatusOldOnly:
+		return "⊖"
+	default:
+		return " "
 	}
 }
