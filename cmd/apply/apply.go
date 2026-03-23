@@ -19,6 +19,7 @@ import (
 	cmdUtils "github.com/nix-community/nixos-cli/internal/cmd/utils"
 	"github.com/nix-community/nixos-cli/internal/configuration"
 	"github.com/nix-community/nixos-cli/internal/constants"
+	"github.com/nix-community/nixos-cli/internal/diff"
 	"github.com/nix-community/nixos-cli/internal/generation"
 	"github.com/nix-community/nixos-cli/internal/logger"
 	"github.com/nix-community/nixos-cli/internal/nix"
@@ -596,7 +597,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 
 	log.Step("Comparing changes...")
 
-	err = generation.RunDiffCommand(targetHost, constants.CurrentSystem, resultLocation, &generation.DiffCommandOptions{
+	err = diff.RunDiffCommand(targetHost, constants.CurrentSystem, resultLocation, &diff.DiffCommandOptions{
 		DiffTool:    cfg.Differ.Tool,
 		DiffToolCmd: cfg.Differ.Command,
 	})

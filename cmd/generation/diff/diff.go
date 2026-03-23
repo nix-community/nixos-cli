@@ -10,6 +10,7 @@ import (
 	"github.com/nix-community/nixos-cli/internal/cmd/opts"
 	"github.com/nix-community/nixos-cli/internal/cmd/utils"
 	"github.com/nix-community/nixos-cli/internal/constants"
+	"github.com/nix-community/nixos-cli/internal/diff"
 	"github.com/nix-community/nixos-cli/internal/generation"
 	"github.com/nix-community/nixos-cli/internal/logger"
 	"github.com/nix-community/nixos-cli/internal/settings"
@@ -84,7 +85,7 @@ func generationDiffMain(cmd *cobra.Command, genOpts *cmdOpts.GenerationOpts, opt
 	beforeDirectory := filepath.Join(profileDirectory, fmt.Sprintf("%v-%v-link", genOpts.ProfileName, opts.Before))
 	afterDirectory := filepath.Join(profileDirectory, fmt.Sprintf("%v-%v-link", genOpts.ProfileName, opts.After))
 
-	err := generation.RunDiffCommand(s, beforeDirectory, afterDirectory, &generation.DiffCommandOptions{
+	err := diff.RunDiffCommand(s, beforeDirectory, afterDirectory, &diff.DiffCommandOptions{
 		DiffTool:    cfg.Differ.Tool,
 		DiffToolCmd: cfg.Differ.Command,
 	})
