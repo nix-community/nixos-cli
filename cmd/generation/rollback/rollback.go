@@ -13,6 +13,7 @@ import (
 	"github.com/nix-community/nixos-cli/internal/cmd/opts"
 	"github.com/nix-community/nixos-cli/internal/cmd/utils"
 	"github.com/nix-community/nixos-cli/internal/constants"
+	"github.com/nix-community/nixos-cli/internal/diff"
 	"github.com/nix-community/nixos-cli/internal/generation"
 	"github.com/nix-community/nixos-cli/internal/logger"
 	"github.com/nix-community/nixos-cli/internal/settings"
@@ -84,7 +85,7 @@ func generationRollbackMain(cmd *cobra.Command, genOpts *cmdOpts.GenerationOpts,
 
 	log.Step("Comparing changes...")
 
-	err = generation.RunDiffCommand(s, constants.CurrentSystem, generationLink, &generation.DiffCommandOptions{
+	err = diff.RunDiffCommand(s, constants.CurrentSystem, generationLink, &diff.DiffCommandOptions{
 		DiffTool:    cfg.Differ.Tool,
 		DiffToolCmd: cfg.Differ.Command,
 	})
