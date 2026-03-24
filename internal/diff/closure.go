@@ -261,16 +261,17 @@ func fillPnameVersion(paths []PathInfo, drvAttrMap *drvAttrs) {
 			}
 		}
 
-		if paths[i].Name == "" || paths[i].Version == "" {
+		if name == "" || version == "" {
 			n, v := parsePnameAndVersion(path.Path)
-			if paths[i].Name == "" {
-				setName(n)
-			}
-			if paths[i].Version == "" {
-				setVersion(v)
-			}
+			setName(n)
+			setVersion(v)
 		}
 
+		// Strip the version in case it still is attached to the pname
+		// according to the pname-version splitting rules. This is
+		// probably super uncommon, but worth checking for anyway in
+		// case someone uses git commits as version strings and they
+		// start with a letter.
 		if before, ok := strings.CutSuffix(name, version); ok {
 			name = before
 			name = strings.TrimSuffix(name, "-")
