@@ -19,9 +19,14 @@ type DiffCommandOptions struct {
 }
 
 type ClosureDiff struct {
-	OldSize uint64
-	NewSize uint64
-	Diffs   []PathDiff
+	Old   ClosureDiffPathInfo
+	New   ClosureDiffPathInfo
+	Diffs []PathDiff
+}
+
+type ClosureDiffPathInfo struct {
+	Path string
+	Size uint64
 }
 
 type PathInfo struct {
@@ -150,9 +155,15 @@ func diffNixStoreDB(before string, after string) (*ClosureDiff, error) {
 	)
 
 	return &ClosureDiff{
-		OldSize: closuresBefore.Size,
-		NewSize: closuresAfter.Size,
-		Diffs:   diffs,
+		Old: ClosureDiffPathInfo{
+			Path: before,
+			Size: closuresBefore.Size,
+		},
+		New: ClosureDiffPathInfo{
+			Path: after,
+			Size: closuresAfter.Size,
+		},
+		Diffs: diffs,
 	}, nil
 }
 

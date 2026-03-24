@@ -6,12 +6,17 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/fatih/color"
 	"github.com/olekukonko/tablewriter"
 )
 
 func displayDiffResults(closureDiff *ClosureDiff) {
-	fmt.Println("Closure Comparison:")
-	fmt.Println(strings.Repeat("=", 19))
+	if len(closureDiff.Diffs) == 0 {
+		return
+	}
+
+	fmt.Println("<<<", color.RedString(closureDiff.Old.Path))
+	fmt.Println(">>>", color.GreenString(closureDiff.New.Path))
 
 	added := 0
 	removed := 0
@@ -29,22 +34,28 @@ func displayDiffResults(closureDiff *ClosureDiff) {
 	}
 
 	fmt.Println("\nPackages:")
-	fmt.Printf("  + %d added\n", added)
-	fmt.Printf("  - %d removed\n", removed)
-	fmt.Printf("  ~ %d changed\n", changed)
+	if added > 0 {
+		fmt.Println(color.GreenString("  + %d added", added))
+	}
+	if removed > 0 {
+		fmt.Println(color.RedString("  - %d removed", removed))
+	}
+	if changed > 0 {
+		fmt.Println(color.YellowString("  ~ %d changed", changed))
+	}
 
 	fmt.Println("\nSize:")
-	if closureDiff.OldSize == closureDiff.NewSize {
+	if closureDiff.Old.Size == closureDiff.New.Size {
 		fmt.Println("  (no change)")
 	} else {
-		oldSize := formatSize(closureDiff.OldSize)
-		newSize := formatSize(closureDiff.NewSize)
+		oldSize := formatSize(closureDiff.Old.Size)
+		newSize := formatSize(closureDiff.New.Size)
 
 		var change string
-		if closureDiff.NewSize > closureDiff.OldSize {
-			change = "-" + formatSize(closureDiff.NewSize-closureDiff.OldSize)
+		if closureDiff.New.Size > closureDiff.Old.Size {
+			change = color.RedString("+%s", formatSize(closureDiff.New.Size-closureDiff.Old.Size))
 		} else {
-			change = "+" + formatSize(closureDiff.OldSize-closureDiff.NewSize)
+			change = color.GreenString("-%s", formatSize(closureDiff.Old.Size-closureDiff.New.Size))
 		}
 
 		fmt.Printf("  %s -> %s (%s)\n", oldSize, newSize, change)
@@ -67,10 +78,29 @@ func displayDiffResults(closureDiff *ClosureDiff) {
 	for _, diff := range closureDiff.Diffs {
 		row := make([]string, 4)
 
-		row[0] = statusMarker(diff)
-		row[1] = diff.Name
-		row[2] = formatVersionList(diff.Old)
-		row[3] = formatVersionList(diff.New)
+		var colorString func(string, ...any) string
+		switch diff.Change {
+		case ChangeTypeAdd:
+			colorString = color.GreenString
+		case ChangeTypeRemove:
+			colorString = color.RedString
+		case ChangeTypeChange:
+			colorString = color.YellowString
+		default:
+			colorString = func(v string, a ...any) string { return v }
+		}
+
+		colorVersionList := func(value string) string {
+			if value == nullSymbol {
+				return nullSymbol
+			}
+			return colorString(value)
+		}
+
+		row[0] = colorString(statusMarker(diff))
+		row[1] = colorString(diff.Name)
+		row[2] = colorVersionList(formatVersionList(diff.Old))
+		row[3] = colorVersionList(formatVersionList(diff.New))
 
 		rows = append(rows, row)
 	}
@@ -100,9 +130,11 @@ func formatSize(size uint64) string {
 	return fmt.Sprintf("%d B", size)
 }
 
+var nullSymbol = "∅"
+
 func formatVersionList(versions []string) string {
 	if len(versions) == 0 {
-		return "∅"
+		return nullSymbol
 	}
 
 	out := make([]string, len(versions))
