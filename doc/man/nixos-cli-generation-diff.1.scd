@@ -18,11 +18,12 @@ Both generation numbers must exist and belong to the same profile.
 The output highlights differing store paths or system configuration files
 between the two specified generations.
 
-The diff command that is ran can be one of two options:
+The diff command is controlled by the settings under the _differ_ key. See
+*nixos-cli-settings(5)* for more information on what available differs exist.
 
-	- *nix store diff-closures* (default)
-	- *nvd*, which has prettier output (if the setting _use_nvd_ is set and
-	if it is installed)
+The internal (builtin) differ directly queries the Nix store SQLite database
+and available derivations to determine packages in a closure and their
+corresponding versions. This differ is used by default.
 
 # OPTIONS
 
