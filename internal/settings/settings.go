@@ -85,7 +85,6 @@ type DiffTool string
 
 const (
 	DifferInternal DiffTool = "internal"
-	DifferNvd      DiffTool = "nvd"
 	DifferNix      DiffTool = "nix"
 	DifferCommand  DiffTool = "command"
 )
@@ -93,14 +92,13 @@ const (
 var AvailableDiffToolOptions = map[string]string{
 	string(DifferInternal): "Use the builtin closure diff facility; queries the Nix store database directly",
 	string(DifferNix):      "Use `nix store diff-closures` to run diffs",
-	string(DifferNvd):      "Use `nvd` to run diffs",
 	string(DifferCommand):  "Use an external command or script to run diffs",
 }
 
 func (d *DiffTool) UnmarshalText(text []byte) error {
 	v := DiffTool(text)
 	switch v {
-	case DifferNvd, DifferNix, DifferInternal, DifferCommand:
+	case DifferNix, DifferInternal, DifferCommand:
 		*d = v
 		return nil
 	default:
@@ -240,8 +238,10 @@ var SettingsDocs = map[string]SettingsDocEntry{
 	},
 	"differ.tool": {
 		Short: "Tool used to diff two generations",
-		Long: `The selected closure diff tool that is used. Can be one of 'internal', 'nix', 'nvd' or 'command'.
-If 'command' is the value, then 'differ.command' MUST be specified.
+		Long: `The selected closure diff tool that is used. Can be one of 'internal', 'nix', or 'command'.
+If 'command' is the value, then 'differ.command' MUST be specified. 'differ.command' is a list of
+command arguments, and will have two arguments, the <before> and <after> closures, appended to it;
+for example, a value of '["nvd", "diff"]' would expand to running 'nvd diff <before> <after>'.
 If a command or function is not available at runtime, then 'nix' is the fallback tool used.`,
 	},
 	"differ.command": {
@@ -323,7 +323,7 @@ the before and after closure paths.`,
 	"use_nvd": {
 		Short:      "Use 'nvd' instead of `nix store diff-closures`",
 		Long:       "Use the better-looking `nvd` diffing tool when comparing configurations instead of `nix store diff-closures`.",
-		Deprecated: "Set `differ.type` to `nvd` intead.",
+		Deprecated: "Set `differ.command` to `[\"nvd\", \"diff\"]` instead.",
 	},
 }
 
@@ -429,9 +429,22 @@ func (cfg *Settings) Validate() SettingsErrors {
 	if cfg.UseNvd {
 		errs = append(errs, DeprecatedSettingError{
 			Field:       "use_nvd",
-			Alternative: "set 'differ.tool=nvd' instead",
+			Alternative: `set 'differ.command=["nvd", "diff"]' instead`,
 		})
-		cfg.Differ.Tool = DifferNvd
+		cfg.Differ.Tool = DifferCommand
+		cfg.Differ.Command = []string{"nvd", "diff"}
+	}
+
+	switch cfg.Differ.Tool {
+	case DifferCommand:
+		if len(cfg.Differ.Command) == 0 {
+			errs = append(errs, SettingsError{Field: "differ.command", Message: "differ.tool is set to 'command', but differ.command is empty"})
+			cfg.Differ.Tool = DifferNix
+		}
+	case DifferNix, DifferInternal:
+	default:
+		errs = append(errs, SettingsError{Field: "differ.tool", Message: fmt.Sprintf("invalid value '%s' specified", cfg.Differ.Tool)})
+		cfg.Differ.Tool = DifferNix
 	}
 
 	if len(errs) > 0 {
