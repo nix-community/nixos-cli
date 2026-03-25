@@ -86,8 +86,9 @@ func generationDiffMain(cmd *cobra.Command, genOpts *cmdOpts.GenerationOpts, opt
 	afterDirectory := filepath.Join(profileDirectory, fmt.Sprintf("%v-%v-link", genOpts.ProfileName, opts.After))
 
 	err := diff.RunDiffCommand(s, beforeDirectory, afterDirectory, &diff.DiffCommandOptions{
-		DiffTool:    cfg.Differ.Tool,
-		DiffToolCmd: cfg.Differ.Command,
+		DiffTool:         cfg.Differ.Tool,
+		DiffToolCmd:      cfg.Differ.Command,
+		QueryDerivations: cfg.Differ.QueryDerivations,
 	})
 	if err != nil {
 		log.Errorf("failed to run diff command: %v", err)

@@ -51,8 +51,9 @@ type EnterSettings struct {
 }
 
 type DifferSettings struct {
-	Tool    DiffTool `koanf:"tool"`
-	Command []string `koanf:"command" noset:"true"`
+	Tool             DiffTool `koanf:"tool"`
+	Command          []string `koanf:"command" noset:"true"`
+	QueryDerivations bool     `koanf:"query_derivations"`
 }
 
 type InitSettings struct {
@@ -249,6 +250,11 @@ If a command or function is not available at runtime, then 'nix' is the fallback
 		Long: `Shell command that is used to run the diff tool if 'command' is used.
 It must take two positional arguments, appended to the command string at runtime:
 the before and after closure paths.`,
+	},
+	"differ.query_derivations": {
+		Short: "Query derivations for more accurate version strings",
+		Long: `When using the internal differ, query store path derivations for more accurate version strings when they exist on the system.
+This requires the 'nix-command' experimental feature to be enabled in the Nix configuration.`,
 	},
 	"enter": {
 		Short: "Settings for `enter` command",

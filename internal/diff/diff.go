@@ -8,14 +8,16 @@ import (
 	_ "modernc.org/sqlite"
 
 	"github.com/nix-community/nixos-cli/internal/constants"
+	"github.com/nix-community/nixos-cli/internal/logger"
 	"github.com/nix-community/nixos-cli/internal/settings"
 	"github.com/nix-community/nixos-cli/internal/system"
 	"github.com/nix-community/nixos-cli/internal/utils/set"
 )
 
 type DiffCommandOptions struct {
-	DiffTool    settings.DiffTool
-	DiffToolCmd []string
+	DiffTool         settings.DiffTool
+	DiffToolCmd      []string
+	QueryDerivations bool
 }
 
 type ClosureDiff struct {
@@ -103,7 +105,7 @@ func RunDiffCommand(s system.System, before string, after string, opts *DiffComm
 	case settings.DifferCommand:
 		argv = append(opts.DiffToolCmd, before, after)
 	case settings.DifferInternal:
-		diff, err := diffNixStoreDB(before, after)
+		diff, err := diffNixStoreDB(log, before, after, opts.QueryDerivations)
 		if err != nil {
 			return err
 		}
@@ -120,7 +122,7 @@ func RunDiffCommand(s system.System, before string, after string, opts *DiffComm
 	return err
 }
 
-func diffNixStoreDB(before string, after string) (*ClosureDiff, error) {
+func diffNixStoreDB(log logger.Logger, before string, after string, queryDerivations bool) (*ClosureDiff, error) {
 	conn, err := sql.Open("sqlite", fmt.Sprintf("file:%s?mode=ro&immutable=1", constants.NixStoreDatabase))
 	if err != nil {
 		return nil, fmt.Errorf("error opening nix sqlite db: %w", err)
@@ -146,6 +148,19 @@ func diffNixStoreDB(before string, after string) (*ClosureDiff, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	var drvAttrInfo *drvAttrs
+	if queryDerivations {
+		drvAttrInfo, err = getDrvAttrs(closuresBefore.Paths, closuresAfter.Paths, systemPathsBefore, systemPathsAfter)
+		if err != nil {
+			log.Warnf("failed to query derivation info: %v", err)
+		}
+	}
+
+	fillPnameVersion(closuresBefore.Paths, drvAttrInfo)
+	fillPnameVersion(closuresAfter.Paths, drvAttrInfo)
+	fillPnameVersion(systemPathsBefore, drvAttrInfo)
+	fillPnameVersion(systemPathsAfter, drvAttrInfo)
 
 	diffs := calculateDiffs(
 		closuresBefore.Paths,

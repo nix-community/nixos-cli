@@ -138,8 +138,9 @@ func generationSwitchMain(cmd *cobra.Command, genOpts *cmdOpts.GenerationOpts, o
 	log.Step("Comparing changes...")
 
 	err := diff.RunDiffCommand(s, constants.CurrentSystem, generationLink, &diff.DiffCommandOptions{
-		DiffTool:    cfg.Differ.Tool,
-		DiffToolCmd: cfg.Differ.Command,
+		DiffTool:         cfg.Differ.Tool,
+		DiffToolCmd:      cfg.Differ.Command,
+		QueryDerivations: cfg.Differ.QueryDerivations,
 	})
 	if err != nil {
 		log.Errorf("failed to run diff command: %v", err)
