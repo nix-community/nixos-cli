@@ -8,17 +8,13 @@ import (
 
 func TestValidateConfig(t *testing.T) {
 	t.Run("incorrect config fails", func(t *testing.T) {
-		cfg := &settings.Settings{
-			Aliases: map[string][]string{
-				"":                     {"value1"},
-				"-bad":                 {"value2"},
-				"has space":            {"value3"},
-				"validalias":           {"value4"},
-				"validalias-noentries": {},
-			},
-			Option: settings.OptionSettings{
-				MinScore: 1,
-			},
+		cfg := settings.NewSettings()
+		cfg.Aliases = map[string][]string{
+			"":                     {"value1"},
+			"-bad":                 {"value2"},
+			"has space":            {"value3"},
+			"validalias":           {"value4"},
+			"validalias-noentries": {},
 		}
 
 		errs := cfg.Validate()
@@ -32,29 +28,18 @@ func TestValidateConfig(t *testing.T) {
 	})
 
 	t.Run("valid config passes", func(t *testing.T) {
-		cfg := &settings.Settings{
-			Aliases: map[string][]string{
-				"validalias": {"value1", "value2"},
-			},
-			Option: settings.OptionSettings{
-				MinScore: 2,
-			},
-		}
+		cfg := settings.NewSettings()
 
 		errs := cfg.Validate()
 		if errs != nil {
-			t.Errorf("expected error slice to be nil, got %d errors", len(errs))
+			t.Errorf("expected error slice to be nil, got %d errors: %v", len(errs), errs)
 		}
 	})
 }
 
 func TestSetConfigValue(t *testing.T) {
 	t.Run("Set int field successfully", func(t *testing.T) {
-		cfg := &settings.Settings{
-			Option: settings.OptionSettings{
-				MinScore: 1,
-			},
-		}
+		cfg := settings.NewSettings()
 
 		err := cfg.SetValue("option.min_score", "4")
 		if err != nil {
@@ -70,9 +55,7 @@ func TestSetConfigValue(t *testing.T) {
 	})
 
 	t.Run("Set string field successfully", func(t *testing.T) {
-		cfg := &settings.Settings{
-			ConfigLocation: "/etc/nixos",
-		}
+		cfg := settings.NewSettings()
 
 		err := cfg.SetValue("config_location", "/home/user")
 		if err != nil {
@@ -88,11 +71,7 @@ func TestSetConfigValue(t *testing.T) {
 	})
 
 	t.Run("Set boolean field successfully", func(t *testing.T) {
-		cfg := &settings.Settings{
-			Apply: settings.ApplySettings{
-				ImplyImpureWithTag: true,
-			},
-		}
+		cfg := settings.NewSettings()
 
 		err := cfg.SetValue("apply.imply_impure_with_tag", "true")
 		if err != nil {
@@ -108,7 +87,7 @@ func TestSetConfigValue(t *testing.T) {
 	})
 
 	t.Run("Invalid key", func(t *testing.T) {
-		cfg := &settings.Settings{}
+		cfg := settings.NewSettings()
 
 		err := cfg.SetValue("invalid_key", "")
 		if err == nil {
@@ -117,7 +96,7 @@ func TestSetConfigValue(t *testing.T) {
 	})
 
 	t.Run("Invalid nested key", func(t *testing.T) {
-		cfg := &settings.Settings{}
+		cfg := settings.NewSettings()
 
 		err := cfg.SetValue("apply.invalid.nested", "")
 		if err == nil {
@@ -126,11 +105,7 @@ func TestSetConfigValue(t *testing.T) {
 	})
 
 	t.Run("Invalid boolean value", func(t *testing.T) {
-		cfg := &settings.Settings{
-			Apply: settings.ApplySettings{
-				ImplyImpureWithTag: true,
-			},
-		}
+		cfg := settings.NewSettings()
 
 		err := cfg.SetValue("apply.imply_impure_with_tag", "invalid")
 		if err == nil {
@@ -139,11 +114,7 @@ func TestSetConfigValue(t *testing.T) {
 	})
 
 	t.Run("Invalid int value", func(t *testing.T) {
-		cfg := &settings.Settings{
-			Option: settings.OptionSettings{
-				MinScore: 1,
-			},
-		}
+		cfg := settings.NewSettings()
 
 		err := cfg.SetValue("option.min_score", "invalid")
 		if err == nil {
