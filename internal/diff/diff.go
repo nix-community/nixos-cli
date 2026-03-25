@@ -3,7 +3,6 @@ package diff
 import (
 	"database/sql"
 	"fmt"
-	"os/exec"
 	"sort"
 
 	_ "modernc.org/sqlite"
@@ -74,16 +73,19 @@ func RunDiffCommand(s system.System, before string, after string, opts *DiffComm
 			tool = settings.DifferNix
 		}
 	case settings.DifferCommand:
+		if len(opts.DiffToolCmd) == 0 {
+			log.Warn("differ.command is empty")
+			tool = settings.DifferNix
+			break
+		}
 		cmd := opts.DiffToolCmd[0]
-		if cmdPath, _ := exec.LookPath(cmd); cmdPath == "" {
+		if !s.HasCommand(cmd) {
 			log.Warnf("differ.command uses '%s', but `%s` is not executable", cmd, cmd)
 			tool = settings.DifferNix
 		}
-	case settings.DifferNvd:
-		if nvdPath, _ := exec.LookPath("nvd"); nvdPath == "" {
-			log.Warn("differ.tool is set to 'nvd', but `nvd` is not executable")
-			tool = settings.DifferNix
-		}
+	case settings.DifferNix:
+	default:
+		return fmt.Errorf("invalid differ type '%v'", tool)
 	}
 
 	if opts.DiffTool != tool && tool == settings.DifferNix {
@@ -104,8 +106,6 @@ func RunDiffCommand(s system.System, before string, after string, opts *DiffComm
 		return nil
 	case settings.DifferNix:
 		argv = []string{"nix", "store", "diff-closures", before, after}
-	case settings.DifferNvd:
-		argv = []string{"nvd", "diff", before, after}
 	}
 
 	s.Logger().CmdArray(argv)
