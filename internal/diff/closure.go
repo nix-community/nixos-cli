@@ -56,10 +56,7 @@ JOIN ValidPaths v ON v.id = c.id;
 
 		err = rows.Scan(&path, &deriver, &size)
 		if err != nil {
-			return &Closure{
-				Paths: results,
-				Size:  totalSize,
-			}, fmt.Errorf("error scanning rows: %w", err)
+			return nil, fmt.Errorf("error scanning rows: %w", err)
 		}
 
 		totalSize += size
@@ -72,9 +69,6 @@ JOIN ValidPaths v ON v.id = c.id;
 	if err = rows.Err(); err != nil {
 		return nil, fmt.Errorf("error scanning rows: %w", err)
 	}
-
-	g, _ := getDrvAttrs(results)
-	fillPnameVersion(results, g)
 
 	return &Closure{
 		Size:  totalSize,
@@ -143,9 +137,6 @@ JOIN validpaths vp ON vp.id = pkgs.id;
 		return nil, fmt.Errorf("error scanning rows: %w", err)
 	}
 
-	g, _ := getDrvAttrs(results)
-	fillPnameVersion(results, g)
-
 	return results, nil
 }
 
@@ -161,22 +152,24 @@ type drvAttrs struct {
 //
 // This is used for determining what the pname and version are
 // exactly, if their derivers are available.
-func getDrvAttrs(paths []PathInfo) (*drvAttrs, error) {
+func getDrvAttrs(pathLists ...[]PathInfo) (*drvAttrs, error) {
 	cmd := exec.Command("nix", "derivation", "show", "--stdin")
 
 	var drvArgs bytes.Buffer
-	for _, p := range paths {
-		if p.Deriver == nil {
-			continue
-		}
+	for _, paths := range pathLists {
+		for _, p := range paths {
+			if p.Deriver == nil {
+				continue
+			}
 
-		drv := *p.Deriver
-		if _, err := os.Stat(drv); err != nil {
-			continue
-		}
+			drv := *p.Deriver
+			if _, err := os.Stat(drv); err != nil {
+				continue
+			}
 
-		drvArgs.WriteString(*p.Deriver)
-		drvArgs.WriteString("\n")
+			drvArgs.WriteString(*p.Deriver)
+			drvArgs.WriteString("\n")
+		}
 	}
 
 	cmd.Stdin = bytes.NewReader(drvArgs.Bytes())
@@ -188,7 +181,7 @@ func getDrvAttrs(paths []PathInfo) (*drvAttrs, error) {
 	cmd.Stdout = &stdout
 
 	if err := cmd.Run(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("nix derivation show failed: %w\nstderr: %s", err, stderr.String())
 	}
 
 	var graph drvAttrs

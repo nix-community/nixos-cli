@@ -598,8 +598,9 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 	log.Step("Comparing changes...")
 
 	err = diff.RunDiffCommand(targetHost, constants.CurrentSystem, resultLocation, &diff.DiffCommandOptions{
-		DiffTool:    cfg.Differ.Tool,
-		DiffToolCmd: cfg.Differ.Command,
+		DiffTool:         cfg.Differ.Tool,
+		DiffToolCmd:      cfg.Differ.Command,
+		QueryDerivations: cfg.Differ.QueryDerivations,
 	})
 	if err != nil {
 		log.Errorf("failed to run diff command: %v", err)
