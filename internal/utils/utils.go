@@ -136,13 +136,33 @@ func ResolveDirectory(input string) (string, error) {
 	return absolutePath, nil
 }
 
-// Prompt for a password from stdin.
+// Prompt for a password from /dev/tty or stdin.
 //
-// This operation can be cancelled using the provided context.
+// This operation can be cancelled using the provided context,
+// but any errors returned from here MAY have the potential
+// to keep consuming stdin until another character is typed
+// if /dev/tty or a duplicate instance of stdin cannot be
+// opened, so any errors here will result in potentially
+// undefined behavior for stdin input.
 func PromptForPassword(ctx context.Context, prompt string) ([]byte, error) {
-	fd := int(os.Stdin.Fd())
-	if !term.IsTerminal(fd) {
-		return nil, fmt.Errorf("cannot prompt for password: stdin is not a terminal")
+	var fd int
+
+	if tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0); err == nil {
+		defer tty.Close()
+		fd = int(tty.Fd())
+	} else if term.IsTerminal(int(os.Stdin.Fd())) {
+		dupStdin, openErr := os.OpenFile("/dev/stdin", os.O_RDONLY, 0)
+		if openErr == nil {
+			defer dupStdin.Close()
+			fd = int(dupStdin.Fd())
+		} else {
+			// NOTE: falling back to stdin will make context
+			// cancellation behavior a bit unclear, as mentioned
+			// in the doc comment.
+			fd = int(os.Stdin.Fd())
+		}
+	} else {
+		return nil, fmt.Errorf("standard input is not a terminal, and /dev/tty is not available: %v", err)
 	}
 
 	oldState, err := term.GetState(fd)
