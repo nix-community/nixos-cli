@@ -67,8 +67,7 @@
         };
 
         devShells = let
-          inherit (pkgs) golangci-lint mkShell mdbook scdoc govulncheck prettier;
-          go = pkgs.go_1_26;
+          inherit (pkgs) go golangci-lint mkShell mdbook scdoc govulncheck prettier;
         in {
           default = mkShell {
             name = "nixos-shell";
