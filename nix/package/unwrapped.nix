@@ -24,7 +24,7 @@ buildGo126Module (finalAttrs: {
     ];
   };
 
-  vendorHash = "sha256-yf15o61MI6Ek20Yb2TPNm1M9caFk0kV8ywR6jK+xHZk=";
+  vendorHash = "sha256-8VvWJfD0aXQzHdOyRbbRAd0aDf097aIiVaOiHuLd+AY=";
 
   nativeBuildInputs = [installShellFiles scdoc];
 
