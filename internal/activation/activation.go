@@ -348,7 +348,7 @@ func RunActivationSupervisor(
 	systemLocation string,
 	action SwitchToConfigurationAction,
 	opts *RunActivationSupervisorOptions,
-) error {
+) (err error) {
 	if _, ok := s.(*system.SSHSystem); !ok {
 		panic("RunActivationSupervisor() called with a non-SSH system")
 	}
@@ -420,6 +420,28 @@ func RunActivationSupervisor(
 		cmd.AsRoot(opts.RootElevator)
 	}
 
+	// If the root elevator uses TTY input, then debug logs will
+	// not work since the terminal will be forced into raw mode.
+	//
+	// As such, any debug logging during the ACK process must be
+	// delayed and replayed later.
+	//
+	// This is a rather niche edge case, but it is useful nonetheless
+	// for users of `doas` and other root elevators that require
+	// TTY input.
+	supervisorLogger := log
+	if opts.RootElevator != nil && opts.RootElevator.Method == settings.PasswordInputMethodTTY {
+		log.Warn("terminal is in raw mode; will replay some supervisor logs after completion")
+		replayLogger := logger.NewReplayLogger(log)
+		defer func() {
+			if err != nil && replayLogger.HasEntries() {
+				log.Print("--- LOG OUTPUT DURING ACTIVATION: ---")
+				replayLogger.Flush()
+			}
+		}()
+		supervisorLogger = replayLogger
+	}
+
 	activationComplete := make(chan error, 1)
 	go func() {
 		// FIXME: there are times where if a connection is taken
@@ -436,7 +458,7 @@ func RunActivationSupervisor(
 	activationChConsumed := false
 	for !successDetected {
 		select {
-		case err := <-activationComplete:
+		case activationErr := <-activationComplete:
 			// Check one more time if a success trigger has been created, in case
 			// the activation error returned before the ticker.
 			// This should be almost impossible, but just in case it happens, the
@@ -451,43 +473,43 @@ func RunActivationSupervisor(
 			// so the switch has either failed, or a transport error has occurred
 			// and we need to re-initiate the SSH connection.
 
-			if _, ok := err.(*ssh.ExitMissingError); ok {
+			if _, ok := activationErr.(*ssh.ExitMissingError); ok {
 				log.Warn("lost connection to target host, attempting to reconnect")
-				err = s.(*system.SSHSystem).Reconnect()
-				if err != nil {
-					log.Errorf("%v", err)
+				activationErr = s.(*system.SSHSystem).Reconnect()
+				if activationErr != nil {
+					log.Errorf("%v", activationErr)
 					log.Info("the target host should rollback soon")
-					return err
+					return activationErr
 				}
 
 				log.Debug("attempting to acknowledge success after reconnecting")
-				if err = s.FS().CreateFile(successTrigger); err != nil {
-					log.Errorf("failed to create %v on remote system: %v", successTrigger, err)
+				if activationErr = s.FS().CreateFile(successTrigger); activationErr != nil {
+					log.Errorf("failed to create %v on remote system: %v", successTrigger, activationErr)
 					log.Info("the target host should rollback soon")
-					return err
+					return activationErr
 				}
 				return nil
 			}
 
 			// At this point, the SSH command has failed to run and
 			// we cannot do anything more, so exit with an error.
-			if err != nil {
-				return fmt.Errorf("activation supervisor exited early: %w", err)
+			if activationErr != nil {
+				return fmt.Errorf("activation supervisor exited early: %w", activationErr)
 			}
 			return errors.New("activation supervisor exited without success signal")
 		case <-successTriggerCheckTimer.C:
 			// Check for the existence of the switch success trigger.
 			// If it exists, then the switch has completed
 			// and we can proceed to signaling the watchdog.
-			_, err := s.FS().Stat(SWITCH_SUCCESS_PATH)
-			if err == nil {
+			_, statErr := s.FS().Stat(SWITCH_SUCCESS_PATH)
+			if statErr == nil {
 				successDetected = true
 				break
 			}
-			if errors.Is(err, os.ErrNotExist) {
+			if errors.Is(statErr, os.ErrNotExist) {
 				continue
 			}
-			return fmt.Errorf("failed checking success file: %w", err)
+			return fmt.Errorf("failed checking success file: %w", statErr)
 		}
 	}
 
@@ -496,12 +518,12 @@ func RunActivationSupervisor(
 	reconnectCh := make(chan *system.SSHSystem)
 
 	go func() {
-		log.Debug("attempting reconnect")
-		s2, err := s.(*system.SSHSystem).Clone()
-		if err != nil {
-			log.Errorf("%v", err)
-			log.Warnf("it is very likely that SSH access cannot be re-established")
-			log.Warnf("the target host should rollback soon")
+		supervisorLogger.Debug("attempting reconnect")
+		s2, reconnectErr := s.(*system.SSHSystem).Clone()
+		if reconnectErr != nil {
+			supervisorLogger.Errorf("%v", reconnectErr)
+			supervisorLogger.Warnf("it is very likely that SSH access cannot be re-established")
+			supervisorLogger.Warnf("the target host should rollback soon")
 			reconnectCh <- nil
 			return
 		}
@@ -515,16 +537,16 @@ func RunActivationSupervisor(
 		}
 
 		defer s2.Close()
-		err := s2.FS().CreateFile(successTrigger)
-		if err != nil {
-			log.Errorf("failed to create %v on remote system: %v", successTrigger, err)
+		createErr := s2.FS().CreateFile(successTrigger)
+		if createErr != nil {
+			supervisorLogger.Errorf("failed to create %v on remote system: %v", successTrigger, createErr)
 		}
 	case <-time.After(opts.AckTimeout):
 		// FIXME: fix race condition where s2 is never closed if this is reached first.
 		break
 	}
 
-	log.Debug("waiting for activation process to complete")
+	supervisorLogger.Debug("waiting for activation process to complete")
 
 	if !activationChConsumed {
 		// Wait for the watchdog to either rollback or finish.

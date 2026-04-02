@@ -1,8 +1,9 @@
 #!/bin/sh
 
-# The activation directory may not exist at this point,
-# and creating the lockfile would fail otherwise.
+# The activation directories may not exist at this point,
+# and creating the lockfile/triggers would fail otherwise.
 mkdir -p /run/nixos
+mkdir -m 1777 /run/nixos/trigger
 
 # Concurrent supervisors are prohibited.
 # Otherwise, multiple rollbacks and switch-to-configuration
