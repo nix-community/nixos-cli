@@ -524,10 +524,19 @@ func RunActivationSupervisor(
 			supervisorLogger.Errorf("%v", reconnectErr)
 			supervisorLogger.Warnf("it is very likely that SSH access cannot be re-established")
 			supervisorLogger.Warnf("the target host should rollback soon")
-			reconnectCh <- nil
+			close(reconnectCh)
 			return
 		}
-		reconnectCh <- s2
+
+		select {
+		case reconnectCh <- s2:
+			// Do nothing, the connection has been re-established here.
+			break
+		case <-time.After(opts.AckTimeout):
+			// Otherwise, close the connection since no other
+			// goroutine will pick it up.
+			s2.Close()
+		}
 	}()
 
 	select {
@@ -542,7 +551,9 @@ func RunActivationSupervisor(
 			supervisorLogger.Errorf("failed to create %v on remote system: %v", successTrigger, createErr)
 		}
 	case <-time.After(opts.AckTimeout):
-		// FIXME: fix race condition where s2 is never closed if this is reached first.
+		// Once the timeout is hit, the reconnect goroutine
+		// will automatically close the connection since it
+		// wasn't received here.
 		break
 	}
 
