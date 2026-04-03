@@ -57,7 +57,7 @@ func findFieldCompletions(value any, prefix string) ([]fieldCompleteResult, bool
 		}
 	}
 
-	if current.Kind() == reflect.Ptr {
+	if current.Kind() == reflect.Pointer {
 		if current.IsNil() {
 			current.Set(reflect.New(current.Type().Elem()))
 		}
@@ -142,13 +142,10 @@ func bestDescriptionFor(name string) string {
 }
 
 func CompleteConfigFlag(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	splitIndex := strings.Index(toComplete, "=")
-	if splitIndex == -1 {
+	key, candidate, ok := strings.Cut(toComplete, "=")
+	if !ok {
 		return completeKeys(toComplete)
 	}
-
-	key := toComplete[0:splitIndex]
-	candidate := toComplete[splitIndex+1:]
 
 	return completeValues(key, candidate)
 }
@@ -244,7 +241,7 @@ func findField(root any, key string) *reflect.Value {
 	parts := strings.Split(key, ".")
 	current := reflect.ValueOf(root)
 
-	if current.Kind() == reflect.Ptr {
+	if current.Kind() == reflect.Pointer {
 		current = current.Elem()
 	}
 
@@ -258,7 +255,7 @@ func findField(root any, key string) *reflect.Value {
 			field := current.Type().Field(i)
 			if field.Tag.Get("koanf") == part {
 				current = current.Field(i)
-				if current.Kind() == reflect.Ptr {
+				if current.Kind() == reflect.Pointer {
 					if current.IsNil() {
 						return nil
 					}
