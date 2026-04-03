@@ -1,6 +1,7 @@
 package settings
 
 import (
+	"encoding"
 	"fmt"
 	"reflect"
 	"regexp"
@@ -561,6 +562,15 @@ func (cfg *Settings) SetValue(key string, value string) error {
 		if i == len(fields)-1 {
 			if !current.CanSet() {
 				return SettingsError{Field: field, Message: "cannot change value of this setting dynamically"}
+			}
+
+			if current.CanAddr() {
+				if unmarshaler, ok := current.Addr().Interface().(encoding.TextUnmarshaler); ok {
+					if err := unmarshaler.UnmarshalText([]byte(value)); err != nil {
+						return err
+					}
+					return nil
+				}
 			}
 
 			switch current.Kind() {
