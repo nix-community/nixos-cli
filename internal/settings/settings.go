@@ -97,6 +97,17 @@ const (
 	PasswordInputMethodNone  PasswordInputMethod = "none"
 )
 
+func (d *PasswordInputMethod) UnmarshalText(text []byte) error {
+	v := PasswordInputMethod(text)
+	switch v {
+	case PasswordInputMethodStdin, PasswordInputMethodTTY, PasswordInputMethodNone:
+		*d = v
+		return nil
+	default:
+		return fmt.Errorf("invalid value for password input method '%s'", text)
+	}
+}
+
 var AvailablePasswordInputMethods = map[string]string{
 	string(PasswordInputMethodStdin): "Prompt for the password once and pass it on stdin for all invocations",
 	string(PasswordInputMethodTTY):   "Allocate a TTY and always use interactive input for password",
