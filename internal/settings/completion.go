@@ -236,6 +236,10 @@ func completeValues(key string, value string) ([]string, cobra.ShellCompDirectiv
 
 func isBoolField(root any, key string) bool {
 	field := findField(root, key)
+	if field == nil {
+		return false
+	}
+
 	kind := field.Kind()
 	return kind == reflect.Bool
 }
