@@ -50,9 +50,10 @@ type SSHConfig struct {
 }
 
 type SSHConfigOptions struct {
-	AgentManager    *sshUtils.AgentManager
-	KnownHostsFiles []string
-	PrivateKeyCmd   []string
+	AgentManager        *sshUtils.AgentManager
+	KnownHostsFiles     []string
+	HostKeyVerification settings.HostKeyVerificationType
+	PrivateKeyCmd       []string
 }
 
 // Initialize a new SSH configuration that can be passed
@@ -61,6 +62,10 @@ type SSHConfigOptions struct {
 // The context is required to construct the password callback
 // such that it can be canceled gracefully.
 func NewSSHConfig(ctx context.Context, host string, log logger.Logger, options SSHConfigOptions) (*SSHConfig, error) {
+	if options.HostKeyVerification == "" {
+		return nil, errors.New("options.HostKeyVerification is empty")
+	}
+
 	// Parse the user@address:port SSH host string
 	if after, ok := strings.CutPrefix(host, "ssh://"); ok {
 		host = after
@@ -162,7 +167,7 @@ func NewSSHConfig(ctx context.Context, host string, log logger.Logger, options S
 	})
 	auth = append(auth, passwordCallback)
 
-	hostKeyCallback, err := knownHostsCallback(log, options.KnownHostsFiles)
+	hostKeyCallback, err := knownHostsCallback(log, options.HostKeyVerification, options.KnownHostsFiles)
 	if err != nil {
 		return nil, err
 	}
@@ -173,7 +178,11 @@ func NewSSHConfig(ctx context.Context, host string, log logger.Logger, options S
 	return cfg, nil
 }
 
-func knownHostsCallback(log logger.Logger, extraKnownHosts []string) (ssh.HostKeyCallback, error) {
+func knownHostsCallback(
+	log logger.Logger,
+	hostKeyVerification settings.HostKeyVerificationType,
+	extraKnownHosts []string,
+) (ssh.HostKeyCallback, error) {
 	var knownHostsFiles []string
 
 	// By default, use /etc/ssh/ssh_known_hosts and $HOME/.ssh/known_hosts.
@@ -213,7 +222,7 @@ func knownHostsCallback(log logger.Logger, extraKnownHosts []string) (ssh.HostKe
 	}
 
 	if knownHostsUserFile != "" {
-		return addKeyToKnownHostsCallback(log, knownHostsKeyCallback, knownHostsUserFile), nil
+		return addKeyToKnownHostsCallback(log, knownHostsKeyCallback, hostKeyVerification, knownHostsUserFile), nil
 	} else {
 		return knownHostsKeyCallback, nil
 	}
@@ -316,57 +325,28 @@ func runPrivateKeyCmd(s *LocalSystem, host string, username string, privateKeyCm
 // This mimics the automatic addition of known_hosts entries
 // to the known_hosts file that OpenSSH performs.
 //
-// Only occurs if the key is not already in known_hosts and
-// if running in interactive mode in a terminal. Otherwise,
-// this will result in failure to connect.
-func addKeyToKnownHostsCallback(log logger.Logger, origCallback ssh.HostKeyCallback, knownHostsPath string) ssh.HostKeyCallback {
+// The behavior of this function depends on the `hostKeyVerification`
+// parameter
+func addKeyToKnownHostsCallback(
+	log logger.Logger,
+	origCallback ssh.HostKeyCallback,
+	hostKeyVerification settings.HostKeyVerificationType,
+	knownHostsPath string,
+) ssh.HostKeyCallback {
 	return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
 		err := origCallback(hostname, remote, key)
 		if err == nil {
 			return nil
 		}
 
-		if keyErr, ok := errors.AsType[*knownhosts.KeyError](err); ok {
-			// Only allow adding the key like OpenSSH does if the
-			// stdin terminal can accept input.
-			if !term.IsTerminal(int(os.Stdin.Fd())) {
-				return err
-			}
+		keyErr, ok := errors.AsType[*knownhosts.KeyError](err)
+		if !ok {
+			return err
+		}
 
-			if len(keyErr.Want) == 0 {
-				fingerprint := ssh.FingerprintSHA256(key)
-				log.Infof("the authenticity of host '%s' (%s) can't be established", hostname, key.Type())
-				log.Infof("SHA256 fingerprint: %s", fingerprint)
-
-				var confirm bool
-				confirm, err = cmdUtils.ConfirmationInput("Are you sure you want to continue connecting?", cmdUtils.ConfirmationPromptOptions{
-					// Copy the default SSH behavior of retrying for invalid input.
-					// Disregard user configuration in this case, since this is mimicking
-					// OpenSSH's behavior.
-					InvalidBehavior: settings.ConfirmationPromptRetry,
-					EmptyBehavior:   settings.ConfirmationPromptRetry,
-				})
-				if err != nil {
-					log.Errorf("failed to get confirmation: %v", err)
-					return err
-				}
-				if !confirm {
-					return fmt.Errorf("user declined unknown host")
-				}
-
-				var knownHostsFile *os.File
-				knownHostsFile, err = os.OpenFile(knownHostsPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
-				if err != nil {
-					return fmt.Errorf("failed to open known_hosts: %w", err)
-				}
-				defer func() { _ = knownHostsFile.Close() }()
-
-				line := knownhosts.Line([]string{hostname}, key)
-				if _, err = knownHostsFile.WriteString(line + "\n"); err != nil {
-					return fmt.Errorf("failed to write to known_hosts: %w", err)
-				}
-
-				log.Warnf("permanently added '%s' (%s) to the list of known hosts", hostname, key.Type())
+		if len(keyErr.Want) > 0 {
+			if hostKeyVerification == settings.HostKeyVerificationOff {
+				log.Warnf("host key verification is off; using key %s", ssh.FingerprintSHA256(key))
 				return nil
 			}
 
@@ -381,7 +361,58 @@ func addKeyToKnownHostsCallback(log logger.Logger, origCallback ssh.HostKeyCallb
 			)
 		}
 
-		return err
+		switch hostKeyVerification {
+		case settings.HostKeyVerificationOff:
+			log.Debugf("host key verification is off; using key %s", ssh.FingerprintSHA256(key))
+			return nil
+		case settings.HostKeyVerificationAcceptNew:
+			// Do nothing, continue adding the key
+		case settings.HostKeyVerificationAsk:
+			// Only allow adding the key like OpenSSH does if the
+			// stdin terminal can accept input.
+			if !term.IsTerminal(int(os.Stdin.Fd())) {
+				return fmt.Errorf("no host key is known for %v", hostname)
+			}
+
+			fingerprint := ssh.FingerprintSHA256(key)
+			log.Infof("the authenticity of host '%s' (%s) can't be established", hostname, key.Type())
+			log.Infof("SHA256 fingerprint: %s", fingerprint)
+
+			var confirm bool
+			confirm, err = cmdUtils.ConfirmationInput("Are you sure you want to continue connecting?", cmdUtils.ConfirmationPromptOptions{
+				// Copy the default SSH behavior of retrying for invalid input.
+				// Disregard user configuration in this case, since this is mimicking
+				// OpenSSH's behavior.
+				InvalidBehavior: settings.ConfirmationPromptRetry,
+				EmptyBehavior:   settings.ConfirmationPromptRetry,
+			})
+			if err != nil {
+				log.Errorf("failed to get confirmation: %v", err)
+				return err
+			}
+			if !confirm {
+				return fmt.Errorf("user declined unknown host")
+			}
+		case settings.HostKeyVerificationStrict:
+			return fmt.Errorf("no host key is known for %v and strict host key checking was requested", hostname)
+		default:
+			panic(fmt.Sprintf("unexpected settings.HostKeyVerificationType: %#v", hostKeyVerification))
+		}
+
+		var knownHostsFile *os.File
+		knownHostsFile, err = os.OpenFile(knownHostsPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+		if err != nil {
+			return fmt.Errorf("failed to open known_hosts: %w", err)
+		}
+		defer func() { _ = knownHostsFile.Close() }()
+
+		line := knownhosts.Line([]string{hostname}, key)
+		if _, err = knownHostsFile.WriteString(line + "\n"); err != nil {
+			return fmt.Errorf("failed to write to known_hosts: %w", err)
+		}
+
+		log.Warnf("permanently added '%s' (%s) to the list of known hosts", hostname, key.Type())
+		return nil
 	}
 }
 
