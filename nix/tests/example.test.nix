@@ -1,13 +1,8 @@
 {
-  pkgs,
-  self,
-  ...
-}:
-pkgs.testers.runNixOSTest {
-  name = "example-test";
-  nodes.machine1 = _: {
-    imports = [self.nixosModules.nixos-cli];
-    programs.nixos-cli.enable = true;
+  nodes.machine1 = {
+    programs.nixos-cli = {
+      enable = true;
+    };
   };
 
   testScript = ''
