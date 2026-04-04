@@ -260,9 +260,10 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 
 		var sshCfg *system.SSHConfig
 		sshCfg, err = system.NewSSHConfig(stopCtx, opts.TargetHost, log, system.SSHConfigOptions{
-			AgentManager:    sshAgent,
-			KnownHostsFiles: cfg.SSH.KnownHostsFiles,
-			PrivateKeyCmd:   cfg.SSH.PrivateKeyCmd,
+			AgentManager:        sshAgent,
+			HostKeyVerification: cfg.SSH.HostKeyVerification,
+			KnownHostsFiles:     cfg.SSH.KnownHostsFiles,
+			PrivateKeyCmd:       cfg.SSH.PrivateKeyCmd,
 		})
 		if err != nil {
 			log.Errorf("%v", err)
@@ -333,9 +334,10 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 
 		var sshCfg *system.SSHConfig
 		sshCfg, err = system.NewSSHConfig(stopCtx, opts.BuildHost, log, system.SSHConfigOptions{
-			AgentManager:    sshAgent,
-			KnownHostsFiles: cfg.SSH.KnownHostsFiles,
-			PrivateKeyCmd:   cfg.SSH.PrivateKeyCmd,
+			AgentManager:        sshAgent,
+			HostKeyVerification: cfg.SSH.HostKeyVerification,
+			KnownHostsFiles:     cfg.SSH.KnownHostsFiles,
+			PrivateKeyCmd:       cfg.SSH.PrivateKeyCmd,
 		})
 		if err != nil {
 			log.Errorf("%v", err)

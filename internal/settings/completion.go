@@ -212,11 +212,14 @@ func completeConfirmationBehaviorKey(key, candidate string) ([]string, cobra.She
 var completionValueFuncs = map[string]CompletionValueFunc{
 	"confirmation.empty":   completeConfirmationBehaviorKey,
 	"confirmation.invalid": completeConfirmationBehaviorKey,
+	"differ.tool": func(key, candidate string) ([]string, cobra.ShellCompDirective) {
+		return stringCompletionFunc(key, candidate, AvailableDiffToolOptions)
+	},
 	"root.password_method": func(key, candidate string) ([]string, cobra.ShellCompDirective) {
 		return stringCompletionFunc(key, candidate, AvailablePasswordInputMethods)
 	},
-	"differ.tool": func(key, candidate string) ([]string, cobra.ShellCompDirective) {
-		return stringCompletionFunc(key, candidate, AvailableDiffToolOptions)
+	"ssh.host_key_verification": func(key, candidate string) ([]string, cobra.ShellCompDirective) {
+		return stringCompletionFunc(key, candidate, AvailableHostKeyVerificationOptions)
 	},
 }
 

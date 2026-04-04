@@ -77,9 +77,10 @@ type RootCommandSettings struct {
 }
 
 type SSHSettings struct {
-	HostsFileCompletion bool     `koanf:"hosts_file_completion"`
-	KnownHostsFiles     []string `koanf:"known_hosts_files"`
-	PrivateKeyCmd       []string `koanf:"private_key_cmd"`
+	HostsFileCompletion bool                    `koanf:"hosts_file_completion"`
+	KnownHostsFiles     []string                `koanf:"known_hosts_files"`
+	PrivateKeyCmd       []string                `koanf:"private_key_cmd"`
+	HostKeyVerification HostKeyVerificationType `koanf:"host_key_verification"`
 }
 
 type ConfirmationPromptBehavior string
@@ -90,6 +91,23 @@ const (
 	ConfirmationPromptDefaultNo  ConfirmationPromptBehavior = "default-no"
 )
 
+var AvailableConfirmationPromptSettings = map[string]string{
+	string(ConfirmationPromptDefaultNo):  "Default to input of 'no'",
+	string(ConfirmationPromptDefaultYes): "Default to input of 'yes'",
+	string(ConfirmationPromptRetry):      "Retry the input function again",
+}
+
+func (c *ConfirmationPromptBehavior) UnmarshalText(text []byte) error {
+	val := ConfirmationPromptBehavior(text)
+	switch val {
+	case ConfirmationPromptDefaultYes, ConfirmationPromptDefaultNo, ConfirmationPromptRetry:
+		*c = val
+		return nil
+	}
+
+	return fmt.Errorf("invalid value for ConfirmationPromptBehavior '%s'", val)
+}
+
 type PasswordInputMethod string
 
 const (
@@ -98,21 +116,21 @@ const (
 	PasswordInputMethodNone  PasswordInputMethod = "none"
 )
 
-func (d *PasswordInputMethod) UnmarshalText(text []byte) error {
-	v := PasswordInputMethod(text)
-	switch v {
-	case PasswordInputMethodStdin, PasswordInputMethodTTY, PasswordInputMethodNone:
-		*d = v
-		return nil
-	default:
-		return fmt.Errorf("invalid value for password input method '%s'", text)
-	}
-}
-
 var AvailablePasswordInputMethods = map[string]string{
 	string(PasswordInputMethodStdin): "Prompt for the password once and pass it on stdin for all invocations",
 	string(PasswordInputMethodTTY):   "Allocate a TTY and always use interactive input for password",
 	string(PasswordInputMethodNone):  "Fail if command requires authentication",
+}
+
+func (p *PasswordInputMethod) UnmarshalText(text []byte) error {
+	v := PasswordInputMethod(text)
+	switch v {
+	case PasswordInputMethodStdin, PasswordInputMethodTTY, PasswordInputMethodNone:
+		*p = v
+		return nil
+	default:
+		return fmt.Errorf("invalid value for password input method '%s'", text)
+	}
 }
 
 type DiffTool string
@@ -140,21 +158,31 @@ func (d *DiffTool) UnmarshalText(text []byte) error {
 	}
 }
 
-var AvailableConfirmationPromptSettings = map[string]string{
-	string(ConfirmationPromptDefaultNo):  "Default to input of 'no'",
-	string(ConfirmationPromptDefaultYes): "Default to input of 'yes'",
-	string(ConfirmationPromptRetry):      "Retry the input function again",
+type HostKeyVerificationType string
+
+const (
+	HostKeyVerificationAcceptNew HostKeyVerificationType = "accept-new"
+	HostKeyVerificationAsk       HostKeyVerificationType = "ask"
+	HostKeyVerificationStrict    HostKeyVerificationType = "strict"
+	HostKeyVerificationOff       HostKeyVerificationType = "off"
+)
+
+var AvailableHostKeyVerificationOptions = map[string]string{
+	string(HostKeyVerificationAcceptNew): "Automatically accept new keys into known_hosts",
+	string(HostKeyVerificationAsk):       "Ask whether to add new keys to known_hosts",
+	string(HostKeyVerificationOff):       "Turn off all host key verification",
+	string(HostKeyVerificationStrict):    "Deny all keys that do not already exist in known_hosts",
 }
 
-func (c *ConfirmationPromptBehavior) UnmarshalText(text []byte) error {
-	val := ConfirmationPromptBehavior(text)
-	switch val {
-	case ConfirmationPromptDefaultYes, ConfirmationPromptDefaultNo, ConfirmationPromptRetry:
-		*c = val
+func (h *HostKeyVerificationType) UnmarshalText(text []byte) error {
+	v := HostKeyVerificationType(text)
+	switch v {
+	case HostKeyVerificationAcceptNew, HostKeyVerificationAsk, HostKeyVerificationOff, HostKeyVerificationStrict:
+		*h = v
 		return nil
+	default:
+		return fmt.Errorf("invalid value for host key verification '%s'", text)
 	}
-
-	return fmt.Errorf("invalid value for ConfirmationPromptBehavior '%s'", val)
 }
 
 type SettingsDocEntry struct {
@@ -342,6 +370,13 @@ This requires the 'nix-command' experimental feature to be enabled in the Nix co
 		Short: "Use hosts file for SSH host completion",
 		Long:  "Whether to use the hosts file (/etc/hosts) for SSH host completion.",
 	},
+	"ssh.host_key_verification": {
+		Short: "Policy on what action to take with unknown host keys",
+		Long: "What action to take when an unknown host key is encountered." +
+			" By default, this will mimic OpenSSH behavior and ask interactively, if possible." +
+			" If turned off, then known_hosts will not be modified and man-in-the-middle attacks" +
+			" may be possible. Mostly a direct equivalent OpenSSH `StrictHostKeyChecking` setting.",
+	},
 	"ssh.known_hosts_files": {
 		Short: "List of paths to known hosts files",
 		Long:  "List of paths to known hosts files. `/etc/ssh/ssh_known_hosts` and `$HOME/.ssh/known_hosts` are always included.",
@@ -416,6 +451,7 @@ func NewSettings() *Settings {
 		},
 		SSH: SSHSettings{
 			HostsFileCompletion: true,
+			HostKeyVerification: HostKeyVerificationAsk,
 		},
 		UseDefaultAliases: true,
 	}
