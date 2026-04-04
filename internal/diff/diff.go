@@ -123,7 +123,7 @@ func RunDiffCommand(s system.System, before string, after string, opts *DiffComm
 }
 
 func diffNixStoreDB(log logger.Logger, before string, after string, queryDerivations bool) (*ClosureDiff, error) {
-	conn, err := sql.Open("sqlite", fmt.Sprintf("file:%s?mode=ro&immutable=1", constants.NixStoreDatabase))
+	conn, err := sql.Open("sqlite", fmt.Sprintf("file:%s?mode=ro", constants.NixStoreDatabase))
 	if err != nil {
 		return nil, fmt.Errorf("error opening nix sqlite db: %w", err)
 	}
