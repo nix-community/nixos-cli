@@ -1,15 +1,37 @@
 {
-  pkgs ? import <nixpkgs> {},
   self ? (import ../flake-compat.nix).outputs,
+  pkgs ? self.inputs.nixpkgs.legacyPackages.${builtins.currentSystem},
+  ...
 }: let
   inherit (pkgs) lib;
 
-  mkTest = test: import test {inherit pkgs self;};
+  mkTest = name: test: let
+    test' = pkgs.testers.runNixOSTest {
+      name = "${name}-test";
+      imports = [
+        test
+        {
+          node.specialArgs = {
+            inherit self;
+          };
+        }
+      ];
+      defaults = {
+        imports = [self.nixosModules.nixos-cli];
+        nixpkgs.overlays = [
+          (_final: _prev: {
+            inherit (self.packages.${pkgs.stdenv.hostPlatform.system}) nixos-cli nixos-cli-legacy;
+          })
+        ];
+      };
+    };
+  in
+    test';
 
   findTests = dir: let
     entries =
       lib.genAttrs' (lib.filesystem.listFilesRecursive dir)
-      (name: lib.nameValuePair (builtins.toString name) (builtins.toString name));
+      (name: lib.nameValuePair (toString name) (toString name));
 
     filenames =
       lib.mapAttrs'
@@ -29,4 +51,4 @@
 
   tests = findTests ./.;
 in
-  lib.mapAttrs (_: test: mkTest test) tests
+  lib.mapAttrs mkTest tests
