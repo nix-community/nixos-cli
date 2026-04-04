@@ -374,6 +374,7 @@ This requires the 'nix-command' experimental feature to be enabled in the Nix co
 		Short: "Policy on what action to take with unknown host keys",
 		Long: "What action to take when an unknown host key is encountered." +
 			" By default, this will mimic OpenSSH behavior and ask interactively, if possible." +
+			" If `confirmation.always` is set, then 'ask' will be overridden to 'accept-new'." +
 			" If turned off, then known_hosts will not be modified and man-in-the-middle attacks" +
 			" may be possible. Mostly a direct equivalent OpenSSH `StrictHostKeyChecking` setting.",
 	},

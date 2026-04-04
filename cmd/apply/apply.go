@@ -253,6 +253,16 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 		}
 	}()
 
+	needsConfirmation := !opts.AlwaysConfirm && !cfg.Confirmation.Always
+
+	// If no confirmation is needed, then manually override the host
+	// key verification type so that host keys can always be added to
+	// known_hosts.
+	hostKeyVerification := cfg.SSH.HostKeyVerification
+	if hostKeyVerification == settings.HostKeyVerificationAsk && !needsConfirmation {
+		hostKeyVerification = settings.HostKeyVerificationAcceptNew
+	}
+
 	var targetHost system.System
 
 	if opts.TargetHost != "" {
@@ -261,7 +271,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 		var sshCfg *system.SSHConfig
 		sshCfg, err = system.NewSSHConfig(stopCtx, opts.TargetHost, log, system.SSHConfigOptions{
 			AgentManager:        sshAgent,
-			HostKeyVerification: cfg.SSH.HostKeyVerification,
+			HostKeyVerification: hostKeyVerification,
 			KnownHostsFiles:     cfg.SSH.KnownHostsFiles,
 			PrivateKeyCmd:       cfg.SSH.PrivateKeyCmd,
 		})
@@ -335,7 +345,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 		var sshCfg *system.SSHConfig
 		sshCfg, err = system.NewSSHConfig(stopCtx, opts.BuildHost, log, system.SSHConfigOptions{
 			AgentManager:        sshAgent,
-			HostKeyVerification: cfg.SSH.HostKeyVerification,
+			HostKeyVerification: hostKeyVerification,
 			KnownHostsFiles:     cfg.SSH.KnownHostsFiles,
 			PrivateKeyCmd:       cfg.SSH.PrivateKeyCmd,
 		})
