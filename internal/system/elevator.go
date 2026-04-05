@@ -66,13 +66,7 @@ func (e *RootElevator) PromptIfNecessary(ctx context.Context) error {
 		return nil
 	}
 
-	var prompt string
-
-	if currentUser, _ := utils.GetUsername(); currentUser != "" {
-		prompt = fmt.Sprintf("[%s] password for %s: ", e.Command, currentUser)
-	} else {
-		prompt = fmt.Sprintf("[%s] enter password: ", e.Command)
-	}
+	prompt := fmt.Sprintf("[%s] enter password: ", e.Command)
 
 	_, err := e.PasswordProvider.PromptForPassword(ctx, prompt)
 	return err
