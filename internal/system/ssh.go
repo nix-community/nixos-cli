@@ -41,8 +41,9 @@ type SSHConfig struct {
 	Address string
 	Port    int
 
-	AuthMethods     []ssh.AuthMethod
-	HostKeyCallback ssh.HostKeyCallback
+	AuthMethods         []ssh.AuthMethod
+	HostKeyVerification settings.HostKeyVerificationType
+	KnownHostsFiles     []string
 
 	password []byte
 
@@ -167,13 +168,9 @@ func NewSSHConfig(ctx context.Context, host string, log logger.Logger, options S
 	})
 	auth = append(auth, passwordCallback)
 
-	hostKeyCallback, err := knownHostsCallback(log, options.HostKeyVerification, options.KnownHostsFiles)
-	if err != nil {
-		return nil, err
-	}
-
 	cfg.AuthMethods = auth
-	cfg.HostKeyCallback = hostKeyCallback
+	cfg.HostKeyVerification = options.HostKeyVerification
+	cfg.KnownHostsFiles = options.KnownHostsFiles
 
 	return cfg, nil
 }
@@ -229,7 +226,7 @@ func knownHostsCallback(
 }
 
 func NewSSHSystem(cfg *SSHConfig, log logger.Logger) (*SSHSystem, error) {
-	client, sftpClient, err := dialClient(cfg)
+	client, sftpClient, err := dialClient(log, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -244,11 +241,16 @@ func NewSSHSystem(cfg *SSHConfig, log logger.Logger) (*SSHSystem, error) {
 	}, nil
 }
 
-func dialClient(cfg *SSHConfig) (*ssh.Client, *sftp.Client, error) {
+func dialClient(log logger.Logger, cfg *SSHConfig) (*ssh.Client, *sftp.Client, error) {
+	hostKeyCallback, err := knownHostsCallback(log, cfg.HostKeyVerification, cfg.KnownHostsFiles)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	client, err := ssh.Dial("tcp", net.JoinHostPort(cfg.Address, strconv.Itoa(cfg.Port)), &ssh.ClientConfig{
 		User:            cfg.User,
 		Auth:            cfg.AuthMethods,
-		HostKeyCallback: cfg.HostKeyCallback,
+		HostKeyCallback: hostKeyCallback,
 		Timeout:         30 * time.Second,
 	})
 	if err != nil {
@@ -268,7 +270,7 @@ func (s *SSHSystem) Reconnect() error {
 	_ = s.sftp.Close()
 	_ = s.client.Close()
 
-	client, sftpClient, err := dialClient(s.cfg)
+	client, sftpClient, err := dialClient(s.logger, s.cfg)
 	if err != nil {
 		return fmt.Errorf("failed to reconnect to %s: %w", s.Address(), err)
 	}
@@ -284,7 +286,7 @@ func (s *SSHSystem) Reconnect() error {
 //
 // Caller must keep the `cfg` field alive until ALL clones are closed.
 func (s *SSHSystem) Clone() (*SSHSystem, error) {
-	client, sftpClient, err := dialClient(s.cfg)
+	client, sftpClient, err := dialClient(s.logger, s.cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to clone connection to %s: %w", s.Address(), err)
 	}
