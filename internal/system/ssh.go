@@ -381,7 +381,7 @@ func addKeyToKnownHostsCallback(
 			log.Infof("SHA256 fingerprint: %s", fingerprint)
 
 			var confirm bool
-			confirm, err = cmdUtils.ConfirmationInput("Are you sure you want to continue connecting?", cmdUtils.ConfirmationPromptOptions{
+			confirm, err = cmdUtils.ConfirmationInput(context.Background(), "Are you sure you want to continue connecting?", cmdUtils.ConfirmationPromptOptions{
 				// Copy the default SSH behavior of retrying for invalid input.
 				// Disregard user configuration in this case, since this is mimicking
 				// OpenSSH's behavior.

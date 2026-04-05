@@ -8,10 +8,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nix-community/nixos-cli/cmd/generation/shared"
+	genUtils "github.com/nix-community/nixos-cli/cmd/generation/shared"
 	"github.com/nix-community/nixos-cli/internal/activation"
-	"github.com/nix-community/nixos-cli/internal/cmd/opts"
-	"github.com/nix-community/nixos-cli/internal/cmd/utils"
+	cmdOpts "github.com/nix-community/nixos-cli/internal/cmd/opts"
+	cmdUtils "github.com/nix-community/nixos-cli/internal/cmd/utils"
 	"github.com/nix-community/nixos-cli/internal/constants"
 	"github.com/nix-community/nixos-cli/internal/diff"
 	"github.com/nix-community/nixos-cli/internal/generation"
@@ -98,7 +98,7 @@ func generationRollbackMain(cmd *cobra.Command, genOpts *cmdOpts.GenerationOpts,
 		log.Printf("\n")
 
 		var confirm bool
-		confirm, err = cmdUtils.ConfirmationInput("Activate the previous generation?", cmdUtils.ConfirmationPromptOptions{
+		confirm, err = cmdUtils.ConfirmationInput(cmd.Context(), "Activate the previous generation?", cmdUtils.ConfirmationPromptOptions{
 			InvalidBehavior: cfg.Confirmation.Invalid,
 			EmptyBehavior:   cfg.Confirmation.Empty,
 		})
