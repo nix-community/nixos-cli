@@ -166,6 +166,34 @@ func SetNixProfileGeneration(s system.System, profile string, genNumber uint64, 
 	return err
 }
 
+type RollbackNixProfileOptions struct {
+	UseRootCommand bool
+	RootElevator   *system.RootElevator
+}
+
+func RollbackNixProfile(s system.System, profile string, opts *RollbackNixProfileOptions) error {
+	if profile != "system" {
+		err := EnsureSystemProfileDirectoryExists(s)
+		if err != nil {
+			return err
+		}
+	}
+
+	profileDirectory := generation.GetProfileDirectoryFromName(profile)
+
+	argv := []string{"nix-env", "--profile", profileDirectory, "--rollback"}
+
+	s.Logger().CmdArray(argv)
+
+	cmd := system.NewCommand(argv[0], argv[1:]...)
+	if opts.UseRootCommand {
+		cmd.AsRoot(opts.RootElevator)
+	}
+
+	_, err := s.Run(cmd)
+	return err
+}
+
 func GetCurrentGenerationNumber(s system.System, profile string) (uint64, error) {
 	genLinkRegex, err := regexp.Compile(fmt.Sprintf(generation.GenerationLinkTemplateRegex, profile))
 	if err != nil {
