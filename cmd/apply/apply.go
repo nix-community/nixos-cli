@@ -680,8 +680,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 
 	previousGenNumber, err := activation.GetCurrentGenerationNumber(targetHost, opts.ProfileName)
 	if err != nil {
-		log.Errorf("%v", err)
-		return err
+		log.Warnf("%v", err)
 	}
 
 	activationMissingRoot := !effectiveRoot && !opts.LocalRoot && !targetHost.IsRemote()
@@ -689,7 +688,6 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 
 	if rootElevator != nil && activationUseRoot {
 		if rootElevator.PasswordProvider != nil {
-			log.Infof("please enter password for %s", rootElevator.Command)
 			if err = rootElevator.PromptIfNecessary(stopCtx); err != nil {
 				log.Error(err)
 				return err
@@ -715,8 +713,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 		var prevLink string
 		prevLink, err = targetHost.FS().ReadLink(activeProfileLink)
 		if err != nil {
-			log.Errorf("%v", err)
-			return err
+			log.Warnf("failed to readlink %s: %v", activeProfileLink, err)
 		}
 
 		if activationMissingRoot {
@@ -741,12 +738,13 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 		var afterLink string
 		afterLink, err = targetHost.FS().ReadLink(activeProfileLink)
 		if err != nil {
-			log.Errorf("%v", err)
-			return err
+			log.Warnf("failed to readlink %s: %v", activeProfileLink, err)
 		}
 
-		if prevLink != afterLink {
-			newGenerationCreated = true
+		if prevLink != "" && afterLink != "" {
+			if prevLink != afterLink {
+				newGenerationCreated = true
+			}
 		}
 	}
 
@@ -759,14 +757,28 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 
 		log.Step("Rolling back system profile...")
 
-		if rbErr := activation.SetNixProfileGeneration(
-			targetHost,
-			opts.ProfileName,
-			previousGenNumber, &activation.SetNixProfileGenerationOptions{
-				RootElevator:   rootElevator,
-				UseRootCommand: activationUseRoot,
-			},
-		); rbErr != nil {
+		var rbErr error
+		if previousGenNumber > 0 {
+			rbErr = activation.SetNixProfileGeneration(
+				targetHost,
+				opts.ProfileName,
+				previousGenNumber, &activation.SetNixProfileGenerationOptions{
+					RootElevator:   rootElevator,
+					UseRootCommand: activationUseRoot,
+				},
+			)
+		} else {
+			rbErr = activation.RollbackNixProfile(
+				targetHost,
+				opts.ProfileName,
+				&activation.RollbackNixProfileOptions{
+					RootElevator:   rootElevator,
+					UseRootCommand: activationUseRoot,
+				},
+			)
+		}
+
+		if rbErr != nil {
 			log.Errorf("failed to rollback system profile: %v", rbErr)
 			log.Info("make sure to rollback the system manually before deleting anything!")
 		}
