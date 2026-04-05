@@ -150,7 +150,7 @@ func generationSwitchMain(cmd *cobra.Command, genOpts *cmdOpts.GenerationOpts, o
 		log.Printf("\n")
 
 		var confirm bool
-		confirm, err = cmdUtils.ConfirmationInput("Activate this generation?", cmdUtils.ConfirmationPromptOptions{
+		confirm, err = cmdUtils.ConfirmationInput(cmd.Context(), "Activate this generation?", cmdUtils.ConfirmationPromptOptions{
 			InvalidBehavior: cfg.Confirmation.Invalid,
 			EmptyBehavior:   cfg.Confirmation.Empty,
 		})

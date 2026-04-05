@@ -160,7 +160,7 @@ func generationDeleteMain(cmd *cobra.Command, genOpts *cmdOpts.GenerationOpts, o
 
 	if !opts.AlwaysConfirm && !cfg.Confirmation.Always {
 		var confirm bool
-		confirm, err = cmdUtils.ConfirmationInput("Proceed?", cmdUtils.ConfirmationPromptOptions{
+		confirm, err = cmdUtils.ConfirmationInput(cmd.Context(), "Proceed?", cmdUtils.ConfirmationPromptOptions{
 			InvalidBehavior: cfg.Confirmation.Invalid,
 			EmptyBehavior:   cfg.Confirmation.Empty,
 		})

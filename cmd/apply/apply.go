@@ -646,7 +646,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 		log.Printf("\n")
 
 		var confirm bool
-		confirm, err = cmdUtils.ConfirmationInput("Activate this configuration?", cmdUtils.ConfirmationPromptOptions{
+		confirm, err = cmdUtils.ConfirmationInput(stopCtx, "Activate this configuration?", cmdUtils.ConfirmationPromptOptions{
 			InvalidBehavior: cfg.Confirmation.Invalid,
 			EmptyBehavior:   cfg.Confirmation.Empty,
 		})
