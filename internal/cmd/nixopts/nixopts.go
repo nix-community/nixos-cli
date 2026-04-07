@@ -572,6 +572,10 @@ func (Option) Supports(c NixCommand) bool {
 	}
 }
 
+func (Option) RegisterCompleter(cmd *cobra.Command) error {
+	return cmd.RegisterFlagCompletionFunc("option", collectOptionFlagCompletions)
+}
+
 type SubstituteOnDestination bool
 
 func (s SubstituteOnDestination) Args() []string {
@@ -794,9 +798,7 @@ func CollectFlags(v any) []NixOption {
 
 	fieldMap := make(map[string]NixOption)
 
-	for i := 0; i < rv.NumField(); i++ {
-		f := rv.Field(i)
-
+	for _, f := range rv.Fields() {
 		if flag, ok := f.Addr().Interface().(NixOption); ok {
 			name := f.Type().Name()
 			fieldMap[name] = flag
