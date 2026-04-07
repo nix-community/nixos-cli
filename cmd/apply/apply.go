@@ -206,6 +206,8 @@ func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 	_ = cmd.RegisterFlagCompletionFunc("target-host", sshUtils.CompleteHost)
 	_ = cmd.RegisterFlagCompletionFunc("store-path", cmdUtils.DirCompletions)
 
+	_ = opts.NixOptions.Option.RegisterCompleter(&cmd)
+
 	cmd.MarkFlagsMutuallyExclusive("dry", "output")
 	cmd.MarkFlagsMutuallyExclusive("vm", "vm-with-bootloader", "image", "store-path")
 	cmd.MarkFlagsMutuallyExclusive("no-activate", "specialisation")

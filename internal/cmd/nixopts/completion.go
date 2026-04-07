@@ -6,7 +6,27 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/spf13/cobra"
 )
+
+func collectOptionFlagCompletions(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	values, err := collectNixCommandCompletionValues([]string{"--option"}, toComplete)
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+
+	if strings.Contains(toComplete, "=") {
+		return nil, cobra.ShellCompDirectiveNoFileComp | cobra.ShellCompDirectiveNoSpace
+	}
+
+	candidates := make([]string, 0, len(values))
+	for _, v := range values {
+		candidates = append(candidates, fmt.Sprintf("%s=\t%s", v.Value, v.Description))
+	}
+
+	return candidates, cobra.ShellCompDirectiveNoFileComp | cobra.ShellCompDirectiveNoSpace
+}
 
 type completionLine struct {
 	Value       string

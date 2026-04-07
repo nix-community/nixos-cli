@@ -147,6 +147,8 @@ func InstallCommand() *cobra.Command {
 	_ = cmd.RegisterFlagCompletionFunc("root", cmdUtils.DirCompletions)
 	_ = cmd.RegisterFlagCompletionFunc("system", cmdUtils.DirCompletions)
 
+	_ = opts.NixOptions.Option.RegisterCompleter(&cmd)
+
 	cmd.MarkFlagsMutuallyExclusive("channel", "no-channel-copy")
 
 	helpTemplate := cmd.HelpTemplate()
