@@ -1,0 +1,26 @@
+name: Check for vulnerabilities
+on:
+  workflow_dispatch:
+  schedule:
+    # Every Saturday @ 12:00 PM UTC
+    - cron: '0 12 * * 6'
+
+jobs:
+  vuln-check:
+    name: Check for vulnerabilities
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+
+      - name: Initialize Cachix
+        uses: cachix/cachix-action@v14
+        with:
+          name: watersucks
+          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+
+      - name: Run checks
+        run: nix develop .# -c make vuln-check

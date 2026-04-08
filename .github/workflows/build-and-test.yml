@@ -42,6 +42,3 @@ jobs:
 
       - name: Build docs
         run: nix develop .# -c make gen-docs
-
-      - name: Check for vulns
-        run: nix develop .# -c make vuln-check
