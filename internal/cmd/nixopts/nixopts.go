@@ -519,6 +519,10 @@ func (LogFormat) Supports(c NixCommand) bool {
 	}
 }
 
+func (LogFormat) RegisterCompleter(cmd *cobra.Command) error {
+	return cmd.RegisterFlagCompletionFunc("log-format", cobra.FixedCompletions([]string{"raw", "internal-json", "bar", "bar-with-logs"}, cobra.ShellCompDirectiveNoFileComp))
+}
+
 type Include []string
 
 func (i Include) Args() []string {
