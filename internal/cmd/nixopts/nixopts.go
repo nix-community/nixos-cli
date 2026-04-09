@@ -748,6 +748,13 @@ func (UpdateInput) Supports(c NixCommand) bool {
 	}
 }
 
+type flakeRefResolver func(cmd *cobra.Command, args []string) (string, bool)
+
+func (UpdateInput) RegisterCompleter(cmd *cobra.Command, resolver flakeRefResolver) error {
+	completer := constructFlakeInputCompletionFunc(resolver, false)
+	return cmd.RegisterFlagCompletionFunc("update-input", completer)
+}
+
 type OverrideInput map[string]string
 
 func (o OverrideInput) Args() []string {
@@ -776,6 +783,11 @@ func (OverrideInput) Supports(c NixCommand) bool {
 	default:
 		return false
 	}
+}
+
+func (OverrideInput) RegisterCompleter(cmd *cobra.Command, resolver flakeRefResolver) error {
+	completer := constructFlakeInputCompletionFunc(resolver, true)
+	return cmd.RegisterFlagCompletionFunc("override-input", completer)
 }
 
 type NixOptionsSet interface {

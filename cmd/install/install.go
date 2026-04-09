@@ -115,6 +115,10 @@ func InstallCommand() *cobra.Command {
 	cmd.Flags().StringVarP(&opts.SystemClosure, "system", "s", "", "Install system from system closure at `path`")
 	cmd.Flags().BoolVarP(&opts.Verbose, "verbose", "v", false, "Show verbose logging")
 
+	_ = cmd.RegisterFlagCompletionFunc("channel", cmdUtils.DirCompletions)
+	_ = cmd.RegisterFlagCompletionFunc("root", cmdUtils.DirCompletions)
+	_ = cmd.RegisterFlagCompletionFunc("system", cmdUtils.DirCompletions)
+
 	opts.NixOptions.Quiet.Bind(&cmd)
 	opts.NixOptions.PrintBuildLogs.Bind(&cmd)
 	opts.NixOptions.NoBuildOutput.Bind(&cmd)
@@ -133,6 +137,9 @@ func InstallCommand() *cobra.Command {
 	opts.NixOptions.Option.Bind(&cmd)
 	opts.NixOptions.Include.Bind(&cmd)
 
+	_ = opts.NixOptions.LogFormat.RegisterCompleter(&cmd)
+	_ = opts.NixOptions.Option.RegisterCompleter(&cmd)
+
 	if build.Flake() {
 		opts.NixOptions.RecreateLockFile.Bind(&cmd)
 		opts.NixOptions.NoUpdateLockFile.Bind(&cmd)
@@ -141,14 +148,23 @@ func InstallCommand() *cobra.Command {
 		opts.NixOptions.CommitLockFile.Bind(&cmd)
 		opts.NixOptions.UpdateInput.Bind(&cmd)
 		opts.NixOptions.OverrideInput.Bind(&cmd)
+
+		flakeRefCompletionResolver := func(cmd *cobra.Command, args []string) (string, bool) {
+			if len(args) == 0 {
+				return "", false
+			}
+
+			ref := configuration.FlakeRefFromString(args[0])
+			if ref.System == "" {
+				return "", false
+			}
+
+			return ref.String(), true
+		}
+
+		_ = opts.NixOptions.UpdateInput.RegisterCompleter(&cmd, flakeRefCompletionResolver)
+		_ = opts.NixOptions.OverrideInput.RegisterCompleter(&cmd, flakeRefCompletionResolver)
 	}
-
-	_ = cmd.RegisterFlagCompletionFunc("channel", cmdUtils.DirCompletions)
-	_ = cmd.RegisterFlagCompletionFunc("root", cmdUtils.DirCompletions)
-	_ = cmd.RegisterFlagCompletionFunc("system", cmdUtils.DirCompletions)
-
-	_ = opts.NixOptions.LogFormat.RegisterCompleter(&cmd)
-	_ = opts.NixOptions.Option.RegisterCompleter(&cmd)
 
 	cmd.MarkFlagsMutuallyExclusive("channel", "no-channel-copy")
 
