@@ -163,6 +163,17 @@ func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 	cmd.Flags().Var(&opts.RollbackTimeout, "rollback-timeout", "Time `period` to wait for acknowledgement signal before automatic rollback")
 	cmd.Flags().BoolVar(&opts.NoRollback, "no-rollback", false, "Do not attempt rollback after a switch failure")
 
+	if !build.Flake() {
+		cmd.Flags().BoolVar(&opts.UpgradeChannels, "upgrade", false, "Upgrade the root user`s 'nixos' channel")
+		cmd.Flags().BoolVar(&opts.UpgradeAllChannels, "upgrade-all", false, "Upgrade all the root user's channels")
+	}
+
+	_ = cmd.RegisterFlagCompletionFunc("profile-name", generation.CompleteProfileFlag)
+	_ = cmd.RegisterFlagCompletionFunc("specialisation", generation.CompleteSpecialisationFlagFromConfig(opts.FlakeRef, opts.NixOptions.Include))
+	_ = cmd.RegisterFlagCompletionFunc("build-host", sshUtils.CompleteHost)
+	_ = cmd.RegisterFlagCompletionFunc("target-host", sshUtils.CompleteHost)
+	_ = cmd.RegisterFlagCompletionFunc("store-path", cmdUtils.DirCompletions)
+
 	opts.NixOptions.Quiet.Bind(&cmd)
 	opts.NixOptions.PrintBuildLogs.Bind(&cmd)
 	opts.NixOptions.NoBuildOutput.Bind(&cmd)
@@ -183,6 +194,9 @@ func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 	opts.NixOptions.Option.Bind(&cmd)
 	opts.NixOptions.Include.Bind(&cmd)
 
+	_ = opts.NixOptions.LogFormat.RegisterCompleter(&cmd)
+	_ = opts.NixOptions.Option.RegisterCompleter(&cmd)
+
 	if build.Flake() {
 		opts.NixOptions.RecreateLockFile.Bind(&cmd)
 		opts.NixOptions.NoUpdateLockFile.Bind(&cmd)
@@ -191,23 +205,34 @@ func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 		opts.NixOptions.CommitLockFile.Bind(&cmd)
 		opts.NixOptions.UpdateInput.Bind(&cmd)
 		opts.NixOptions.OverrideInput.Bind(&cmd)
-	}
 
-	if !build.Flake() {
-		cmd.Flags().BoolVar(&opts.UpgradeChannels, "upgrade", false, "Upgrade the root user`s 'nixos' channel")
-		cmd.Flags().BoolVar(&opts.UpgradeAllChannels, "upgrade-all", false, "Upgrade all the root user's channels")
+		flakeRefCompletionResolver := func(cmd *cobra.Command, args []string) (string, bool) {
+			if len(args) > 0 {
+				ref := configuration.FlakeRefFromString(args[0])
+				if err := ref.InferSystemFromHostnameIfNeeded(); err != nil {
+					return "", false
+				}
+
+				return ref.String(), true
+			} else {
+				c, err := configuration.FindConfiguration(logger.NewNoOpLogger(), cfg, opts.NixOptions.Include)
+				if err != nil {
+					return "", false
+				}
+
+				if ref, ok := c.(*configuration.FlakeRef); ok {
+					return ref.String(), true
+				}
+			}
+
+			return "", false
+		}
+
+		_ = opts.NixOptions.UpdateInput.RegisterCompleter(&cmd, flakeRefCompletionResolver)
+		_ = opts.NixOptions.OverrideInput.RegisterCompleter(&cmd, flakeRefCompletionResolver)
 	}
 
 	cmdUtils.RemoveDefaultValueDesc(&cmd, "rollback-timeout")
-
-	_ = cmd.RegisterFlagCompletionFunc("profile-name", generation.CompleteProfileFlag)
-	_ = cmd.RegisterFlagCompletionFunc("specialisation", generation.CompleteSpecialisationFlagFromConfig(opts.FlakeRef, opts.NixOptions.Include))
-	_ = cmd.RegisterFlagCompletionFunc("build-host", sshUtils.CompleteHost)
-	_ = cmd.RegisterFlagCompletionFunc("target-host", sshUtils.CompleteHost)
-	_ = cmd.RegisterFlagCompletionFunc("store-path", cmdUtils.DirCompletions)
-
-	_ = opts.NixOptions.LogFormat.RegisterCompleter(&cmd)
-	_ = opts.NixOptions.Option.RegisterCompleter(&cmd)
 
 	cmd.MarkFlagsMutuallyExclusive("dry", "output")
 	cmd.MarkFlagsMutuallyExclusive("vm", "vm-with-bootloader", "image", "store-path")

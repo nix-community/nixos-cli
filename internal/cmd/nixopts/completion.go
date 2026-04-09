@@ -10,6 +10,37 @@ import (
 	"github.com/spf13/cobra"
 )
 
+func constructFlakeInputCompletionFunc(resolver flakeRefResolver, addEqualsSign bool) cobra.CompletionFunc {
+	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		resolvedFlakeRef, ok := resolver(cmd, args)
+		if !ok {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+
+		values, err := collectNixCommandCompletionValues([]string{"build", resolvedFlakeRef, "--update-input"}, toComplete)
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+
+		directive := cobra.ShellCompDirectiveNoFileComp
+		if addEqualsSign {
+			directive |= cobra.ShellCompDirectiveNoSpace
+		}
+
+		candidates := make([]string, 0, len(values))
+		for _, v := range values {
+			formatString := "%s\t%s"
+			if addEqualsSign {
+				formatString = "%s=\t%s"
+			}
+
+			candidates = append(candidates, fmt.Sprintf(formatString, v.Value, v.Description))
+		}
+
+		return candidates, directive
+	}
+}
+
 func collectOptionFlagCompletions(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	values, err := collectNixCommandCompletionValues([]string{"--option"}, toComplete)
 	if err != nil {
