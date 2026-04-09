@@ -206,6 +206,7 @@ func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 	_ = cmd.RegisterFlagCompletionFunc("target-host", sshUtils.CompleteHost)
 	_ = cmd.RegisterFlagCompletionFunc("store-path", cmdUtils.DirCompletions)
 
+	_ = opts.NixOptions.LogFormat.RegisterCompleter(&cmd)
 	_ = opts.NixOptions.Option.RegisterCompleter(&cmd)
 
 	cmd.MarkFlagsMutuallyExclusive("dry", "output")
