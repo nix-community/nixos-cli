@@ -204,11 +204,35 @@ func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 		}
 	}
 
+	imageCompleter := func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		log, _ := completion.PrepareCompletionResources()
+
+		c := configResolver(cmd, args)
+		if c == nil {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+
+		images, err := getAvailableImageAttrs(system.NewLocalSystem(log), c, &opts.NixOptions)
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+
+		var results []string
+		for _, v := range images {
+			if strings.HasPrefix(v, toComplete) {
+				results = append(results, v)
+			}
+		}
+
+		return results, cobra.ShellCompDirectiveNoFileComp
+	}
+
 	_ = cmd.RegisterFlagCompletionFunc("profile-name", completion.CompleteProfileFlag)
 	_ = cmd.RegisterFlagCompletionFunc("specialisation", completion.CompleteSpecialisationFlagFromConfig(configResolver))
 	_ = cmd.RegisterFlagCompletionFunc("build-host", completion.CompleteHost)
 	_ = cmd.RegisterFlagCompletionFunc("target-host", completion.CompleteHost)
 	_ = cmd.RegisterFlagCompletionFunc("store-path", completion.DirCompletions)
+	_ = cmd.RegisterFlagCompletionFunc("image", imageCompleter)
 
 	opts.NixOptions.Quiet.Bind(&cmd)
 	opts.NixOptions.PrintBuildLogs.Bind(&cmd)
@@ -1001,17 +1025,23 @@ func getAvailableImageAttrs(
 	var argv []string
 	var attr string
 
-	switch v := cfg.(type) {
+	switch c := cfg.(type) {
 	case *configuration.FlakeRef:
 		evalArgs := nixOpts.ArgsForCommand(nixopts.CmdEval)
 
-		attr = v.BuildAttr("images")
+		attr = c.BuildAttr("images")
 		argv = []string{"nix", "eval", "--json", attr, "--apply", "builtins.attrNames"}
 		argv = append(argv, evalArgs...)
 	case *configuration.LegacyConfiguration:
+		configPathArg := c.ConfigPathArg()
+		if configPathArg == "<nixpkgs/nixos>" {
+			configPathArg += " {}"
+		}
+
+		expr := fmt.Sprintf(`builtins.attrNames (import "%s").%s`, configPathArg, c.ConfigAttr("system", "build", "images"))
+
 		instantiateArgs := nixOpts.ArgsForCommand(nixopts.CmdInstantiate)
 
-		expr := "with import <nixpkgs/nixos> {}; builtins.attrNames config.system.build.images"
 		argv = []string{"nix-instantiate", "--eval", "--strict", "--json", "--expr", expr}
 		argv = append(argv, instantiateArgs...)
 	}
