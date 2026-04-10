@@ -73,12 +73,15 @@ func OptionCommand() *cobra.Command {
 	if build.Flake() {
 		cmd.Flags().StringVarP(&opts.FlakeRef, "flake", "f", "", "Flake `ref` to explicitly load options from")
 
-		_ = cmd.RegisterFlagCompletionFunc("flake", completion.DirCompletions)
+		_ = cmd.RegisterFlagCompletionFunc("flake", completion.CompleteConfigFlakeRef)
 	} else {
 		cmd.Flags().StringVar(&opts.File, "file", "", "File `path` to load NixOS configuration from")
 		cmd.Flags().StringVar(&opts.Attr, "attr", "", "Attribute `path` inside of file pointing to configuration")
 
 		_ = cmd.RegisterFlagCompletionFunc("file", completion.FileCompletions("nix"))
+		_ = cmd.RegisterFlagCompletionFunc("attr", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+			return completion.CompleteNixConfigFileAttr(opts.File)
+		})
 	}
 
 	opts.Include.Bind(&cmd)
