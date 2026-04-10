@@ -9,7 +9,7 @@
 }:
 buildGo126Module (finalAttrs: {
   pname = "nixos-cli-unwrapped";
-  version = "0.16.1";
+  version = "0.16.1-dev";
 
   src = lib.fileset.toSource {
     root = ../../.;
