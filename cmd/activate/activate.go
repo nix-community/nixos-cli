@@ -7,6 +7,7 @@ import (
 	"github.com/nix-community/nixos-cli/internal/activation"
 	cmdOpts "github.com/nix-community/nixos-cli/internal/cmd/opts"
 	cmdUtils "github.com/nix-community/nixos-cli/internal/cmd/utils"
+	"github.com/nix-community/nixos-cli/internal/generation"
 	"github.com/nix-community/nixos-cli/internal/logger"
 	"github.com/spf13/cobra"
 )
@@ -74,6 +75,7 @@ func ActivateCommand() *cobra.Command {
 
 	if os.Getenv("NIXOS_CLI_ATTEMPTING_ACTIVATION") == "" {
 		cmd.Flags().StringVarP(&opts.Specialisation, "specialisation", "s", "", "Activate specialisation `name`")
+		_ = cmd.RegisterFlagCompletionFunc("specialisation", generation.CompleteSpecialisationFlag("/run/current-system"))
 	}
 
 	cmd.Flags().BoolVarP(&opts.Verbose, "verbose", "v", false, "Show verbose logging")

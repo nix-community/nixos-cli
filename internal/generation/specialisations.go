@@ -2,6 +2,7 @@ package generation
 
 import (
 	"encoding/json"
+	"fmt"
 	"os/exec"
 	"path/filepath"
 	"sort"
@@ -40,9 +41,16 @@ func CollectSpecialisationsFromConfig(cfg configuration.Configuration) []string 
 		attr := c.ConfigAttr("specialisation")
 		argv = []string{"nix", "eval", attr, "--apply", "builtins.attrNames", "--json"}
 	case *configuration.LegacyConfiguration:
+		configPathArg := c.ConfigPathArg()
+		if configPathArg == "<nixpkgs/nixos>" {
+			configPathArg += " {}"
+		}
 		argv = []string{
-			"nix-instantiate", "--eval", "--json", "--expr", "builtins.attrNames",
-			"builtins.attrNames (import <nixpkgs/nixos> {}).config.specialisation",
+			"nix-instantiate", "--eval", "--json", "--expr",
+			fmt.Sprintf(`builtins.attrNames (import "%s").%s`, configPathArg, c.ConfigAttr("specialisation")),
+		}
+		for _, include := range c.Includes {
+			argv = append(argv, "-I", include)
 		}
 	}
 
@@ -89,24 +97,13 @@ func CompleteSpecialisationFlag(generationDirname string) cobra.CompletionFunc {
 	}
 }
 
-func CompleteSpecialisationFlagFromConfig(flakeRefStr string, includes []string) cobra.CompletionFunc {
-	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		log, cfg := cmdUtils.PrepareCompletionResources()
+type configResolver func(cmd *cobra.Command, args []string) configuration.Configuration
 
-		var nixConfig configuration.Configuration
-		if flakeRefStr != "" {
-			nixConfig = configuration.FlakeRefFromString(flakeRefStr)
-		} else {
-			c, err := configuration.FindConfiguration(log, cfg, includes)
-			if err != nil {
-				log.Errorf("failed to find configuration: %v", err)
-				return []string{}, cobra.ShellCompDirectiveNoFileComp
-			}
-			nixConfig = c
-		}
+func CompleteSpecialisationFlagFromConfig(resolver configResolver) cobra.CompletionFunc {
+	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		nixConfig := resolver(cmd, args)
 
 		if nixConfig == nil {
-			log.Error("config is nil")
 			return []string{}, cobra.ShellCompDirectiveNoFileComp
 		}
 
