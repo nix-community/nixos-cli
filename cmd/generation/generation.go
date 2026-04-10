@@ -7,7 +7,7 @@ import (
 
 	cmdOpts "github.com/nix-community/nixos-cli/internal/cmd/opts"
 	cmdUtils "github.com/nix-community/nixos-cli/internal/cmd/utils"
-	"github.com/nix-community/nixos-cli/internal/generation"
+	"github.com/nix-community/nixos-cli/internal/cmd/utils/completion"
 	"github.com/nix-community/nixos-cli/internal/logger"
 	"github.com/nix-community/nixos-cli/internal/system"
 
@@ -47,7 +47,7 @@ func GenerationCommand() *cobra.Command {
 
 	cmdUtils.SetHelpFlagText(&cmd)
 
-	_ = cmd.RegisterFlagCompletionFunc("profile", generation.CompleteProfileFlag)
+	_ = cmd.RegisterFlagCompletionFunc("profile", completion.CompleteProfileFlag)
 
 	return &cmd
 }

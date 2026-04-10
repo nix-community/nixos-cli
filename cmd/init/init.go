@@ -6,6 +6,7 @@ import (
 
 	cmdOpts "github.com/nix-community/nixos-cli/internal/cmd/opts"
 	cmdUtils "github.com/nix-community/nixos-cli/internal/cmd/utils"
+	"github.com/nix-community/nixos-cli/internal/cmd/utils/completion"
 	"github.com/spf13/cobra"
 )
 
@@ -35,8 +36,8 @@ func InitCommand() *cobra.Command {
 	cmd.Flags().StringVarP(&opts.Root, "root", "r", "/", "Treat `path` as the root directory")
 	cmd.Flags().BoolVarP(&opts.ShowHardwareConfig, "show-hardware-config", "s", false, "Print hardware config to stdout and exit")
 
-	_ = cmd.RegisterFlagCompletionFunc("dir", cmdUtils.DirCompletions)
-	_ = cmd.RegisterFlagCompletionFunc("root", cmdUtils.DirCompletions)
+	_ = cmd.RegisterFlagCompletionFunc("dir", completion.DirCompletions)
+	_ = cmd.RegisterFlagCompletionFunc("root", completion.DirCompletions)
 
 	return &cmd
 }

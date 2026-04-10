@@ -12,6 +12,7 @@ import (
 	"github.com/nix-community/nixos-cli/internal/activation"
 	cmdOpts "github.com/nix-community/nixos-cli/internal/cmd/opts"
 	cmdUtils "github.com/nix-community/nixos-cli/internal/cmd/utils"
+	"github.com/nix-community/nixos-cli/internal/cmd/utils/completion"
 	"github.com/nix-community/nixos-cli/internal/constants"
 	"github.com/nix-community/nixos-cli/internal/diff"
 	"github.com/nix-community/nixos-cli/internal/generation"
@@ -230,7 +231,7 @@ func completeSpecialisationFlag(profileName string) cobra.CompletionFunc {
 	}
 
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		log, _ := cmdUtils.PrepareCompletionResources()
+		log, _ := completion.PrepareCompletionResources()
 
 		previousGen, err := findPreviousGeneration(log, profileName)
 		if err != nil {
@@ -239,6 +240,6 @@ func completeSpecialisationFlag(profileName string) cobra.CompletionFunc {
 
 		generationLink := filepath.Join(profileDirectory, fmt.Sprintf("%v-%v-link", profileName, previousGen.Number))
 
-		return generation.CompleteSpecialisationFlag(generationLink)(cmd, args, toComplete)
+		return completion.CompleteSpecialisationFlag(generationLink)(cmd, args, toComplete)
 	}
 }

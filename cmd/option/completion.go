@@ -4,8 +4,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/nix-community/nixos-cli/internal/cmd/opts"
-	cmdUtils "github.com/nix-community/nixos-cli/internal/cmd/utils"
+	cmdOpts "github.com/nix-community/nixos-cli/internal/cmd/opts"
+	"github.com/nix-community/nixos-cli/internal/cmd/utils/completion"
 	"github.com/nix-community/nixos-cli/internal/configuration"
 	"github.com/nix-community/nixos-cli/internal/logger"
 	"github.com/nix-community/nixos-cli/internal/settings"
@@ -62,7 +62,7 @@ func loadOptions(log logger.Logger, cfg *settings.Settings, includes []string) (
 
 func OptionsCompletionFunc(opts *cmdOpts.OptionOpts) cobra.CompletionFunc {
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		log, cfg := cmdUtils.PrepareCompletionResources()
+		log, cfg := completion.PrepareCompletionResources()
 
 		if len(args) != 0 {
 			return []string{}, cobra.ShellCompDirectiveNoFileComp

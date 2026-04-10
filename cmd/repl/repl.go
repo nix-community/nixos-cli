@@ -9,6 +9,7 @@ import (
 	"github.com/fatih/color"
 	cmdOpts "github.com/nix-community/nixos-cli/internal/cmd/opts"
 	cmdUtils "github.com/nix-community/nixos-cli/internal/cmd/utils"
+	"github.com/nix-community/nixos-cli/internal/cmd/utils/completion"
 	"github.com/nix-community/nixos-cli/internal/configuration"
 	"github.com/nix-community/nixos-cli/internal/logger"
 	"github.com/nix-community/nixos-cli/internal/settings"
@@ -57,7 +58,7 @@ func ReplCommand() *cobra.Command {
 
 			return nil
 		},
-		ValidArgsFunction: cmdUtils.FlakeOrNixFileCompletions,
+		ValidArgsFunction: completion.FlakeOrNixFileCompletions,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return cmdUtils.CommandErrorHandler(replMain(cmd, &opts))
 		},

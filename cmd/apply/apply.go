@@ -19,6 +19,7 @@ import (
 	"github.com/nix-community/nixos-cli/internal/cmd/nixopts"
 	cmdOpts "github.com/nix-community/nixos-cli/internal/cmd/opts"
 	cmdUtils "github.com/nix-community/nixos-cli/internal/cmd/utils"
+	"github.com/nix-community/nixos-cli/internal/cmd/utils/completion"
 	"github.com/nix-community/nixos-cli/internal/configuration"
 	"github.com/nix-community/nixos-cli/internal/constants"
 	"github.com/nix-community/nixos-cli/internal/diff"
@@ -123,7 +124,7 @@ func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 
 			return nil
 		},
-		ValidArgsFunction: cmdUtils.FlakeOrNixFileCompletions,
+		ValidArgsFunction: completion.FlakeOrNixFileCompletions,
 		PreRun: func(cmd *cobra.Command, args []string) {
 			ctx := cmd.Context()
 			log := logger.FromContext(ctx)
@@ -203,11 +204,11 @@ func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 		}
 	}
 
-	_ = cmd.RegisterFlagCompletionFunc("profile-name", generation.CompleteProfileFlag)
-	_ = cmd.RegisterFlagCompletionFunc("specialisation", generation.CompleteSpecialisationFlagFromConfig(configResolver))
-	_ = cmd.RegisterFlagCompletionFunc("build-host", sshUtils.CompleteHost)
-	_ = cmd.RegisterFlagCompletionFunc("target-host", sshUtils.CompleteHost)
-	_ = cmd.RegisterFlagCompletionFunc("store-path", cmdUtils.DirCompletions)
+	_ = cmd.RegisterFlagCompletionFunc("profile-name", completion.CompleteProfileFlag)
+	_ = cmd.RegisterFlagCompletionFunc("specialisation", completion.CompleteSpecialisationFlagFromConfig(configResolver))
+	_ = cmd.RegisterFlagCompletionFunc("build-host", completion.CompleteHost)
+	_ = cmd.RegisterFlagCompletionFunc("target-host", completion.CompleteHost)
+	_ = cmd.RegisterFlagCompletionFunc("store-path", completion.DirCompletions)
 
 	opts.NixOptions.Quiet.Bind(&cmd)
 	opts.NixOptions.PrintBuildLogs.Bind(&cmd)

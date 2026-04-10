@@ -217,3 +217,22 @@ func CollectGenerationsInProfile(s system.System, log logger.Logger, profile str
 
 	return generations, nil
 }
+
+func CollectSpecialisations(s system.System, generationDirname string) ([]string, error) {
+	var specialisations []string
+
+	specialisationsGlob := filepath.Join(generationDirname, "specialisation", "*")
+
+	specialisationsMatches, err := s.FS().Glob(specialisationsGlob)
+	if err != nil {
+		return nil, err
+	} else {
+		for _, match := range specialisationsMatches {
+			specialisations = append(specialisations, filepath.Base(match))
+		}
+	}
+
+	sort.Strings(specialisations)
+
+	return specialisations, nil
+}

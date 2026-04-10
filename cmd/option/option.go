@@ -10,6 +10,7 @@ import (
 	"github.com/nix-community/nixos-cli/internal/build"
 	cmdOpts "github.com/nix-community/nixos-cli/internal/cmd/opts"
 	cmdUtils "github.com/nix-community/nixos-cli/internal/cmd/utils"
+	"github.com/nix-community/nixos-cli/internal/cmd/utils/completion"
 	"github.com/nix-community/nixos-cli/internal/configuration"
 	"github.com/nix-community/nixos-cli/internal/logger"
 	"github.com/nix-community/nixos-cli/internal/settings"
@@ -72,12 +73,12 @@ func OptionCommand() *cobra.Command {
 	if build.Flake() {
 		cmd.Flags().StringVarP(&opts.FlakeRef, "flake", "f", "", "Flake `ref` to explicitly load options from")
 
-		_ = cmd.RegisterFlagCompletionFunc("flake", cmdUtils.DirCompletions)
+		_ = cmd.RegisterFlagCompletionFunc("flake", completion.DirCompletions)
 	} else {
 		cmd.Flags().StringVar(&opts.File, "file", "", "File `path` to load NixOS configuration from")
 		cmd.Flags().StringVar(&opts.Attr, "attr", "", "Attribute `path` inside of file pointing to configuration")
 
-		_ = cmd.RegisterFlagCompletionFunc("file", cmdUtils.FileCompletions("nix"))
+		_ = cmd.RegisterFlagCompletionFunc("file", completion.FileCompletions("nix"))
 	}
 
 	opts.Include.Bind(&cmd)

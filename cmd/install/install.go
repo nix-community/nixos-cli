@@ -12,6 +12,7 @@ import (
 	"github.com/nix-community/nixos-cli/internal/cmd/nixopts"
 	cmdOpts "github.com/nix-community/nixos-cli/internal/cmd/opts"
 	cmdUtils "github.com/nix-community/nixos-cli/internal/cmd/utils"
+	"github.com/nix-community/nixos-cli/internal/cmd/utils/completion"
 	"github.com/nix-community/nixos-cli/internal/configuration"
 	"github.com/nix-community/nixos-cli/internal/constants"
 	"github.com/nix-community/nixos-cli/internal/logger"
@@ -90,7 +91,7 @@ func InstallCommand() *cobra.Command {
 
 			return nil
 		},
-		ValidArgsFunction: cmdUtils.FlakeOrNixFileCompletions,
+		ValidArgsFunction: completion.FlakeOrNixFileCompletions,
 		PreRun: func(cmd *cobra.Command, args []string) {
 			ctx := cmd.Context()
 			log := logger.FromContext(ctx)
@@ -115,9 +116,9 @@ func InstallCommand() *cobra.Command {
 	cmd.Flags().StringVarP(&opts.SystemClosure, "system", "s", "", "Install system from system closure at `path`")
 	cmd.Flags().BoolVarP(&opts.Verbose, "verbose", "v", false, "Show verbose logging")
 
-	_ = cmd.RegisterFlagCompletionFunc("channel", cmdUtils.DirCompletions)
-	_ = cmd.RegisterFlagCompletionFunc("root", cmdUtils.DirCompletions)
-	_ = cmd.RegisterFlagCompletionFunc("system", cmdUtils.DirCompletions)
+	_ = cmd.RegisterFlagCompletionFunc("channel", completion.DirCompletions)
+	_ = cmd.RegisterFlagCompletionFunc("root", completion.DirCompletions)
+	_ = cmd.RegisterFlagCompletionFunc("system", completion.DirCompletions)
 
 	opts.NixOptions.Quiet.Bind(&cmd)
 	opts.NixOptions.PrintBuildLogs.Bind(&cmd)
