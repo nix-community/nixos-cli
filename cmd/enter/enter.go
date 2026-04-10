@@ -5,6 +5,7 @@ import (
 
 	cmdOpts "github.com/nix-community/nixos-cli/internal/cmd/opts"
 	cmdUtils "github.com/nix-community/nixos-cli/internal/cmd/utils"
+	"github.com/nix-community/nixos-cli/internal/cmd/utils/completion"
 	"github.com/nix-community/nixos-cli/internal/logger"
 )
 
@@ -44,8 +45,8 @@ func EnterCommand() *cobra.Command {
 	cmd.Flags().BoolVarP(&opts.Silent, "silent", "s", false, "Suppress all system activation output")
 	cmd.Flags().BoolVarP(&opts.Verbose, "verbose", "v", false, "Show verbose logging")
 
-	_ = cmd.RegisterFlagCompletionFunc("root", cmdUtils.DirCompletions)
-	_ = cmd.RegisterFlagCompletionFunc("system", cmdUtils.DirCompletions)
+	_ = cmd.RegisterFlagCompletionFunc("root", completion.DirCompletions)
+	_ = cmd.RegisterFlagCompletionFunc("system", completion.DirCompletions)
 
 	cmd.MarkFlagsMutuallyExclusive("silent", "verbose")
 

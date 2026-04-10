@@ -1,16 +1,16 @@
-package ssh
+package completion
 
 import (
 	"strings"
 
-	cmdUtils "github.com/nix-community/nixos-cli/internal/cmd/utils"
+	"github.com/nix-community/nixos-cli/internal/ssh"
 	"github.com/spf13/cobra"
 )
 
 func CompleteHost(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	log, cfg := cmdUtils.PrepareCompletionResources()
+	log, cfg := PrepareCompletionResources()
 
-	hosts, err := getHosts(cfg.SSH.HostsFileCompletion)
+	hosts, err := ssh.GetHosts(cfg.SSH.HostsFileCompletion)
 	if err != nil {
 		log.Errorf("failed to get hosts: %v", err)
 		return []string{}, cobra.ShellCompDirectiveNoFileComp

@@ -1,37 +1,16 @@
-package generation
+package completion
 
 import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
-	"path/filepath"
-	"sort"
 	"strings"
 
-	cmdUtils "github.com/nix-community/nixos-cli/internal/cmd/utils"
 	"github.com/nix-community/nixos-cli/internal/configuration"
+	"github.com/nix-community/nixos-cli/internal/generation"
 	"github.com/nix-community/nixos-cli/internal/system"
 	"github.com/spf13/cobra"
 )
-
-func CollectSpecialisations(s system.System, generationDirname string) ([]string, error) {
-	var specialisations []string
-
-	specialisationsGlob := filepath.Join(generationDirname, "specialisation", "*")
-
-	specialisationsMatches, err := s.FS().Glob(specialisationsGlob)
-	if err != nil {
-		return nil, err
-	} else {
-		for _, match := range specialisationsMatches {
-			specialisations = append(specialisations, filepath.Base(match))
-		}
-	}
-
-	sort.Strings(specialisations)
-
-	return specialisations, nil
-}
 
 func CollectSpecialisationsFromConfig(cfg configuration.Configuration) []string {
 	var argv []string
@@ -73,10 +52,10 @@ func CollectSpecialisationsFromConfig(cfg configuration.Configuration) []string 
 
 func CompleteSpecialisationFlag(generationDirname string) cobra.CompletionFunc {
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		log, _ := cmdUtils.PrepareCompletionResources()
+		log, _ := PrepareCompletionResources()
 		s := system.NewLocalSystem(log)
 
-		specialisations, err := CollectSpecialisations(s, generationDirname)
+		specialisations, err := generation.CollectSpecialisations(s, generationDirname)
 		if err != nil {
 			return []string{}, cobra.ShellCompDirectiveNoFileComp
 		}

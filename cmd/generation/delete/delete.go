@@ -16,6 +16,7 @@ import (
 	"github.com/nix-community/nixos-cli/internal/build"
 	cmdOpts "github.com/nix-community/nixos-cli/internal/cmd/opts"
 	cmdUtils "github.com/nix-community/nixos-cli/internal/cmd/utils"
+	"github.com/nix-community/nixos-cli/internal/cmd/utils/completion"
 	"github.com/nix-community/nixos-cli/internal/constants"
 	"github.com/nix-community/nixos-cli/internal/generation"
 	"github.com/nix-community/nixos-cli/internal/logger"
@@ -72,7 +73,7 @@ func GenerationDeleteCommand(genOpts *cmdOpts.GenerationOpts) *cobra.Command {
 
 			return nil
 		},
-		ValidArgsFunction: generation.CompleteGenerationNumber(&genOpts.ProfileName, 0),
+		ValidArgsFunction: completion.CompleteGenerationNumber(&genOpts.ProfileName, 0),
 		PreRun: func(cmd *cobra.Command, args []string) {
 			ctx := cmd.Context()
 			log := logger.FromContext(ctx)
@@ -99,9 +100,9 @@ func GenerationDeleteCommand(genOpts *cmdOpts.GenerationOpts) *cobra.Command {
 	cmd.Flags().BoolVarP(&opts.Verbose, "verbose", "v", false, "Show verbose logging")
 	cmd.Flags().BoolVarP(&opts.AlwaysConfirm, "yes", "y", false, "Automatically confirm generation deletion")
 
-	_ = cmd.RegisterFlagCompletionFunc("from", generation.CompleteGenerationNumberFlag(&genOpts.ProfileName))
-	_ = cmd.RegisterFlagCompletionFunc("to", generation.CompleteGenerationNumberFlag(&genOpts.ProfileName))
-	_ = cmd.RegisterFlagCompletionFunc("keep", generation.CompleteGenerationNumberFlag(&genOpts.ProfileName))
+	_ = cmd.RegisterFlagCompletionFunc("from", completion.CompleteGenerationNumberFlag(&genOpts.ProfileName))
+	_ = cmd.RegisterFlagCompletionFunc("to", completion.CompleteGenerationNumberFlag(&genOpts.ProfileName))
+	_ = cmd.RegisterFlagCompletionFunc("keep", completion.CompleteGenerationNumberFlag(&genOpts.ProfileName))
 
 	cmdUtils.RemoveDefaultValueDesc(&cmd, "keep", "older-than")
 

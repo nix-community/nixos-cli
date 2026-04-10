@@ -28,7 +28,7 @@ const (
 // - The hosts file (if `useHostsFile` is set)
 // - SSH config files
 // - SSH known_hosts files
-func getHosts(useHostsFile bool) ([]string, error) {
+func GetHosts(useHostsFile bool) ([]string, error) {
 	hosts := make(map[string]struct{})
 
 	if useHostsFile {
@@ -41,7 +41,7 @@ func getHosts(useHostsFile bool) ([]string, error) {
 	// The default known hosts files can be specified in the config files,
 	// so a set is used to avoid reading them multiple times.
 	knownHostsFiles := map[string]struct{}{
-		SystemKnownHostsFile: struct{}{},
+		SystemKnownHostsFile: {},
 	}
 
 	home, err := os.UserHomeDir()

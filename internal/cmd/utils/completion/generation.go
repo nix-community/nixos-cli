@@ -1,4 +1,4 @@
-package generation
+package completion
 
 import (
 	"fmt"
@@ -8,8 +8,8 @@ import (
 	"sort"
 	"strconv"
 
-	cmdUtils "github.com/nix-community/nixos-cli/internal/cmd/utils"
 	"github.com/nix-community/nixos-cli/internal/constants"
+	"github.com/nix-community/nixos-cli/internal/generation"
 	"github.com/nix-community/nixos-cli/internal/system"
 	"github.com/spf13/cobra"
 )
@@ -41,14 +41,14 @@ func CompleteProfileFlag(_ *cobra.Command, args []string, toComplete string) ([]
 
 func CompleteGenerationNumber(profile *string, limit int) cobra.CompletionFunc {
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		log, _ := cmdUtils.PrepareCompletionResources()
+		log, _ := PrepareCompletionResources()
 		s := system.NewLocalSystem(log)
 
 		if limit != 0 && len(args) >= limit {
 			return []string{}, cobra.ShellCompDirectiveNoFileComp
 		}
 
-		generations, err := CollectGenerationsInProfile(s, log, *profile)
+		generations, err := generation.CollectGenerationsInProfile(s, log, *profile)
 		if err != nil {
 			return []string{}, cobra.ShellCompDirectiveNoFileComp
 		}
@@ -83,10 +83,10 @@ func CompleteGenerationNumber(profile *string, limit int) cobra.CompletionFunc {
 
 func CompleteGenerationNumberFlag(profile *string) cobra.CompletionFunc {
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		log, _ := cmdUtils.PrepareCompletionResources()
+		log, _ := PrepareCompletionResources()
 		s := system.NewLocalSystem(log)
 
-		generations, err := CollectGenerationsInProfile(s, log, *profile)
+		generations, err := generation.CollectGenerationsInProfile(s, log, *profile)
 		if err != nil {
 			return []string{}, cobra.ShellCompDirectiveNoFileComp
 		}

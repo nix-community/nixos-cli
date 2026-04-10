@@ -17,7 +17,7 @@ func constructFlakeInputCompletionFunc(resolver flakeRefResolver, addEqualsSign 
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
 
-		values, err := collectNixCommandCompletionValues([]string{"build", resolvedFlakeRef, "--update-input"}, toComplete)
+		values, err := CollectNixCommandCompletionValues([]string{"build", resolvedFlakeRef, "--update-input"}, toComplete)
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
@@ -42,7 +42,7 @@ func constructFlakeInputCompletionFunc(resolver flakeRefResolver, addEqualsSign 
 }
 
 func collectOptionFlagCompletions(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	values, err := collectNixCommandCompletionValues([]string{"--option"}, toComplete)
+	values, err := CollectNixCommandCompletionValues([]string{"--option"}, toComplete)
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
@@ -59,7 +59,7 @@ func collectOptionFlagCompletions(cmd *cobra.Command, args []string, toComplete 
 	return candidates, cobra.ShellCompDirectiveNoFileComp | cobra.ShellCompDirectiveNoSpace
 }
 
-type completionLine struct {
+type CompletionLine struct {
 	Value       string
 	Description string
 }
@@ -69,7 +69,7 @@ type completionLine struct {
 //
 // Only works on modern Nix commands and internally sets
 // NIX_CONFIG to facilitate this if necessary.
-func collectNixCommandCompletionValues(argv []string, candidate string) ([]completionLine, error) {
+func CollectNixCommandCompletionValues(argv []string, candidate string) ([]CompletionLine, error) {
 	nixCommandArgv := append([]string{"nix"}, argv...)
 	nixCommandArgv = append(nixCommandArgv, candidate)
 
@@ -108,11 +108,11 @@ func collectNixCommandCompletionValues(argv []string, candidate string) ([]compl
 	// Trim the first line, since that's usually a directive.
 	lines = lines[1:]
 
-	candidates := make([]completionLine, 0, len(lines))
+	candidates := make([]CompletionLine, 0, len(lines))
 	for _, line := range lines {
 		parts := strings.SplitN(line, "\t", 2)
 
-		c := completionLine{
+		c := CompletionLine{
 			Value: parts[0],
 		}
 

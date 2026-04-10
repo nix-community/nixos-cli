@@ -11,9 +11,9 @@ import (
 	"github.com/nix-community/nixos-cli/internal/activation"
 	cmdOpts "github.com/nix-community/nixos-cli/internal/cmd/opts"
 	cmdUtils "github.com/nix-community/nixos-cli/internal/cmd/utils"
+	"github.com/nix-community/nixos-cli/internal/cmd/utils/completion"
 	"github.com/nix-community/nixos-cli/internal/constants"
 	"github.com/nix-community/nixos-cli/internal/diff"
-	"github.com/nix-community/nixos-cli/internal/generation"
 	"github.com/nix-community/nixos-cli/internal/logger"
 	"github.com/nix-community/nixos-cli/internal/settings"
 	"github.com/nix-community/nixos-cli/internal/system"
@@ -42,7 +42,7 @@ func GenerationSwitchCommand(genOpts *cmdOpts.GenerationOpts) *cobra.Command {
 
 			return nil
 		},
-		ValidArgsFunction: generation.CompleteGenerationNumber(&genOpts.ProfileName, 1),
+		ValidArgsFunction: completion.CompleteGenerationNumber(&genOpts.ProfileName, 1),
 		PreRun: func(cmd *cobra.Command, args []string) {
 			ctx := cmd.Context()
 			log := logger.FromContext(ctx)
@@ -98,7 +98,7 @@ func completeSpecialisationFlag(profileName string) cobra.CompletionFunc {
 
 		generationLink := filepath.Join(profileDirectory, fmt.Sprintf("%v-%v-link", profileName, genNumber))
 
-		return generation.CompleteSpecialisationFlag(generationLink)(cmd, args, toComplete)
+		return completion.CompleteSpecialisationFlag(generationLink)(cmd, args, toComplete)
 	}
 }
 
