@@ -168,8 +168,43 @@ func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 		cmd.Flags().BoolVar(&opts.UpgradeAllChannels, "upgrade-all", false, "Upgrade all the root user's channels")
 	}
 
+	configResolver := func(cmd *cobra.Command, args []string) configuration.Configuration {
+		if len(args) > 0 {
+			if build.Flake() {
+				ref := configuration.FlakeRefFromString(args[0])
+				if err := ref.InferSystemFromHostnameIfNeeded(); err != nil {
+					return nil
+				}
+				return ref
+			} else {
+				configPath, err := utils.ResolveNixFilename(args[0])
+				if err != nil {
+					return nil
+				}
+
+				var attr string
+				if len(args) > 1 {
+					attr = args[1]
+				}
+
+				return &configuration.LegacyConfiguration{
+					Includes:        opts.NixOptions.Include,
+					ConfigPath:      configPath,
+					Attribute:       attr,
+					UseExplicitPath: true,
+				}
+			}
+		} else {
+			c, err := configuration.FindConfiguration(logger.NewNoOpLogger(), cfg, opts.NixOptions.Include)
+			if err != nil {
+				return nil
+			}
+			return c
+		}
+	}
+
 	_ = cmd.RegisterFlagCompletionFunc("profile-name", generation.CompleteProfileFlag)
-	_ = cmd.RegisterFlagCompletionFunc("specialisation", generation.CompleteSpecialisationFlagFromConfig(opts.FlakeRef, opts.NixOptions.Include))
+	_ = cmd.RegisterFlagCompletionFunc("specialisation", generation.CompleteSpecialisationFlagFromConfig(configResolver))
 	_ = cmd.RegisterFlagCompletionFunc("build-host", sshUtils.CompleteHost)
 	_ = cmd.RegisterFlagCompletionFunc("target-host", sshUtils.CompleteHost)
 	_ = cmd.RegisterFlagCompletionFunc("store-path", cmdUtils.DirCompletions)
