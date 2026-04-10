@@ -35,14 +35,25 @@ func PrepareCompletionResources() (logger.Logger, *settings.Settings) {
 	return log, cfg
 }
 
+// Completions for commands that require <FLAKE> || <FILE> <ATTR>
+// arguments, depending on if the application is built with
+// flakes or not.
 func FlakeOrNixFileCompletions(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	if len(args) != 0 {
-		return nil, cobra.ShellCompDirectiveNoFileComp
-	}
 	if build.Flake() {
-		return nil, cobra.ShellCompDirectiveFilterDirs
-	} else {
-		return []string{"nix"}, cobra.ShellCompDirectiveFilterFileExt
+		if len(args) > 0 {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+		return CompleteConfigFlakeRef(cmd, args, toComplete)
+	}
+
+	switch len(args) {
+	case 0:
+		return FileCompletions("nix")(cmd, args, toComplete)
+	case 1:
+		// We are now completing <ATTR> for legacy mode.
+		return CompleteNixConfigFileAttr(args[0])
+	default:
+		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 }
 
