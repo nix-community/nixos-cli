@@ -9,11 +9,31 @@ import (
 	"sort"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/nix-community/nixos-cli/internal/cmd/nixopts"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 func SetHelpFlagText(cmd *cobra.Command) {
 	cmd.Flags().BoolP("help", "h", false, "Show this help menu")
+}
+
+// Set a usage function that hides any nix flags before returning
+// the default usage function. This is needed as hiding the flags
+// outside of the usage function also hides them from completion
+// output.
+func SetUsageHideNixFlags(cmd *cobra.Command) {
+	defaultUsageFunc := cmd.UsageFunc()
+
+	cmd.SetUsageFunc(func(cmd *cobra.Command) error {
+		cmd.LocalFlags().VisitAll(func(f *pflag.Flag) {
+			if _, ok := f.Annotations[nixopts.NixFlagAnnotation]; ok {
+				f.Hidden = true
+			}
+		})
+
+		return defaultUsageFunc(cmd)
+	})
 }
 
 var ErrCommand = errors.New("command error")
