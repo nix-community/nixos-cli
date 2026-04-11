@@ -9,6 +9,8 @@ import (
 	"github.com/spf13/pflag"
 )
 
+const NixFlagAnnotation = "nixos_cli_nix_flag"
+
 func addNixOptionBool(cmd *cobra.Command, dest *bool, name string, shorthand string, desc string) {
 	flag := string(name)
 	if shorthand != "" {
@@ -16,7 +18,7 @@ func addNixOptionBool(cmd *cobra.Command, dest *bool, name string, shorthand str
 	} else {
 		cmd.Flags().BoolVar(dest, flag, false, desc)
 	}
-	cmd.Flags().Lookup(flag).Hidden = true
+	_ = cmd.Flags().SetAnnotation(flag, NixFlagAnnotation, nil)
 }
 
 // func addNixOptionInt(cmd *cobra.Command, dest *int, name string, shorthand string, desc string) {
@@ -36,7 +38,7 @@ func addNixOptionString(cmd *cobra.Command, dest *string, name string, shorthand
 	} else {
 		cmd.Flags().StringVar(dest, flag, "", desc)
 	}
-	cmd.Flags().Lookup(flag).Hidden = true
+	_ = cmd.Flags().SetAnnotation(flag, NixFlagAnnotation, nil)
 }
 
 func addNixOptionStringSlice(cmd *cobra.Command, dest *[]string, name string, shorthand string, desc string) {
@@ -46,7 +48,7 @@ func addNixOptionStringSlice(cmd *cobra.Command, dest *[]string, name string, sh
 	} else {
 		cmd.Flags().StringSliceVar(dest, flag, nil, desc)
 	}
-	cmd.Flags().Lookup(flag).Hidden = true
+	_ = cmd.Flags().SetAnnotation(flag, NixFlagAnnotation, nil)
 }
 
 func addNixOptionStringMap(cmd *cobra.Command, dest *map[string]string, name string, shorthand string, desc string) {
@@ -56,7 +58,7 @@ func addNixOptionStringMap(cmd *cobra.Command, dest *map[string]string, name str
 	} else {
 		cmd.Flags().StringToStringVar(dest, flag, nil, desc)
 	}
-	cmd.Flags().Lookup(flag).Hidden = true
+	_ = cmd.Flags().SetAnnotation(flag, NixFlagAnnotation, nil)
 }
 
 func addNixOptionVar(cmd *cobra.Command, dest pflag.Value, name string, shorthand string, desc string) {
@@ -66,7 +68,7 @@ func addNixOptionVar(cmd *cobra.Command, dest pflag.Value, name string, shorthan
 	} else {
 		cmd.Flags().Var(dest, flag, desc)
 	}
-	cmd.Flags().Lookup(flag).Hidden = true
+	_ = cmd.Flags().SetAnnotation(flag, NixFlagAnnotation, nil)
 }
 
 type NixCommand string

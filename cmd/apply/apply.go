@@ -324,6 +324,7 @@ Check the man page nixos-cli-apply(1) for more details on what options are avail
 
 	cmdUtils.SetHelpFlagText(&cmd)
 	cmd.SetHelpTemplate(helpTemplate)
+	cmdUtils.SetUsageHideNixFlags(&cmd)
 
 	return &cmd
 }
