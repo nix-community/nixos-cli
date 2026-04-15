@@ -239,12 +239,7 @@ func (f *FlakeRef) buildRemoteSystem(s *system.SSHSystem, buildType BuildType, o
 	// 2. Copy the drv path over to the builder.
 	// $ nix "${flakeFlags[@]}" copy "${copyFlags[@]}" --derivation --to "ssh://$buildHost" "$drv"
 
-	var copyFlags []string
-	if opts.NixOpts != nil {
-		copyFlags = opts.NixOpts.ArgsForCommand(nixopts.CmdCopyClosure)
-	}
-
-	if err = system.CopyClosures(localSystem, s, []string{drvPath}, copyFlags...); err != nil {
+	if err = system.CopyClosures(localSystem, s, []string{drvPath}, opts.NixOpts); err != nil {
 		return "", fmt.Errorf("failed to copy drv to build host: %v", err)
 	}
 

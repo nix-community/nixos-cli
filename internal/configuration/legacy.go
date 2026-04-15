@@ -244,7 +244,7 @@ func (l *LegacyConfiguration) buildRemoteSystem(s *system.SSHSystem, buildType B
 
 	// 2. Copy the drv path over to the builder.
 	// $ nix-copy-closure --to "$buildHost" "$drv"
-	if err := system.CopyClosures(localSystem, s, []string{drvPath}); err != nil {
+	if err := system.CopyClosures(localSystem, s, []string{drvPath}, opts.NixOpts); err != nil {
 		return "", fmt.Errorf("failed to copy drv to build host: %v", err)
 	}
 

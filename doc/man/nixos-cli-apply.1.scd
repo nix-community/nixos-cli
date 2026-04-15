@@ -118,7 +118,10 @@ command tree. See *nixos-cli-generation(1)* for details.
 	to perform the build. The host needs to be accessible with SSH, and must be
 	able to perform Nix builds.
 
-	*HOST* is a simple SSH address with the format "_user@address:port_".
+	*HOST* is a simple SSH address with the format "_user@address:port_". This
+	can be prefixed with "_ssh-ng://_" or "_ssh://_" to indicate the Nix store
+	protocol to use when copying closures. Using _ssh-ng_ requires having the
+	_nix-command_ Nix experimental feature enabled.
 
 	SSH can be authenticated using private keys via the following methods:
 	- the *ssh.private_key_cmd* setting (see *nixos-cli-settings(5)*)
@@ -286,7 +289,10 @@ command tree. See *nixos-cli-generation(1)* for details.
 
 	If this is left empty, activation of the system will happen locally.
 
-	*HOST* is a simple SSH address with the format "_user@address:port_".
+	*HOST* is a simple SSH address with the format "_user@address:port_". This
+	can be prefixed with "_ssh-ng://_" or "_ssh://_" to indicate the Nix store
+	protocol to use when copying closures. Using _ssh-ng_ requires having the
+	_nix-command_ Nix experimental feature enabled.
 
 	If *--build-host* is not explicitly specified or is left empty, building
 	will take place locally.

@@ -45,10 +45,19 @@ type SSHConfig struct {
 	HostKeyVerification settings.HostKeyVerificationType
 	KnownHostsFiles     []string
 
+	StoreType NixStoreType
+
 	password []byte
 
 	agentManager *sshUtils.AgentManager
 }
+
+type NixStoreType string
+
+const (
+	NixStoreTypeSSH   NixStoreType = "ssh"
+	NixStoreTypeSSHNG NixStoreType = "ssh-ng"
+)
 
 type SSHConfigOptions struct {
 	AgentManager        *sshUtils.AgentManager
@@ -67,9 +76,17 @@ func NewSSHConfig(ctx context.Context, host string, log logger.Logger, options S
 		return nil, errors.New("options.HostKeyVerification is empty")
 	}
 
+	storeType := NixStoreTypeSSH
+
+	var after string
+	var ok bool
+
 	// Parse the user@address:port SSH host string
-	if after, ok := strings.CutPrefix(host, "ssh://"); ok {
+	if after, ok = strings.CutPrefix(host, "ssh://"); ok {
 		host = after
+	} else if after, ok = strings.CutPrefix(host, "ssh-ng://"); ok {
+		host = after
+		storeType = NixStoreTypeSSHNG
 	}
 
 	hostInfo, err := sshUtils.ParseUserHostPort(host)
@@ -146,6 +163,8 @@ func NewSSHConfig(ctx context.Context, host string, log logger.Logger, options S
 		User:    username,
 		Address: address,
 		Port:    port,
+
+		StoreType: storeType,
 	}
 
 	// Use password auth to access the SSH system with
@@ -659,6 +678,10 @@ func (s *SSHSystem) IsNixOS() bool {
 	}
 
 	return nixosDistroIDRegex.MatchString(distroID)
+}
+
+func (s *SSHSystem) AddressWithScheme() string {
+	return fmt.Sprintf("%s://%s@%s:%d", s.cfg.StoreType, s.cfg.User, s.cfg.Address, s.cfg.Port)
 }
 
 func (s *SSHSystem) Address() string {
