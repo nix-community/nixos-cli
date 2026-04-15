@@ -74,12 +74,13 @@ func addNixOptionVar(cmd *cobra.Command, dest pflag.Value, name string, shorthan
 type NixCommand string
 
 const (
-	CmdBuild        = "nix build"
-	CmdLegacyBuild  = "nix-build"
-	CmdCopyClosure  = "nix-copy-closure"
-	CmdEval         = "nix eval"
-	CmdInstantiate  = "nix-instantiate"
-	CmdStoreRealise = "nix-store-realise"
+	CmdBuild        NixCommand = "nix build"
+	CmdLegacyBuild  NixCommand = "nix-build"
+	CmdCopyClosure  NixCommand = "nix-copy-closure"
+	CmdCopy         NixCommand = "nix copy"
+	CmdEval         NixCommand = "nix eval"
+	CmdInstantiate  NixCommand = "nix-instantiate"
+	CmdStoreRealise NixCommand = "nix-store-realise"
 )
 
 type NixOption interface {
@@ -104,7 +105,7 @@ func (q *Quiet) Bind(cmd *cobra.Command) {
 
 func (Quiet) Supports(c NixCommand) bool {
 	switch c {
-	case CmdBuild, CmdLegacyBuild, CmdCopyClosure, CmdEval, CmdInstantiate, CmdStoreRealise:
+	case CmdBuild, CmdLegacyBuild, CmdCopyClosure, CmdCopy, CmdEval, CmdInstantiate, CmdStoreRealise:
 		return true
 	default:
 		return false
@@ -127,7 +128,7 @@ func (p *PrintBuildLogs) Bind(cmd *cobra.Command) {
 
 func (PrintBuildLogs) Supports(c NixCommand) bool {
 	switch c {
-	case CmdBuild, CmdEval:
+	case CmdBuild, CmdCopy, CmdEval:
 		return true
 	default:
 		return false
@@ -173,7 +174,7 @@ func (s *ShowTrace) Bind(cmd *cobra.Command) {
 
 func (ShowTrace) Supports(c NixCommand) bool {
 	switch c {
-	case CmdBuild, CmdLegacyBuild, CmdCopyClosure, CmdEval, CmdInstantiate, CmdStoreRealise:
+	case CmdBuild, CmdLegacyBuild, CmdCopy, CmdCopyClosure, CmdEval, CmdInstantiate, CmdStoreRealise:
 		return true
 	default:
 		return false
@@ -196,7 +197,7 @@ func (k *KeepGoing) Bind(cmd *cobra.Command) {
 
 func (KeepGoing) Supports(c NixCommand) bool {
 	switch c {
-	case CmdBuild, CmdLegacyBuild, CmdCopyClosure, CmdEval, CmdInstantiate, CmdStoreRealise:
+	case CmdBuild, CmdLegacyBuild, CmdCopy, CmdCopyClosure, CmdEval, CmdInstantiate, CmdStoreRealise:
 		return true
 	default:
 		return false
@@ -219,7 +220,7 @@ func (k *KeepFailed) Bind(cmd *cobra.Command) {
 
 func (KeepFailed) Supports(c NixCommand) bool {
 	switch c {
-	case CmdBuild, CmdLegacyBuild, CmdCopyClosure, CmdEval, CmdInstantiate, CmdStoreRealise:
+	case CmdBuild, CmdLegacyBuild, CmdCopy, CmdCopyClosure, CmdEval, CmdInstantiate, CmdStoreRealise:
 		return true
 	default:
 		return false
@@ -242,7 +243,7 @@ func (f *Fallback) Bind(cmd *cobra.Command) {
 
 func (Fallback) Supports(c NixCommand) bool {
 	switch c {
-	case CmdBuild, CmdLegacyBuild, CmdCopyClosure, CmdEval, CmdInstantiate, CmdStoreRealise:
+	case CmdBuild, CmdLegacyBuild, CmdCopy, CmdCopyClosure, CmdEval, CmdInstantiate, CmdStoreRealise:
 		return true
 	default:
 		return false
@@ -265,7 +266,7 @@ func (r *Refresh) Bind(cmd *cobra.Command) {
 
 func (Refresh) Supports(c NixCommand) bool {
 	switch c {
-	case CmdBuild, CmdEval:
+	case CmdCopy, CmdBuild, CmdEval:
 		return true
 	default:
 		return false
@@ -288,7 +289,7 @@ func (r *Repair) Bind(cmd *cobra.Command) {
 
 func (Repair) Supports(c NixCommand) bool {
 	switch c {
-	case CmdBuild, CmdLegacyBuild, CmdEval, CmdInstantiate, CmdStoreRealise:
+	case CmdBuild, CmdLegacyBuild, CmdCopy, CmdEval, CmdInstantiate, CmdStoreRealise:
 		return true
 	default:
 		return false
@@ -311,7 +312,7 @@ func (i *Impure) Bind(cmd *cobra.Command) {
 
 func (Impure) Supports(c NixCommand) bool {
 	switch c {
-	case CmdBuild, CmdLegacyBuild, CmdEval, CmdInstantiate:
+	case CmdBuild, CmdCopy, CmdLegacyBuild, CmdEval, CmdInstantiate:
 		return true
 	default:
 		return false
@@ -334,7 +335,7 @@ func (o *Offline) Bind(cmd *cobra.Command) {
 
 func (Offline) Supports(c NixCommand) bool {
 	switch c {
-	case CmdBuild, CmdEval:
+	case CmdCopy, CmdBuild, CmdEval:
 		return true
 	default:
 		return false
@@ -357,7 +358,7 @@ func (n *NoNet) Bind(cmd *cobra.Command) {
 
 func (NoNet) Supports(c NixCommand) bool {
 	switch c {
-	case CmdBuild, CmdEval:
+	case CmdCopy, CmdBuild, CmdEval:
 		return true
 	default:
 		return false
@@ -383,7 +384,7 @@ func (m *MaxJobs) Bind(cmd *cobra.Command) {
 
 func (MaxJobs) Supports(c NixCommand) bool {
 	switch c {
-	case CmdBuild, CmdLegacyBuild, CmdCopyClosure, CmdEval, CmdInstantiate, CmdStoreRealise:
+	case CmdBuild, CmdLegacyBuild, CmdCopy, CmdCopyClosure, CmdEval, CmdInstantiate, CmdStoreRealise:
 		return true
 	default:
 		return false
@@ -429,7 +430,7 @@ func (c *Cores) Bind(cmd *cobra.Command) {
 
 func (Cores) Supports(c NixCommand) bool {
 	switch c {
-	case CmdBuild, CmdLegacyBuild, CmdCopyClosure, CmdEval, CmdInstantiate, CmdStoreRealise:
+	case CmdBuild, CmdLegacyBuild, CmdCopy, CmdCopyClosure, CmdEval, CmdInstantiate, CmdStoreRealise:
 		return true
 	default:
 		return false
@@ -475,7 +476,7 @@ func (b *Builders) Bind(cmd *cobra.Command) {
 
 func (Builders) Supports(c NixCommand) bool {
 	switch c {
-	case CmdBuild, CmdLegacyBuild, CmdCopyClosure, CmdEval, CmdInstantiate, CmdStoreRealise:
+	case CmdBuild, CmdLegacyBuild, CmdCopy, CmdCopyClosure, CmdEval, CmdInstantiate, CmdStoreRealise:
 		return true
 	default:
 		return false
@@ -514,7 +515,7 @@ func (l *LogFormat) Bind(cmd *cobra.Command) {
 
 func (LogFormat) Supports(c NixCommand) bool {
 	switch c {
-	case CmdBuild, CmdLegacyBuild, CmdCopyClosure, CmdEval, CmdInstantiate, CmdStoreRealise:
+	case CmdBuild, CmdLegacyBuild, CmdCopy, CmdCopyClosure, CmdEval, CmdInstantiate, CmdStoreRealise:
 		return true
 	default:
 		return false
@@ -541,7 +542,7 @@ func (i *Include) Bind(cmd *cobra.Command) {
 
 func (Include) Supports(c NixCommand) bool {
 	switch c {
-	case CmdBuild, CmdLegacyBuild, CmdEval, CmdInstantiate:
+	case CmdBuild, CmdLegacyBuild, CmdCopy, CmdEval, CmdInstantiate:
 		return true
 	default:
 		return false
@@ -571,7 +572,7 @@ func (o *Option) Bind(cmd *cobra.Command) {
 
 func (Option) Supports(c NixCommand) bool {
 	switch c {
-	case CmdBuild, CmdLegacyBuild, CmdCopyClosure, CmdEval, CmdInstantiate, CmdStoreRealise:
+	case CmdBuild, CmdLegacyBuild, CmdCopy, CmdCopyClosure, CmdEval, CmdInstantiate, CmdStoreRealise:
 		return true
 	default:
 		return false
@@ -603,7 +604,7 @@ func (s *SubstituteOnDestination) Bind(cmd *cobra.Command) {
 
 func (SubstituteOnDestination) Supports(c NixCommand) bool {
 	switch c {
-	case CmdCopyClosure:
+	case CmdCopy, CmdCopyClosure:
 		return true
 	default:
 		return false
@@ -626,7 +627,7 @@ func (r *RecreateLockFile) Bind(cmd *cobra.Command) {
 
 func (RecreateLockFile) Supports(c NixCommand) bool {
 	switch c {
-	case CmdBuild, CmdEval:
+	case CmdBuild, CmdCopy, CmdEval:
 		return true
 	default:
 		return false
@@ -649,7 +650,7 @@ func (n *NoUpdateLockFile) Bind(cmd *cobra.Command) {
 
 func (NoUpdateLockFile) Supports(c NixCommand) bool {
 	switch c {
-	case CmdBuild, CmdEval:
+	case CmdBuild, CmdCopy, CmdEval:
 		return true
 	default:
 		return false
@@ -672,7 +673,7 @@ func (n *NoWriteLockFile) Bind(cmd *cobra.Command) {
 
 func (NoWriteLockFile) Supports(c NixCommand) bool {
 	switch c {
-	case CmdBuild, CmdEval:
+	case CmdBuild, CmdCopy, CmdEval:
 		return true
 	default:
 		return false
@@ -697,7 +698,7 @@ func (n *NoUseRegistries) Bind(cmd *cobra.Command) {
 
 func (NoUseRegistries) Supports(c NixCommand) bool {
 	switch c {
-	case CmdBuild, CmdEval:
+	case CmdBuild, CmdCopy, CmdEval:
 		return true
 	default:
 		return false
@@ -720,7 +721,7 @@ func (c *CommitLockFile) Bind(cmd *cobra.Command) {
 
 func (CommitLockFile) Supports(c NixCommand) bool {
 	switch c {
-	case CmdBuild, CmdEval:
+	case CmdBuild, CmdCopy, CmdEval:
 		return true
 	default:
 		return false
@@ -743,7 +744,7 @@ func (u *UpdateInput) Bind(cmd *cobra.Command) {
 
 func (UpdateInput) Supports(c NixCommand) bool {
 	switch c {
-	case CmdBuild, CmdEval:
+	case CmdBuild, CmdCopy, CmdEval:
 		return true
 	default:
 		return false
@@ -780,7 +781,7 @@ func (o *OverrideInput) Bind(cmd *cobra.Command) {
 
 func (OverrideInput) Supports(c NixCommand) bool {
 	switch c {
-	case CmdBuild, CmdEval:
+	case CmdBuild, CmdCopy, CmdEval:
 		return true
 	default:
 		return false

@@ -674,8 +674,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 	}
 
 	if !dryBuild {
-		copyFlags := opts.NixOptions.ArgsForCommand(nixopts.CmdCopyClosure)
-		err = system.CopyClosures(buildHost, targetHost, []string{resultLocation}, copyFlags...)
+		err = system.CopyClosures(buildHost, targetHost, []string{resultLocation}, &opts.NixOptions)
 		if err != nil {
 			log.Errorf("failed to copy system closure to target host: %v", err)
 			return err
