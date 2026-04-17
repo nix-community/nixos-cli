@@ -28,7 +28,7 @@ require (
 	golang.org/x/sys v0.42.0
 	golang.org/x/term v0.41.0
 	modernc.org/sqlite v1.46.1
-	snare.dev/optnix v0.3.1
+	snare.dev/optnix v0.3.2
 )
 
 require (
