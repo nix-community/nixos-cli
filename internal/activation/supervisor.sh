@@ -3,7 +3,8 @@
 # The activation directories may not exist at this point,
 # and creating the lockfile/triggers would fail otherwise.
 mkdir -p /run/nixos
-mkdir -m 1777 /run/nixos/trigger
+# shellcheck disable=SC2174
+mkdir -p -m 1777 /run/nixos/trigger
 
 # Concurrent supervisors are prohibited.
 # Otherwise, multiple rollbacks and switch-to-configuration
