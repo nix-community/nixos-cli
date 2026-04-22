@@ -16,6 +16,7 @@ import (
 	"time"
 
 	shlex "github.com/carapace-sh/carapace-shlex"
+	ssh_config "github.com/kevinburke/ssh_config"
 	cmdUtils "github.com/nix-community/nixos-cli/internal/cmd/utils"
 	"github.com/nix-community/nixos-cli/internal/logger"
 	"github.com/nix-community/nixos-cli/internal/settings"
@@ -94,25 +95,53 @@ func NewSSHConfig(ctx context.Context, host string, log logger.Logger, options S
 		return nil, err
 	}
 
+	// Resolve hostInfo.Host against the user's ssh_config so host aliases
+	// (e.g. `Host prod \n  HostName 10.0.0.1 \n  User admin \n  Port 2222`)
+	// dial the real endpoint the way OpenSSH would. Explicit values from
+	// the command-line host string (user@, :port) still take precedence
+	// over ssh_config entries; we only consult ssh_config for fields the
+	// caller did not set.
+	var configuredHostName, configuredUser, configuredPort string
+	if hostInfo.Host != "" {
+		configuredHostName = ssh_config.Get(hostInfo.Host, "HostName")
+		configuredUser = ssh_config.Get(hostInfo.Host, "User")
+		configuredPort = ssh_config.Get(hostInfo.Host, "Port")
+	}
+
 	var username string
 	var address string
 	var port int
 
 	if hostInfo.User == "" {
-		var currentUser string
-		currentUser, err = utils.GetUsername()
-		if err != nil {
-			return nil, err
+		if configuredUser != "" {
+			username = configuredUser
+		} else {
+			var currentUser string
+			currentUser, err = utils.GetUsername()
+			if err != nil {
+				return nil, err
+			}
+			username = currentUser
 		}
-		username = currentUser
 	} else {
 		username = hostInfo.User
 	}
 
 	address = hostInfo.Host
+	if configuredHostName != "" {
+		address = configuredHostName
+	}
 
 	if hostInfo.Port != 0 {
 		port = hostInfo.Port
+	} else if configuredPort != "" {
+		p, parseErr := strconv.Atoi(configuredPort)
+		if parseErr != nil || p <= 0 || p > 65535 {
+			log.Warnf("ignoring invalid Port %q in ssh_config for %q", configuredPort, hostInfo.Host)
+			port = 22
+		} else {
+			port = p
+		}
 	} else {
 		port = 22
 	}
