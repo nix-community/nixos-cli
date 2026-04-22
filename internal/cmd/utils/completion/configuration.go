@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/nix-community/nixos-cli/internal/cmd/nixopts"
-	"github.com/nix-community/nixos-cli/internal/utils"
+	"github.com/nix-community/nixos-cli/internal/configuration"
 	"github.com/spf13/cobra"
 )
 
@@ -68,7 +68,7 @@ func CompleteFlakeRefURI(toComplete string) []string {
 // contains attributes that can be evaluated directly and
 // correspond to NixOS configurations.
 func CompleteNixConfigFileAttr(filename string) ([]string, cobra.ShellCompDirective) {
-	configPath, err := utils.ResolveNixFilename(filename)
+	configPath, err := configuration.ResolveSystemNix(filename)
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}

@@ -15,7 +15,6 @@ import (
 	"github.com/nix-community/nixos-cli/internal/logger"
 	"github.com/nix-community/nixos-cli/internal/settings"
 	"github.com/nix-community/nixos-cli/internal/system"
-	"github.com/nix-community/nixos-cli/internal/utils"
 	"github.com/sahilm/fuzzy"
 	"github.com/spf13/cobra"
 	"github.com/yarlson/pin"
@@ -120,7 +119,7 @@ func optionMain(cmd *cobra.Command, opts *cmdOpts.OptionOpts) error {
 		}
 		nixosConfig = ref
 	} else if opts.File != "" {
-		configPath, err := utils.ResolveNixFilename(opts.File)
+		configPath, err := configuration.ResolveSystemNix(opts.File)
 		if err != nil {
 			log.Error(err)
 			return err

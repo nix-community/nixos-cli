@@ -69,7 +69,7 @@ func FindLegacyConfiguration(cfg *settings.Settings, log logger.Logger, includes
 		if resolved, err := utils.ResolveNixFilename(config); err == nil {
 			config = resolved
 		} else {
-			log.Debugf("error when resolving %s to file: %s", resolved, err)
+			log.Debugf("error when resolving %s to file: %s", config, err)
 		}
 		return &LegacyConfiguration{
 			ConfigPath: config,
@@ -112,7 +112,7 @@ func findExplicitConfiguration(
 
 	log.Debugf("looking for system.nix in %s", cfg.ConfigLocation)
 
-	if _, err := os.Stat(cfg.ConfigLocation); err != nil {
+	if _, err := os.Stat(cfg.ConfigLocation); err == nil {
 		if utils.ContainsFile(cfg.ConfigLocation, "system.nix") {
 			return filepath.Join(cfg.ConfigLocation, "system.nix"), "", true
 		} else {
@@ -123,6 +123,29 @@ func findExplicitConfiguration(
 	}
 
 	return "", "", false
+}
+
+// If the passed file is a directory, then try to find a system.nix
+// file or a default.nix file in it. Otherwise, error out.
+func ResolveSystemNix(input string) (string, error) {
+	if utils.ContainsFile(input, "system.nix") {
+		joined := filepath.Join(input, "system.nix")
+
+		realPath, err := filepath.EvalSymlinks(joined)
+		if err != nil {
+			return "", err
+		}
+
+		absolutePath, err := filepath.Abs(realPath)
+		if err != nil {
+			return "", err
+		}
+
+		return absolutePath, nil
+
+	}
+
+	return utils.ResolveNixFilename(input)
 }
 
 func findImplicitConfiguration(
@@ -278,9 +301,9 @@ func (l *LegacyConfiguration) buildLocalSystem(s *system.LocalSystem, buildType 
 
 	log := s.Logger()
 
-	// if log.GetLogLevel() == logger.LogLevelDebug {
-	// 	argv = append(argv, "-v")
-	// }
+	if log.GetLogLevel() == logger.LogLevelDebug {
+		argv = append(argv, "-v")
+	}
 
 	log.CmdArray(argv)
 
