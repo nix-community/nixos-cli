@@ -32,12 +32,40 @@ following things:
 - Settings
 - NixOS module options
 
+## AI Policy
+
+All contributions made to `nixos-cli` are appreciated. However, quality becomes
+a concern when AI is involved.
+
+AI is a tool in the developer toolbox, and is used for code review, courtesy of
+CodeRabbit and their OSS program. As such, AI usage is not prohibited, but
+proper standards must be enforced to prevent the repository from rotting.
+
+AI-assisted contributions will be accepted under three conditions:
+
+1. The contributor must **understand their code** and be able to explain it in
+   their pull request description and during the review process. AI-generated
+   descriptions, comments, etc. will be rejected without consideration.
+2. The contributor must demonstrate that their code works, either through proper
+   unit/integration tests, or with picture/video evidence.
+3. Autonomously-submitted code (via Claude Code or other such agentic AI tools)
+   will be automatically rejected without consideration. This kind of drive-by
+   contribution forces the maintainers to make the assumption that the
+   contributor did not do their due diligence described in the previous
+   conditions.
+
+Additionally, AI usage is _strictly prohibited_ for issues marked with the "good
+first issue" label. Those issues are meant for human contributors to get a good
+grasp on the codebase by doing the work on their own; using AI to do this
+defeats the purpose and actively does the maintainers a disservice. Please also
+consider this when contributing to other open-source projects.
+
 ## Bug Reports
 
 Testing every feature edge-case is hard—especially before full releases.
 
 If you're a brave soul, use the main branch instead of a release version, and
-file bug reports by
+file any bug reports by
 [opening a new issue](https://github.com/nix-community/nixos-cli/issues) with
 the **Bug Report** template. In the bug report, provide:
 
@@ -47,11 +75,11 @@ the **Bug Report** template. In the bug report, provide:
 - Your environment (run `nixos features`)
 - Any relevant logs, error messages, or images
 
-Clear reports will assist in faster bug fixes!
+Clear reports will assist in faster resolution!
 
 ## Improving Documentation
 
-Nix documentation is notoriously patchy — so help here is _especially_ welcome.
+Nix documentation is notoriously patchy, so help here is _especially_ welcome.
 
 As such, documentation quality is of utmost importance. `nixos-cli` should be a
 tool that is both easy to use and powerful in functionality; however, as
