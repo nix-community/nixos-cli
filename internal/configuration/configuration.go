@@ -64,12 +64,19 @@ func FindConfiguration(log logger.Logger, cfg *settings.Settings, includes []str
 
 		return f, nil
 	} else {
-		c, err := FindLegacyConfiguration(log, includes)
+		c, err := FindLegacyConfiguration(cfg, log, includes)
 		if err != nil {
 			return nil, err
 		}
 
 		log.Debugf("found legacy configuration at %s", c.ConfigPath)
+		if c.UseExplicitPath {
+			if c.Attribute == "" {
+				log.Debugf("using top-level attribute")
+			} else {
+				log.Debugf("using explicit attribute '%s'", c.Attribute)
+			}
+		}
 
 		return c, nil
 	}
