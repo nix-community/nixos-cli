@@ -27,6 +27,9 @@ This command behaves slightly differently based on if it is flake-enabled
 or not, and this requirement will be specified for the relevant options
 and sections.
 
+Important: see *nixos-cli-config(5)* for a detailed description of how to
+specify NixOS configuration parameters, and how they are discovered.
+
 # EXAMPLES
 
 Many behaviors are similar to the _nixos-rebuild_ command of old. Here are some
@@ -44,13 +47,13 @@ _nixos-rebuild switch_, on an arbitrary flake ref (for flake-enabled CLIs only)
 
 	*nixos apply "github:water-sucks/nixed#CharlesWoodson"*
 
-_nixos-rebuild switch_, on an arbitrary Nix file containing a configuration (for
-legacy CLIs only):
+_nixos-rebuild switch_, on an arbitrary Nix file containing an explicit
+configuration (for legacy CLIs only):
 
 	*nixos apply /home/user/.nixconfig/config.nix*
 
-_nixos-rebuild switch_, on an arbitrary Nix file containing multiple
-configurations in an attribute set (for legacy CLIs only):
+_nixos-rebuild switch_, on an arbitrary Nix configuration containing multiple
+systems in an attribute set (for legacy CLIs only):
 
 	*nixos apply /home/user/.nixconfig/machines.nix SebastianJanikowski*
 
@@ -87,20 +90,20 @@ command tree. See *nixos-cli-generation(1)* for details.
 	Specify an explicit flake ref with a NixOS configuration. Only available
 	on flake-enabled CLIs.
 
-	See *nixos-config-env(5)* for the proper flake ref format.
+	See *nixos-cli-config(5)* for the proper flake ref format.
 
 	Default: *$NIXOS_CONFIG*
 
 *FILE*
-	Specify an explicit path to a Nix file containing a NixOS configuration.
+	Specify a path to a Nix file containing an explicit NixOS configuration.
 
 	Only available on legacy CLIs.
 
-	This argument is useful for building a NixOS system from a Nix file that is
-	not a flake or a NixOS configuration module.
+	This argument can only be used to build explicit configurations.
 
-	If not specified, then the value in the environment variable _$NIXOS_CONFIG_
-	or the value of the _nixos-config_ entry in _$NIX_PATH_ will be used.
+	If not specified, then explicit configurations will be auto-discovered in
+	the order described in *nixos-cli-config(5)*. If no explicit configurations
+	are found, then implicit ones will be auto-discovered and used.
 
 *ATTR*
 	Use the specified attribute path inside of *FILE* as the NixOS system to
@@ -109,7 +112,8 @@ command tree. See *nixos-cli-generation(1)* for details.
 	Only available on legacy CLIs.
 
 	If *ATTR* is not specified, then the top-level attribute of *FILE* will be
-	used.
+	used, or the selected attribute from _$NIXOS_SYSTEM_ or the _<nixos-system>_
+	entry in _$NIX_PATH_ if it exists.
 
 # OPTIONS
 
@@ -433,6 +437,8 @@ this:
 *nix3-build*(1), *nix-build(1)*
 
 *nix-env(1)*
+
+*nixos-cli-config*(5)
 
 *nixos-cli-env*(5)
 

@@ -30,9 +30,11 @@ If the CLI is flake-enabled:
 	  flake reference with a NixOS configuration.
 Otherwise:
 	- The *$NIXOS_CONFIG* variable must point to a valid NixOS configuration
-	  module or a directory containing a _default.nix_ with the same.
+	  module or a directory containing a _default.nix_ with the same. This
+	  will be treated as an implicit configuration.
 	- OR the target root must have a file at _/etc/nixos/configuration.nix_
-	- OR *FILE* + *ATTR* should be passed.
+	  (also an implicit configuration)
+	- OR *FILE* + *ATTR* should be passed (explicit configuration)
 
 The installation will take place relative to a specified root directory
 (defaults to `/mnt`). Mountpoints and all other filesystems must be mounted
@@ -100,7 +102,7 @@ is also possible, assuming a successful installation.
 	Specify an explicit flake ref to evaluate options from. Only available
 	on flake-enabled CLIs.
 
-	See *nixos-config-env(5)* for the proper flake ref format.
+	See *nixos-cli-config(5)* for the proper flake ref format.
 
 	The system name is NOT inferred from the hostname, and must be provided
 	explicitly after the #.
@@ -109,15 +111,14 @@ is also possible, assuming a successful installation.
 	CLI, the program will fail.
 
 *FILE*
-	Specify an explicit path to a Nix file containing a NixOS configuration.
+	Specify an path to a Nix file containing an explicit configuration, or to a
+	directory containing a _system.nix_ file with the same.
 
 	Only available on legacy CLIs.
 
-	This argument is useful for building a NixOS system from a Nix file that is
-	not a flake or a NixOS configuration module.
-
 	If not specified, then the value in the environment variable _$NIXOS_CONFIG_
-	or the value of the _nixos-config_ entry in _$NIX_PATH_ will be used.
+	or the file located in *root*_/etc/nixos/configuration.nix_ will be used as
+	an implicit configuration.
 
 *ATTR*
 	Use the specified attribute path inside of *FILE* as the NixOS system to
@@ -177,7 +178,7 @@ is also possible, assuming a successful installation.
 
 # NIX OPTIONS
 
-*nixos apply* accepts some Nix options and passes them through to their relevant
+*nixos install* accepts some Nix options and passes them through to their relevant
 Nix invocations.
 
 The following options are supported:
@@ -227,7 +228,9 @@ than as two arguments in the actual Nix CLI.
 
 *nix-env(1)*
 
-*nixos-cli-env*(5)
+*nixos-cli-config(5)*
+
+*nixos-cli-env(5)*
 
 # AUTHORS
 
