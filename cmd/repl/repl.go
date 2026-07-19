@@ -79,9 +79,9 @@ Arguments:
   [FILE]  File that contains configuration
   [ATTR]  Attribute inside of [FILE] pointing to configuration
 
-  Both arguments are optional. If [FILE] is not specified, then 
-  $NIXOS_CONFIG or the 'nixos-config' entry in $NIX_PATH is used. 
-  If [ATTR] is not specified, then the top-level attribute of 
+  Both arguments are optional. If [FILE] is not specified, then
+  $NIXOS_CONFIG or the 'nixos-config' entry in $NIX_PATH is used.
+  If [ATTR] is not specified, then the top-level attribute of
   [FILE] is used.
 `)
 	}
@@ -101,7 +101,7 @@ const (
       system._module.args
       // system._module.specialArgs
       // {
-        inherit (system) config options;
+        inherit (system) config options lib;
         inherit flake;
       };
 in
