@@ -206,3 +206,21 @@ func GetUsername() (string, error) {
 		return "", fmt.Errorf("failed to determine current user")
 	}
 }
+
+// Find if a directory contains a file.
+func ContainsFile(dir string, filename string) bool {
+	s, err := os.Stat(dir)
+	if err != nil {
+		return false
+	}
+
+	if !s.IsDir() {
+		return false
+	}
+
+	if _, err = os.Stat(filepath.Join(dir, filename)); err != nil {
+		return false
+	}
+
+	return true
+}

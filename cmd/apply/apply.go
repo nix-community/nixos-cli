@@ -178,7 +178,7 @@ func ApplyCommand(cfg *settings.Settings) *cobra.Command {
 				}
 				return ref
 			} else {
-				configPath, err := utils.ResolveNixFilename(args[0])
+				configPath, err := configuration.ResolveSystemNix(args[0])
 				if err != nil {
 					return nil
 				}
@@ -492,7 +492,7 @@ func applyMain(cmd *cobra.Command, opts *cmdOpts.ApplyOpts) error {
 			}
 		} else if opts.File != "" {
 			var configPath string
-			configPath, err = utils.ResolveNixFilename(opts.File)
+			configPath, err = configuration.ResolveSystemNix(opts.File)
 			if err != nil {
 				log.Error(err)
 				return err

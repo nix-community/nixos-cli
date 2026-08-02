@@ -183,8 +183,9 @@ Arguments:
   [ATTR]  Attribute inside of [FILE] pointing to configuration
 
   Both arguments are optional. If [FILE] is not specified, then
-  $root/etc/nixos/configuration.nix is used. If [ATTR] is not
-  specified, then the top-level attribute of [FILE] is used.
+  $root/etc/nixos/configuration.nix is used as an implicit
+  configuration. If [ATTR] is not specified, then the top-level
+  attribute of [FILE] is used.
 `
 	}
 	helpTemplate += `
@@ -453,7 +454,7 @@ func installMain(cmd *cobra.Command, opts *cmdOpts.InstallOpts) error {
 			log.Debugf("using flake ref %s", opts.FlakeRef)
 		} else if opts.File != "" {
 			var configPath string
-			configPath, err = utils.ResolveNixFilename(opts.File)
+			configPath, err = configuration.ResolveSystemNix(opts.File)
 			if err != nil {
 				log.Error(err)
 				return err
@@ -514,7 +515,7 @@ func installMain(cmd *cobra.Command, opts *cmdOpts.InstallOpts) error {
 			envMap["TMPDIR"] = tmpDirname
 		}
 
-		if c, ok := nixConfig.(*configuration.LegacyConfiguration); ok {
+		if c, ok := nixConfig.(*configuration.LegacyConfiguration); ok && !c.UseExplicitPath {
 			// This value gets appended to the list of includes,
 			// and does not replace existing values already provided
 			// for -I on the command line.

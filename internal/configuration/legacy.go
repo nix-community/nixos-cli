@@ -11,6 +11,7 @@ import (
 	"github.com/nix-community/nixos-cli/internal/cmd/nixopts"
 	"github.com/nix-community/nixos-cli/internal/logger"
 	"github.com/nix-community/nixos-cli/internal/nix"
+	"github.com/nix-community/nixos-cli/internal/settings"
 	"github.com/nix-community/nixos-cli/internal/system"
 	"github.com/nix-community/nixos-cli/internal/utils"
 )
@@ -32,50 +33,164 @@ type LegacyConfiguration struct {
 	Builder system.CommandRunner
 }
 
-func FindLegacyConfiguration(log logger.Logger, includes []string) (*LegacyConfiguration, error) {
+func FindLegacyConfiguration(cfg *settings.Settings, log logger.Logger, includes []string) (*LegacyConfiguration, error) {
 	log.Debugf("looking for legacy configuration")
 
-	var configPath string
-	if nixosCfg, set := os.LookupEnv("NIXOS_CONFIG"); set {
-		log.Debugf("$NIXOS_CONFIG is set, using automatically")
-		configPath = nixosCfg
+	// Order of priority when discovering configuration
+	// 1. Explicit (system)
+	//   - $NIXOS_SYSTEM (/path/to/file#attr)
+	//   - -I nixos-system=
+	//   - <nixos-system>
+	//   - ${configLocation}/system.nix
+	// 2. Implicit (importing <nixpkgs/nixos>)
+	//   - $NIXOS_CONFIG
+	//   - -I nixos-config=
+	//   - <nixos-config>
+
+	nixPathEntries := getNixPathEntries()
+
+	if config, attr, found := findExplicitConfiguration(cfg, log, includes, nixPathEntries); found {
+
+		if resolved, err := utils.ResolveNixFilename(config); err == nil {
+			config = resolved
+		} else {
+			log.Debugf("error when resolving %s to file: %s", config, err)
+		}
+		return &LegacyConfiguration{
+			ConfigPath:      config,
+			Attribute:       attr,
+			UseExplicitPath: true,
+			Includes:        includes,
+		}, nil
 	}
 
-	if configPath == "" && includes != nil {
-		for _, include := range includes {
-			if after, ok := strings.CutPrefix(include, "nixos-config="); ok {
-				configPath = after
-				break
-			}
+	if config, found := findImplicitConfiguration(log, includes, nixPathEntries); found {
+		// First, attempt to resolve the path from a directory if possible.
+		if resolved, err := utils.ResolveNixFilename(config); err == nil {
+			config = resolved
+		} else {
+			log.Debugf("error when resolving %s to file: %s", config, err)
+		}
+		return &LegacyConfiguration{
+			ConfigPath: config,
+			Includes:   includes,
+		}, nil
+	}
+
+	return nil, fmt.Errorf("no configuration found")
+}
+
+func findExplicitConfiguration(
+	cfg *settings.Settings,
+	log logger.Logger,
+	includes []string,
+	nixPath map[string]string,
+) (string, string, bool) {
+	if config, set := os.LookupEnv("NIXOS_SYSTEM"); set {
+		log.Debug("$NIXOS_SYSTEM is set, using automatically")
+		path, attr, _ := strings.Cut(config, "#")
+		return path, attr, true
+	}
+
+	log.Debug("looking for nixos-system= entry in includes list")
+
+	for _, include := range includes {
+		if config, ok := strings.CutPrefix(include, "nixos-system="); ok {
+			log.Debug("found nixos-system= in include list")
+			path, attr, _ := strings.Cut(config, "#")
+			return path, attr, true
 		}
 	}
 
-	if configPath == "" {
-		log.Debugf("$NIXOS_CONFIG not set, using $NIX_PATH to find configuration")
+	log.Debug("looking for nixos-system= entry in $NIX_PATH")
 
-		nixPath := strings.SplitSeq(os.Getenv("NIX_PATH"), ":")
-		for entry := range nixPath {
-			if after, ok := strings.CutPrefix(entry, "nixos-config="); ok {
-				configPath = after
-				break
-			}
+	if config, ok := nixPath["nixos-system"]; ok {
+		log.Debug("found nixos-system entry in $NIX_PATH")
+		path, attr, _ := strings.Cut(config, "#")
+		return path, attr, true
+	}
+
+	log.Debugf("looking for system.nix in %s", cfg.ConfigLocation)
+
+	if _, err := os.Stat(cfg.ConfigLocation); err == nil {
+		if utils.ContainsFile(cfg.ConfigLocation, "system.nix") {
+			return filepath.Join(cfg.ConfigLocation, "system.nix"), "", true
+		} else {
+			return cfg.ConfigLocation, "", true
+		}
+	} else {
+		log.Warn(err)
+	}
+
+	return "", "", false
+}
+
+// If the passed file is a directory, then try to find a system.nix
+// file or a default.nix file in it. Otherwise, error out.
+func ResolveSystemNix(input string) (string, error) {
+	if utils.ContainsFile(input, "system.nix") {
+		joined := filepath.Join(input, "system.nix")
+
+		realPath, err := filepath.EvalSymlinks(joined)
+		if err != nil {
+			return "", err
+		}
+
+		absolutePath, err := filepath.Abs(realPath)
+		if err != nil {
+			return "", err
+		}
+
+		return absolutePath, nil
+
+	}
+
+	return utils.ResolveNixFilename(input)
+}
+
+func findImplicitConfiguration(
+	log logger.Logger,
+	includes []string,
+	nixPath map[string]string,
+) (string, bool) {
+	if config, set := os.LookupEnv("NIXOS_CONFIG"); set {
+		log.Debug("$NIXOS_CONFIG is set, using automatically")
+		return config, true
+	}
+
+	log.Debug("looking for nixos-config= entry in includes list")
+
+	for _, include := range includes {
+		if config, ok := strings.CutPrefix(include, "nixos-config="); ok {
+			log.Debug("found nixos-config= in include list")
+			return config, true
 		}
 	}
 
-	if configPath == "" {
-		log.Debugf("no 'nixos-config' attribute exists in NIX_PATH")
-		return nil, fmt.Errorf("no configuration found")
+	log.Debug("looking for nixos-config= entry in $NIX_PATH")
+
+	if config, ok := nixPath["nixos-config"]; ok {
+		log.Debug("found nixos-config entry in $NIX_PATH")
+		return config, true
 	}
 
-	resolvedPath, err := utils.ResolveNixFilename(configPath)
-	if err != nil {
-		return nil, err
+	return "", false
+}
+
+func getNixPathEntries() map[string]string {
+	entries := make(map[string]string)
+
+	nixPath := strings.SplitSeq(os.Getenv("NIX_PATH"), ":")
+	for entry := range nixPath {
+		key, value, ok := strings.Cut(entry, "=")
+		if !ok {
+			continue
+		}
+		entries[key] = value
+
 	}
 
-	return &LegacyConfiguration{
-		Includes:   includes,
-		ConfigPath: resolvedPath,
-	}, nil
+	return entries
 }
 
 // Get the directory that this configuration file is found in

@@ -293,7 +293,9 @@ var SettingsDocs = map[string]SettingsDocEntry{
 	},
 	"config_location": {
 		Short: "Where to look for configuration by default",
-		Long:  "Path to a Nix file or directory to look for user configuration in by default.",
+		Long: "Path to a Nix file or directory to look for user configuration in by default." +
+			" If this is a directory, then nixos-cli will search for a system.nix file or flake ref here." +
+			" If it is a file, then it will be used as an explicit configuration in legacy mode only.",
 	},
 	"confirmation": {
 		Short: "Settings for confirmation prompts throughout the program",

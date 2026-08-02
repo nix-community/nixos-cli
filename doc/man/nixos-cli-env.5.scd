@@ -38,32 +38,24 @@ Among other things.
 		This must be a valid flake ref (e.g., */home/user/config* or
 		*github:myorg/nixos-config#attr*).
 
-		Flake refs without a local path may have slightly different behavior,
-		such as not supporting implicit Git operations. Check relevant man pages
-		for more information.
-
-		If a flake ref is a path, it _MUST_ be absolute. Use *realpath(1)* if
-		you must.
-
-		Additionally, flake refs will usually be expanded when necessary.
-		For example, the following flake ref:
-
-			_github:water-sucks/nixed#CharlesWoodson_
-
-		will get expanded to the following flake ref and attribute:
-
-			_github:water-sucks/nixed#nixosConfigurations.CharlesWoodson_
-
-		If the ref does not have text after the "#", then the NixOS system
-		attribute name will be inferred to be the current system's hostname.
+		See the flake reference section in *nixos-cli-config(5)* for more
+		information.
 
 	*Legacy CLIs:*
 		This can be a path to a configuration file directly
 		(*configuration.nix*), or a directory containing a *default.nix*.
 
-		Legacy configurations can also be sourced from the *$NIX_PATH*
-		environment variable, if the _nixos-config=<PATH>_ attribute is
-		specified there.
+		See the implicit configuration section in *nixos-cli-config(5)* for
+		more information.
+
+*NIXOS_SYSTEM*
+	Only applicable to legacy CLIs.
+
+	For entirely self-contained explicit configurations, _$NIXOS_SYSTEM_
+	can be used to pass them to _nixos-cli_ instead.
+
+	See the explicit configuration section in *nixos-cli-config(5)* for more
+	information.
 
 *NIXOS_GENERATION_TAG*
 	A description for the generation. Usually set by default through the *-t*
@@ -119,6 +111,8 @@ Do not set directly unless running this in development.
 # SEE ALSO
 
 *nixos-cli-config(5)*
+
+*nixos-cli-settings(5)*
 
 # AUTHORS
 
