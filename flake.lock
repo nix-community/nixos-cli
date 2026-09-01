@@ -75,11 +75,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1776468647,
-        "narHash": "sha256-zx5O1RyRl6Fq+mvMh+JdS18aXR8644bcN9MKh2fN19M=",
+        "lastModified": 1785660058,
+        "narHash": "sha256-ZCQBUTKhEYbJ11lVk3u/ZCQs4xWbZQcODaMJ2W1XVkw=",
         "owner": "water-sucks",
         "repo": "optnix",
-        "rev": "c320dc5494c0caaca9ee4341367618c06a957709",
+        "rev": "d70527982f00bd40d3f49dedfa55cd2bfcceb38c",
         "type": "github"
       },
       "original": {
