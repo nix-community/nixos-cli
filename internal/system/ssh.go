@@ -232,10 +232,19 @@ func knownHostsCallback(
 		}
 	}
 
+	// Drop entries with unparseable key types, which would otherwise
+	// make knownhosts.New reject the entire file.
+	knownHostsFiles, skippedHosts, cleanup, err := sanitizeKnownHosts(log, knownHostsFiles)
+	if err != nil {
+		return nil, err
+	}
+	defer cleanup()
+
 	knownHostsKeyCallback, err := knownhosts.New(knownHostsFiles...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create known hosts callback: %v", err)
 	}
+	knownHostsKeyCallback = failOnUnsupportedOnly(knownHostsKeyCallback, skippedHosts, hostKeyVerification)
 
 	if knownHostsUserFile != "" {
 		return addKeyToKnownHostsCallback(log, knownHostsKeyCallback, hostKeyVerification, knownHostsUserFile), nil
